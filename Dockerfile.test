@@ -1,0 +1,9 @@
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim
+
+WORKDIR /app
+COPY . .
+RUN python -m pip install --upgrade pip tox
+
+CMD bash -lc 'ENV=py$(python -c "import sys;print(f\"{sys.version_info.major}{sys.version_info.minor}\")"); tox -e $ENV'
+

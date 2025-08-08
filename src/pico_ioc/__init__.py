@@ -1,6 +1,6 @@
-# src/pico_ioc.py
+# src/pico_ioc/__init__.py
 
-import functools, inspect, pkgutil, importlib, logging
+import functools, inspect, pkgutil, importlib, logging, sys
 from typing import Callable, Any, Iterator, AsyncIterator
 
 # ==============================================================================
@@ -18,7 +18,6 @@ class PicoContainer:
         if key in self._singletons:
             return self._singletons[key]
         if key in self._providers:
-            # Aquí se devuelve una instancia del nuevo LazyProxy agnóstico
             instance = self._providers[key]()
             self._singletons[key] = instance
             return instance
@@ -129,7 +128,8 @@ class LazyProxy:
 # ==============================================================================
 # --- 2. The Scanner and `init` Facade ---
 # ==============================================================================
-def scan_and_configure(package, container: PicoContainer):
+def _scan_and_configure(package_or_name, container: PicoContainer):
+    package = importlib.import_module(package_or_name) if isinstance(package_or_name, str) else package_or_name
     logging.info(f"🚀 Scanning in '{package.__name__}'...")
     component_classes, factory_classes = [], []
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
@@ -157,7 +157,15 @@ def scan_and_configure(package, container: PicoContainer):
         key = getattr(component_cls, '_component_key', component_cls)
         def create_component(cls=component_cls):
             sig = inspect.signature(cls.__init__)
-            deps = {p.name: container.get(p.name) for p in sig.parameters.values() if p.name != 'self'}
+            deps = {}
+            for p in sig.parameters.values():
+                if p.name == 'self' or p.kind in (
+                    inspect.Parameter.VAR_POSITIONAL,  # *args
+                    inspect.Parameter.VAR_KEYWORD,     # **kwargs
+                ):
+                    continue
+                dep_key = p.annotation if p.annotation is not inspect._empty else p.name
+                deps[p.name] = container.get(dep_key)
             return cls(**deps)
         container.bind(key, create_component)
 
@@ -168,7 +176,7 @@ def init(root_package):
         return _container
     _container = PicoContainer()
     logging.info("🔌 Initializing 'pico-ioc'...")
-    scan_and_configure(root_package, _container)
+    _scan_and_configure(root_package, _container)
     logging.info("✅ Container configured and ready.")
     return _container
 
@@ -194,3 +202,4 @@ def component(cls=None, *, name: str = None):
         setattr(cls, '_component_key', name if name is not None else cls)
         return cls
     return decorator(cls) if cls else decorator
+
