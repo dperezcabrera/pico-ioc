@@ -96,7 +96,7 @@ Data from postgresql://user:pass@host/db
 
 -----
 
-## \#\# API Reference
+## API Reference
 
 ### `init(root_package_name: str) -> PicoContainer`
 
