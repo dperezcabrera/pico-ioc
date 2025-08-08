@@ -1,138 +1,202 @@
 # Pico-IoC: A Minimalist IoC Container for Python
 
-[](https://www.google.com/search?q=https://pypi.org/project/pico-ioc/)
-[](https://www.google.com/search?q=https://travis-ci.com/dperezcabrera/pico-ioc)
-[](https://opensource.org/licenses/MIT)
+[![PyPI](https://img.shields.io/pypi/v/pico-ioc.svg)](https://pypi.org/project/pico-ioc/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+![CI (tox matrix)](https://github.com/dperezcabrera/pico-ioc/actions/workflows/ci.yml/badge.svg)
 
-**Pico-IoC** is a tiny, zero-dependency, and decorator-based Inversion of Control (IoC) container for Python. It helps you manage dependencies in your application in a clean, intuitive, and "Pythonic" way.
+**Pico-IoC** is a tiny, zero-dependency, decorator-based Inversion of Control (IoC) container for Python.  
+It helps you manage dependencies in a clean, intuitive, and *Pythonic* way.
 
-The core idea is to let you build loosely coupled, easily testable applications without the boilerplate of manually wiring components together.
+The core idea is to let you build loosely coupled, easily testable applications without manually wiring components.  
+*Inspired by the IoC philosophy popularized by the Spring Framework.*
 
------
+---
 
 ## Key Features
 
-  * ✨ **Zero Dependencies:** Pure Python, no external libraries required.
-  * 🚀 **Decorator-Based API:** A simple and declarative API using decorators like `@component` and `@provides`.
-  * 🔍 **Automatic Discovery:** Scans your project packages to find and register components automatically.
-  * 🧩 **Lazy Instantiation:** Components are created only when they are first requested, improving startup time and resource efficiency.
-  * 🏭 **Flexible Factories:** Use factory components to handle complex object creation logic.
-  * 🤝 **Framework-Agnostic:** Works with any application or framework (Flask, FastAPI, scripts, etc.).
+* ✨ **Zero Dependencies:** Pure Python, no external libraries.
+* 🚀 **Decorator-Based API:** Simple decorators like `@component` and `@provides`.
+* 🔍 **Automatic Discovery:** Scans your package to auto-register components.
+* 🧩 **Lazy Instantiation:** Objects are created on first use.
+* 🏭 **Flexible Factories:** Encapsulate complex creation logic.
+* 🤝 **Framework-Agnostic:** Works with Flask, FastAPI, CLIs, scripts, etc.
 
------
+---
 
 ## Installation
-
-You can install Pico-IoC directly from PyPI:
 
 ```bash
 pip install pico-ioc
 ```
 
------
+---
 
-##  Quickstart
+## Quick Start
 
-Getting started is simple. Structure your application, decorate your classes, and let Pico-IoC wire everything up.
-
-#### 1\. Define Your Components
-
-Create your services and components in different files. Use the `@component` decorator for classes that the container can instantiate directly.
-
-`# project/services.py`
+Getting started is simple. Decorate your classes and let Pico-IoC wire them up.
 
 ```python
-# A simple service with a dependency on another component.
-# Pico-IoC will automatically inject 'config' when creating 'DatabaseService'.
-@component
-class DatabaseService:
-    def __init__(self, config: AppConfig):
-        self._connection_string = config.get_db_url()
-        print(f"DatabaseService initialized with: {self._connection_string}")
+from pico_ioc import component, init
 
-    def get_data(self):
-        return f"Data from {self._connection_string}"
-
-# A component that will be a dependency for another service.
 @component
 class AppConfig:
     def get_db_url(self):
         return "postgresql://user:pass@host/db"
+
+@component
+class DatabaseService:
+    def __init__(self, config: AppConfig):
+        self._cs = config.get_db_url()
+
+    def get_data(self):
+        return f"Data from {self._cs}"
+
+# Initialize the container scanning the current module
+container = init(__name__)
+
+db = container.get(DatabaseService)
+print(db.get_data())  # Data from postgresql://user:pass@host/db
 ```
 
-#### 2\. Initialize the Container
+---
 
-In your main application file, call `pico_ioc.init()` with your root package. This will scan for all decorated components and configure the container.
+## More Examples
 
-`# project/main.py`
+### 🧩 Custom Component Name
+
+```python
+from pico_ioc import component, init
+
+@component(name="config")
+class AppConfig:
+    def __init__(self):
+        self.db_url = "postgresql://user:pass@localhost/db"
+
+@component
+class Repository:
+    def __init__(self, config: "config"):  # refer by custom name if you prefer
+        self._url = config.db_url
+
+container = init(__name__)
+repo = container.get(Repository)
+print(repo._url)           # postgresql://user:pass@localhost/db
+print(container.get("config").db_url)
+```
+
+> Pico-IoC prefers **type annotations** to resolve deps; if missing, it falls back to the **parameter name**.
+
+### 💤 Lazy Factories (only build when used)
+
+```python
+from pico_ioc import factory_component, provides, init
+
+CREATION_COUNTER = {"value": 0}
+
+@factory_component
+class ServicesFactory:
+    @provides(name="heavy_service")  # returns a LazyProxy by default
+    def make_heavy(self):
+        CREATION_COUNTER["value"] += 1
+        return {"payload": "Hello from heavy service"}
+
+container = init(__name__)
+svc = container.get("heavy_service")
+print(CREATION_COUNTER["value"])  # 0 (not created yet)
+
+print(svc["payload"])             # triggers creation
+print(CREATION_COUNTER["value"])  # 1
+```
+
+### 📦 Project-Style Package Scanning
+
+```
+project_root/
+└── myapp/
+    ├── __init__.py
+    ├── services.py
+    └── main.py
+```
+
+**myapp/services.py**
+
+```python
+from pico_ioc import component
+
+@component
+class Config:
+    def __init__(self):
+        self.base_url = "https://api.example.com"
+
+@component
+class ApiClient:
+    def __init__(self, config: Config):
+        self.base_url = config.base_url
+
+    def get(self, path: str):
+        return f"GET {self.base_url}/{path}"
+```
+
+**myapp/main.py**
 
 ```python
 import pico_ioc
-from project.services import DatabaseService
+from myapp.services import ApiClient
 
-# Initialize the container, scanning the 'project' package
-container = pico_ioc.init("project")
+# Scan the whole 'myapp' package
+container = pico_ioc.init("myapp")
 
-# 3. Get Your Top-Level Component
-# The container will create the 'DatabaseService' and its 'AppConfig' dependency.
-db_service = container.get(DatabaseService)
-
-# Use the service
-print(db_service.get_data())
+client = container.get(ApiClient)
+print(client.get("status"))  # GET https://api.example.com/status
 ```
 
-#### 4\. Run It
+---
 
-When you run `main.py`, Pico-IoC handles the creation and injection of all objects:
+## API Reference (mini)
 
-```
-$ python -m project.main
-INFO:root:🔌 Initializing 'pico-ioc'...
-INFO:root:🚀 Scanning in 'project'...
-INFO:root:✅ Container configured and ready.
-DatabaseService initialized with: postgresql://user:pass@host/db
-Data from postgresql://user:pass@host/db
-```
+### `init(root_package_or_module) -> PicoContainer`
 
------
+Initialize the container by scanning a root **package** (str) or **module**. Returns the configured container.
 
-## API Reference
+### `@component(cls=None, *, name: str | None = None)`
 
-### `init(root_package_name: str) -> PicoContainer`
-
-Initializes the IoC container. It must be called once with the name of the root package to scan. It returns the configured container instance.
-
-### `@component(cls=None, *, name: str = None)`
-
-A class decorator that marks a class as a component for auto-discovery. The container will manage its lifecycle.
-
-  * **`name`**: (Optional) A string to register the component with a specific name instead of its class type.
+Mark a class as a component. Registered by **class type** by default, or by **name** if provided.
 
 ### `@factory_component`
 
-A class decorator that marks a class as a source of components. Use this when object creation is complex. Methods inside a factory class can be decorated with `@provides`.
+Mark a class as a factory holder. Methods inside can be `@provides(...)`.
 
-### `@provides(name: str)`
+### `@provides(name: str, lazy: bool = True)`
 
-A method decorator used inside a `@factory_component`. It indicates that the method produces a component.
+Declare that a factory method **produces** a component registered under `name`. By default it’s **lazy** (a proxy that creates on first real use).
 
-  * **`name`**: The name (string) used to register the component in the container. This is mandatory.
+---
 
------
+## Testing
+
+`pico-ioc` ships with `pytest` tests and a `tox` matrix.
+
+```bash
+pip install tox
+tox -e py311           # run on a specific version
+tox                    # run all configured envs
+```
+
+---
 
 ## Contributing
 
-Contributions are welcome\! If you find a bug or have a feature request, please open an issue. If you'd like to contribute code, please open a pull request.
+Issues and PRs are welcome. If you spot a bug or have an idea, open an issue!
 
------
+---
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+MIT — see the [LICENSE](https://opensource.org/licenses/MIT).
 
------
+---
 
 ## Authors
 
-  * **David Perez Cabrera**
-  * **Gemini 2.5-Pro**
+* **David Perez Cabrera**
+* **Gemini 2.5-Pro**
+* **GPT-5**
