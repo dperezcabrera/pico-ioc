@@ -3,6 +3,14 @@
 import functools, inspect, pkgutil, importlib, logging, sys
 from typing import Callable, Any, Iterator, AsyncIterator
 
+try:
+    # written at build time by setuptools-scm
+    from ._version import __version__
+except Exception:  # pragma: no cover
+    __version__ = "0.0.0"
+
+__all__ = ["__version__"]
+
 # ==============================================================================
 # --- 1. Container and Chameleon Proxy (Framework-Agnostic) ---
 # ==============================================================================
