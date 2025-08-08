@@ -10,7 +10,7 @@ The core idea is to let you build loosely coupled, easily testable applications 
 
 -----
 
-## \#\# Key Features
+## Key Features
 
   * ✨ **Zero Dependencies:** Pure Python, no external libraries required.
   * 🚀 **Decorator-Based API:** A simple and declarative API using decorators like `@component` and `@provides`.
@@ -21,7 +21,7 @@ The core idea is to let you build loosely coupled, easily testable applications 
 
 -----
 
-## \#\# Installation
+## Installation
 
 You can install Pico-IoC directly from PyPI:
 
@@ -31,7 +31,7 @@ pip install pico-ioc
 
 -----
 
-## \#\# Quickstart
+##  Quickstart
 
 Getting started is simple. Structure your application, decorate your classes, and let Pico-IoC wire everything up.
 
@@ -120,19 +120,19 @@ A method decorator used inside a `@factory_component`. It indicates that the met
 
 -----
 
-## \#\# Contributing
+## Contributing
 
 Contributions are welcome\! If you find a bug or have a feature request, please open an issue. If you'd like to contribute code, please open a pull request.
 
 -----
 
-## \#\# License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
 
 -----
 
-## \#\# Authors
+## Authors
 
   * **David Perez Cabrera**
   * **Gemini 2.5-Pro**
