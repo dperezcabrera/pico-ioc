@@ -1,29 +1,32 @@
-# Pico-IoC: A Minimalist IoC Container for Python
+
+# 📦 Pico-IoC: A Minimalist IoC Container for Python
 
 [![PyPI](https://img.shields.io/pypi/v/pico-ioc.svg)](https://pypi.org/project/pico-ioc/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![CI (tox matrix)](https://github.com/dperezcabrera/pico-ioc/actions/workflows/ci.yml/badge.svg)
 
-**Pico-IoC** is a tiny, zero-dependency, decorator-based Inversion of Control (IoC) container for Python.  
+**Pico-IoC** is a tiny, zero-dependency, decorator-based Inversion of Control (IoC) container for Python.
 It helps you manage dependencies in a clean, intuitive, and *Pythonic* way.
 
-The core idea is to let you build loosely coupled, easily testable applications without manually wiring components.  
+The core idea is to let you build loosely coupled, easily testable applications without manually wiring components.
 *Inspired by the IoC philosophy popularized by the Spring Framework.*
 
 ---
 
-## Key Features
+## ✨ Key Features
 
-* ✨ **Zero Dependencies:** Pure Python, no external libraries.
-* 🚀 **Decorator-Based API:** Simple decorators like `@component` and `@provides`.
-* 🔍 **Automatic Discovery:** Scans your package to auto-register components.
-* 🧩 **Lazy Instantiation:** Objects are created on first use.
-* 🏭 **Flexible Factories:** Encapsulate complex creation logic.
-* 🤝 **Framework-Agnostic:** Works with Flask, FastAPI, CLIs, scripts, etc.
+* **Zero Dependencies:** Pure Python, no external libraries.
+* **Decorator-Based API:** Simple decorators like `@component` and `@provides`.
+* **Automatic Discovery:** Scans your package to auto-register components.
+* **Lazy Instantiation:** Objects are created on first use.
+* **Flexible Factories:** Encapsulate complex creation logic.
+* **Framework-Agnostic:** Works with Flask, FastAPI, CLIs, scripts, etc.
+* **Smart Dependency Resolution:** Resolves by **parameter name**, then **type annotation**, then **MRO fallback**.
+* **Auto-Exclude Caller:** `init()` automatically skips the calling module to avoid double-initialization during scans.
 
 ---
 
-## Installation
+## 📦 Installation
 
 ```bash
 pip install pico-ioc
@@ -31,9 +34,7 @@ pip install pico-ioc
 
 ---
 
-## Quick Start
-
-Getting started is simple. Decorate your classes and let Pico-IoC wire them up.
+## 🚀 Quick Start
 
 ```python
 from pico_ioc import component, init
@@ -60,21 +61,22 @@ print(db.get_data())  # Data from postgresql://user:pass@host/db
 
 ---
 
-## More Examples
+## 🧩 Custom Component Keys
 
-### 🧩 Custom Component Name
+You can register a component with a **custom key** (string, class, enum…).
+`key=` is the preferred syntax. For backwards compatibility, `name=` still works.
 
 ```python
 from pico_ioc import component, init
 
-@component(name="config")
+@component(name="config")  # still supported for legacy code
 class AppConfig:
     def __init__(self):
         self.db_url = "postgresql://user:pass@localhost/db"
 
 @component
 class Repository:
-    def __init__(self, config: "config"):  # refer by custom name if you prefer
+    def __init__(self, config: "config"):  # resolve by name
         self._url = config.db_url
 
 container = init(__name__)
@@ -83,9 +85,12 @@ print(repo._url)           # postgresql://user:pass@localhost/db
 print(container.get("config").db_url)
 ```
 
-> Pico-IoC prefers **type annotations** to resolve deps; if missing, it falls back to the **parameter name**.
+---
 
-### 💤 Lazy Factories (only build when used)
+## 🏭 Factory Components and `@provides`
+
+Factories can provide components under a specific **key**.
+Default is lazy creation (via `LazyProxy`).
 
 ```python
 from pico_ioc import factory_component, provides, init
@@ -94,7 +99,7 @@ CREATION_COUNTER = {"value": 0}
 
 @factory_component
 class ServicesFactory:
-    @provides(name="heavy_service")  # returns a LazyProxy by default
+    @provides(key="heavy_service")  # preferred
     def make_heavy(self):
         CREATION_COUNTER["value"] += 1
         return {"payload": "Hello from heavy service"}
@@ -107,7 +112,9 @@ print(svc["payload"])             # triggers creation
 print(CREATION_COUNTER["value"])  # 1
 ```
 
-### 📦 Project-Style Package Scanning
+---
+
+## 📦 Project-Style Scanning
 
 ```
 project_root/
@@ -142,61 +149,62 @@ class ApiClient:
 import pico_ioc
 from myapp.services import ApiClient
 
-# Scan the whole 'myapp' package
 container = pico_ioc.init("myapp")
-
 client = container.get(ApiClient)
 print(client.get("status"))  # GET https://api.example.com/status
 ```
 
 ---
 
-## API Reference (mini)
+## 🧠 Dependency Resolution Order
 
-### `init(root_package_or_module) -> PicoContainer`
+When Pico-IoC instantiates a component, it tries to resolve each parameter in this order:
 
-Initialize the container by scanning a root **package** (str) or **module**. Returns the configured container.
-
-### `@component(cls=None, *, name: str | None = None)`
-
-Mark a class as a component. Registered by **class type** by default, or by **name** if provided.
-
-### `@factory_component`
-
-Mark a class as a factory holder. Methods inside can be `@provides(...)`.
-
-### `@provides(name: str, lazy: bool = True)`
-
-Declare that a factory method **produces** a component registered under `name`. By default it’s **lazy** (a proxy that creates on first real use).
+1. **Exact parameter name** (string key in container)
+2. **Exact type annotation** (class key in container)
+3. **MRO fallback** (walk base classes until match)
+4. **String version** of the parameter name
 
 ---
 
-## Testing
+## 🛠 API Reference
 
-`pico-ioc` ships with `pytest` tests and a `tox` matrix.
+### `init(root_package_or_module, *, exclude=None, auto_exclude_caller=True) -> PicoContainer`
+
+Scan the given root **package** (str) or **module**.
+By default, excludes the calling module.
+
+### `@component(cls=None, *, name=None)`
+
+Register a class as a component.
+If `name` is given, registers under that string; otherwise under the class type.
+
+### `@factory_component`
+
+Register a class as a factory of components.
+
+### `@provides(key=None, *, name=None, lazy=True)`
+
+Declare that a factory method provides a component under `key`.
+`name` is accepted for backwards compatibility.
+If `lazy=True`, returns a `LazyProxy` that instantiates on first real use.
+
+---
+
+## 🧪 Testing
 
 ```bash
 pip install tox
-tox -e py311           # run on a specific version
-tox                    # run all configured envs
+tox -e py311
 ```
 
 ---
 
-## Contributing
+## 📜 License
 
-Issues and PRs are welcome. If you spot a bug or have an idea, open an issue!
-
----
-
-## License
-
-MIT — see the [LICENSE](https://opensource.org/licenses/MIT).
+MIT — see [LICENSE](https://opensource.org/licenses/MIT)
 
 ---
 
-## Authors
+¿Quieres que también te prepare **un ejemplo completo en el README** con `fast_model` y `BaseChatModel` para que quede documentado el nuevo orden de resolución? Así quedaría clarísimo para cualquiera que lo use.
 
-* **David Perez Cabrera**
-* **Gemini 2.5-Pro**
-* **GPT-5**
