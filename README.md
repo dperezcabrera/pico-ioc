@@ -1,28 +1,25 @@
-
 # 📦 Pico-IoC: A Minimalist IoC Container for Python
 
 [![PyPI](https://img.shields.io/pypi/v/pico-ioc.svg)](https://pypi.org/project/pico-ioc/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![CI (tox matrix)](https://github.com/dperezcabrera/pico-ioc/actions/workflows/ci.yml/badge.svg)
 
-**Pico-IoC** is a tiny, zero-dependency, decorator-based Inversion of Control (IoC) container for Python.
-It helps you manage dependencies in a clean, intuitive, and *Pythonic* way.
-
-The core idea is to let you build loosely coupled, easily testable applications without manually wiring components.
-*Inspired by the IoC philosophy popularized by the Spring Framework.*
+**Pico-IoC** is a tiny, zero-dependency, decorator-based Inversion of Control container for Python.
+Build loosely-coupled, testable apps without manual wiring. Inspired by the Spring ecosystem.
 
 ---
 
 ## ✨ Key Features
 
-* **Zero Dependencies:** Pure Python, no external libraries.
-* **Decorator-Based API:** Simple decorators like `@component` and `@provides`.
-* **Automatic Discovery:** Scans your package to auto-register components.
-* **Lazy Instantiation:** Objects are created on first use.
-* **Flexible Factories:** Encapsulate complex creation logic.
-* **Framework-Agnostic:** Works with Flask, FastAPI, CLIs, scripts, etc.
-* **Smart Dependency Resolution:** Resolves by **parameter name**, then **type annotation**, then **MRO fallback**.
-* **Auto-Exclude Caller:** `init()` automatically skips the calling module to avoid double-initialization during scans.
+* **Zero dependencies** — pure Python.
+* **Decorator API** — `@component`, `@factory_component`, `@provides`.
+* **Auto discovery** — scans a package and registers components.
+* **Eager by default, fail-fast** — non-lazy bindings are instantiated immediately after `init()`. Missing deps fail startup.
+* **Opt-in lazy** — set `lazy=True` to defer creation (wrapped in `ComponentProxy`).
+* **Factories** — encapsulate complex creation logic.
+* **Smart resolution** — by **parameter name**, then **type annotation**, then **MRO fallback**, then **string(name)**.
+* **Re-entrancy guard** — prevents `get()` during scanning.
+* **Auto-exclude caller** — `init()` skips the calling module to avoid double scanning.
 
 ---
 
@@ -48,146 +45,143 @@ class AppConfig:
 class DatabaseService:
     def __init__(self, config: AppConfig):
         self._cs = config.get_db_url()
-
     def get_data(self):
         return f"Data from {self._cs}"
 
-# Initialize the container scanning the current module
-container = init(__name__)
-
+container = init(__name__)  # blueprint runs here (eager + fail-fast)
 db = container.get(DatabaseService)
-print(db.get_data())  # Data from postgresql://user:pass@host/db
+print(db.get_data())
 ```
 
 ---
 
 ## 🧩 Custom Component Keys
 
-You can register a component with a **custom key** (string, class, enum…).
-`key=` is the preferred syntax. For backwards compatibility, `name=` still works.
-
 ```python
 from pico_ioc import component, init
 
-@component(name="config")  # still supported for legacy code
+@component(name="config")  # custom key
 class AppConfig:
-    def __init__(self):
-        self.db_url = "postgresql://user:pass@localhost/db"
+    db_url = "postgresql://user:pass@localhost/db"
 
 @component
 class Repository:
-    def __init__(self, config: "config"):  # resolve by name
-        self._url = config.db_url
+    def __init__(self, config: "config"):  # resolve by NAME
+        self.url = config.db_url
 
 container = init(__name__)
-repo = container.get(Repository)
-print(repo._url)           # postgresql://user:pass@localhost/db
 print(container.get("config").db_url)
 ```
 
 ---
 
-## 🏭 Factory Components and `@provides`
+## 🏭 Factories and `@provides`
 
-Factories can provide components under a specific **key**.
-Default is lazy creation (via `LazyProxy`).
+* Default is **eager** (`lazy=False`). Eager bindings are constructed at the end of `init()`.
+* Use `lazy=True` for on-first-use creation via `ComponentProxy`.
 
 ```python
 from pico_ioc import factory_component, provides, init
 
-CREATION_COUNTER = {"value": 0}
+COUNTER = {"value": 0}
 
 @factory_component
 class ServicesFactory:
-    @provides(key="heavy_service")  # preferred
-    def make_heavy(self):
-        CREATION_COUNTER["value"] += 1
-        return {"payload": "Hello from heavy service"}
+    @provides(key="heavy_service", lazy=True)
+    def heavy(self):
+        COUNTER["value"] += 1
+        return {"payload": "hello"}
 
 container = init(__name__)
-svc = container.get("heavy_service")
-print(CREATION_COUNTER["value"])  # 0 (not created yet)
-
-print(svc["payload"])             # triggers creation
-print(CREATION_COUNTER["value"])  # 1
-```
-
----
-
-## 📦 Project-Style Scanning
-
-```
-project_root/
-└── myapp/
-    ├── __init__.py
-    ├── services.py
-    └── main.py
-```
-
-**myapp/services.py**
-
-```python
-from pico_ioc import component
-
-@component
-class Config:
-    def __init__(self):
-        self.base_url = "https://api.example.com"
-
-@component
-class ApiClient:
-    def __init__(self, config: Config):
-        self.base_url = config.base_url
-
-    def get(self, path: str):
-        return f"GET {self.base_url}/{path}"
-```
-
-**myapp/main.py**
-
-```python
-import pico_ioc
-from myapp.services import ApiClient
-
-container = pico_ioc.init("myapp")
-client = container.get(ApiClient)
-print(client.get("status"))  # GET https://api.example.com/status
+svc = container.get("heavy_service")  # not created yet
+print(COUNTER["value"])               # 0
+print(svc["payload"])                 # triggers creation
+print(COUNTER["value"])               # 1
 ```
 
 ---
 
 ## 🧠 Dependency Resolution Order
 
-When Pico-IoC instantiates a component, it tries to resolve each parameter in this order:
+1. parameter **name**
+2. exact **type annotation**
+3. **MRO fallback** (walk base classes)
+4. `str(name)`
 
-1. **Exact parameter name** (string key in container)
-2. **Exact type annotation** (class key in container)
-3. **MRO fallback** (walk base classes until match)
-4. **String version** of the parameter name
+---
+
+## ⚡ Eager vs. Lazy (Blueprint Behavior)
+
+At the end of `init()`, Pico-IoC performs a **blueprint**:
+
+- **Eager** (`lazy=False`, default): instantiated immediately; failures stop startup.
+- **Lazy** (`lazy=True`): returns a `ComponentProxy`; instantiated on first real use.
+
+**Lifecycle:**
+
+           ┌───────────────────────┐
+           │        init()         │
+           └───────────────────────┘
+                      │
+                      ▼
+           ┌───────────────────────┐
+           │   Scan & bind deps    │
+           └───────────────────────┘
+                      │
+                      ▼
+           ┌─────────────────────────────┐
+           │  Blueprint instantiates all │
+           │    non-lazy (eager) beans   │
+           └─────────────────────────────┘
+                      │
+           ┌───────────────────────┐
+           │   Container ready     │
+           └───────────────────────┘
+
+
+**Best practice:** keep eager+fail-fast for production parity with Spring; use lazy only for heavy/optional deps or to support negative tests.
+
+---
+
+## 🔄 Migration Guide (v0.2.1 → v0.3.0)
+
+* **Defaults changed:** `@component` and `@provides` now default to `lazy=False` (eager).
+* **Proxy renamed:** `LazyProxy` → `ComponentProxy` (only relevant if referenced directly).
+* **Tests/fixtures:** components intentionally missing deps should be marked `@component(lazy=True)` (to avoid failing `init()`), or excluded from the scan.
+
+Example fix for an intentional failure case:
+
+```python
+@component(lazy=True)
+class MissingDep:
+    def __init__(self, missing):
+        self.missing = missing
+```
 
 ---
 
 ## 🛠 API Reference
 
-### `init(root_package_or_module, *, exclude=None, auto_exclude_caller=True) -> PicoContainer`
+### `init(root, *, exclude=None, auto_exclude_caller=True) -> PicoContainer`
 
-Scan the given root **package** (str) or **module**.
-By default, excludes the calling module.
+Scan and bind components in `root` (str module name or module).
+Skips the calling module if `auto_exclude_caller=True`.
+Runs blueprint (instantiate all `lazy=False` bindings).
 
-### `@component(cls=None, *, name=None)`
+### `@component(cls=None, *, name=None, lazy=False)`
 
 Register a class as a component.
-If `name` is given, registers under that string; otherwise under the class type.
+Use `name` for a custom key.
+Set `lazy=True` to defer creation.
 
 ### `@factory_component`
 
-Register a class as a factory of components.
+Mark a class as a component factory (its methods can `@provides` bindings).
 
-### `@provides(key=None, *, name=None, lazy=True)`
+### `@provides(key, *, lazy=False)`
 
 Declare that a factory method provides a component under `key`.
-`name` is accepted for backwards compatibility.
-If `lazy=True`, returns a `LazyProxy` that instantiates on first real use.
+Set `lazy=True` for deferred creation (`ComponentProxy`).
 
 ---
 
@@ -198,8 +192,25 @@ pip install tox
 tox -e py311
 ```
 
+Tip: for “missing dependency” tests, mark those components as `lazy=True` so `init()` remains fail-fast for real components while your test still asserts failure on resolution.
+
+---
+
+## ❓ FAQ
+
+**Q: Can I make the container lenient at startup?**
+A: By design it’s strict. Prefer `lazy=True` on specific bindings or exclude problem modules from the scan.
+
+**Q: Thread safety?**
+A: Container uses `ContextVar` to guard re-entrancy during scanning. Singletons are created once per container; typical usage is in single-threaded app startup, then read-mostly.
+
+**Q: Frameworks?**
+A: Framework-agnostic. Works with Flask, FastAPI, CLIs, scripts, etc.
+
 ---
 
 ## 📜 License
 
 MIT — see [LICENSE](https://opensource.org/licenses/MIT)
+
+
