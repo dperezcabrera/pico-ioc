@@ -1,7 +1,7 @@
 # src/pico_ioc/__init__.py
 
 import functools, inspect, pkgutil, importlib, logging, sys
-from typing import Callable, Any, Iterator, AsyncIterator
+from typing import Callable, Any, Iterator, Optional, AsyncIterator
 
 try:
     # written at build time by setuptools-scm
@@ -16,11 +16,14 @@ __all__ = ["__version__"]
 # ==============================================================================
 class PicoContainer:
     def __init__(self):
-        self._providers = {}
-        self._singletons = {}
+        self._providers: dict[Any, Callable[[], Any]] = {}
+        self._singletons: dict[Any, Any] = {}
 
     def bind(self, key: Any, provider: Callable[[], Any]):
         self._providers[key] = provider
+
+    def has(self, key: Any) -> bool:
+        return key in self._providers or key in self._singletons
 
     def get(self, key: Any) -> Any:
         if key in self._singletons:
@@ -136,11 +139,47 @@ class LazyProxy:
 # ==============================================================================
 # --- 2. The Scanner and `init` Facade ---
 # ==============================================================================
-def _scan_and_configure(package_or_name, container: PicoContainer):
+def _resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
+    if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+        raise RuntimeError("Invalid param for resolution")
+
+    if container.has(p.name):
+        return container.get(p.name)
+
+    ann = p.annotation
+    if ann is not inspect._empty and container.has(ann):
+        return container.get(ann)
+
+    if ann is not inspect._empty:
+        try:
+            for base in getattr(ann, "__mro__", ())[1:]:
+                if base is object:
+                    break
+                if container.has(base):
+                    return container.get(base)
+        except Exception:
+            pass
+
+    if container.has(str(p.name)):
+        return container.get(str(p.name))
+
+    key = p.name if not (ann and ann is not inspect._empty) else ann
+    return container.get(key)
+
+
+def _scan_and_configure(
+    package_or_name,
+    container: PicoContainer,
+    exclude: Optional[Callable[[str], bool]] = None
+):
     package = importlib.import_module(package_or_name) if isinstance(package_or_name, str) else package_or_name
     logging.info(f"🚀 Scanning in '{package.__name__}'...")
     component_classes, factory_classes = [], []
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
+        # Skip excluded modules (used by auto_exclude_caller and custom excludes)
+        if exclude and exclude(name):
+            logging.info(f"  ⏭️ Skipping module {name} (excluded)")
+            continue
         try:
             module = importlib.import_module(name)
             for _, obj in inspect.getmembers(module, inspect.isclass):
@@ -167,24 +206,41 @@ def _scan_and_configure(package_or_name, container: PicoContainer):
             sig = inspect.signature(cls.__init__)
             deps = {}
             for p in sig.parameters.values():
-                if p.name == 'self' or p.kind in (
-                    inspect.Parameter.VAR_POSITIONAL,  # *args
-                    inspect.Parameter.VAR_KEYWORD,     # **kwargs
-                ):
+                if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
                     continue
-                dep_key = p.annotation if p.annotation is not inspect._empty else p.name
-                deps[p.name] = container.get(dep_key)
+                deps[p.name] = _resolve_param(container, p)
             return cls(**deps)
         container.bind(key, create_component)
 
 _container = None
-def init(root_package):
+
+def init(root_package, *, exclude: Optional[Callable[[str], bool]] = None, auto_exclude_caller: bool = True):
     global _container
     if _container:
         return _container
+
+    combined_exclude = exclude
+    if auto_exclude_caller:
+        # módulo que invoca a init()
+        try:
+            caller_frame = inspect.stack()[1].frame
+            caller_module = inspect.getmodule(caller_frame)
+            caller_name = getattr(caller_module, "__name__", None)
+        except Exception:
+            caller_name = None
+
+        if caller_name:
+            if combined_exclude is None:
+                def combined_exclude(mod: str, _caller=caller_name):
+                    return mod == _caller
+            else:
+                prev = combined_exclude
+                def combined_exclude(mod: str, _caller=caller_name, _prev=prev):
+                    return mod == _caller or _prev(mod)
+
     _container = PicoContainer()
     logging.info("🔌 Initializing 'pico-ioc'...")
-    _scan_and_configure(root_package, _container)
+    _scan_and_configure(root_package, _container, exclude=combined_exclude)
     logging.info("✅ Container configured and ready.")
     return _container
 
@@ -195,12 +251,13 @@ def factory_component(cls):
     setattr(cls, '_is_factory_component', True)
     return cls
 
-def provides(name: str, lazy: bool = True):
+def provides(key: Any, *, lazy: bool = True):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return LazyProxy(lambda: func(*args, **kwargs)) if lazy else func(*args, **kwargs)
-        setattr(wrapper, '_provides_name', name)
+        # mantenemos compat con _provides_name (por si alguien lo usa)
+        setattr(wrapper, '_provides_name', key)
         return wrapper
     return decorator
 
