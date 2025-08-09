@@ -203,8 +203,3 @@ tox -e py311
 ## 📜 License
 
 MIT — see [LICENSE](https://opensource.org/licenses/MIT)
-
----
-
-¿Quieres que también te prepare **un ejemplo completo en el README** con `fast_model` y `BaseChatModel` para que quede documentado el nuevo orden de resolución? Así quedaría clarísimo para cualquiera que lo use.
-
