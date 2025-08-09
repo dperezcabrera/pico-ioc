@@ -1,5 +1,3 @@
-# src/pico_ioc/__init__.py
-
 import functools, inspect, pkgutil, importlib, logging
 from typing import Callable, Any, Optional
 from contextvars import ContextVar
@@ -15,12 +13,10 @@ __all__ = ["__version__"]
 # ------------------------------------------------------------------------------
 # Re-entrancy guards
 # ------------------------------------------------------------------------------
-# True while init/scan is running. Used to prevent userland container access
-# during module import-time triggered by the scanner.
+# True while init/scan is running. Blocks userland container access during scan.
 _scanning: ContextVar[bool] = ContextVar("pico_scanning", default=False)
 
-# True while the container is resolving constructor dependencies for a component.
-# Internal resolutions (container.get from within create_component) are allowed.
+# True while the container is resolving deps for a component (internal use allowed).
 _resolving: ContextVar[bool] = ContextVar("pico_resolving", default=False)
 
 # ==============================================================================
@@ -45,7 +41,7 @@ class PicoContainer:
                 "pico-ioc: re-entrant container access during scan. "
                 "Avoid calling init()/get() at import time (e.g., in a module body). "
                 "Move resolution to runtime (e.g., under if __name__ == '__main__':) "
-                "or delay it until after pico-ioc init completes."
+                "or delay it until pico-ioc init completes."
             )
 
         if key in self._singletons:
@@ -165,17 +161,17 @@ def _resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
     if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
         raise RuntimeError("Invalid param for resolution")
 
-    # 1) resolve by NAME (highest priority)
+    # 1) NAME
     if container.has(p.name):
         return container.get(p.name)
 
     ann = p.annotation
 
-    # 2) resolve by exact TYPE annotation
+    # 2) TYPE
     if ann is not inspect._empty and container.has(ann):
         return container.get(ann)
 
-    # 3) resolve by TYPE MRO (bases)
+    # 3) TYPE MRO
     if ann is not inspect._empty:
         try:
             for base in getattr(ann, "__mro__", ())[1:]:
@@ -186,7 +182,7 @@ def _resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
         except Exception:
             pass
 
-    # 4) resolve by string(NAME) as a last-ditch compatibility step
+    # 4) str(NAME)
     if container.has(str(p.name)):
         return container.get(str(p.name))
 
@@ -204,7 +200,6 @@ def _scan_and_configure(
     component_classes, factory_classes = [], []
 
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
-        # honor custom/auto excludes before importing
         if exclude and exclude(name):
             logging.info(f"  ⏭️ Skipping module {name} (excluded)")
             continue
@@ -218,7 +213,7 @@ def _scan_and_configure(
         except Exception as e:
             logging.warning(f"  ⚠️ Module {name} not processed: {e}")
 
-    # Register factory-provided providers
+    # Register factories
     for factory_cls in factory_classes:
         try:
             sig = inspect.signature(factory_cls.__init__)
@@ -229,14 +224,13 @@ def _scan_and_configure(
         except Exception as e:
             logging.error(f"  ❌ Error in factory {factory_cls.__name__}: {e}", exc_info=True)
 
-    # Register components as providers (constructor DI)
+    # Register components
     for component_cls in component_classes:
         key = getattr(component_cls, '_component_key', component_cls)
 
         def create_component(cls=component_cls):
             sig = inspect.signature(cls.__init__)
             deps = {}
-            # mark resolution section to allow container.get() internally
             tok = _resolving.set(True)
             try:
                 for p in sig.parameters.values():
@@ -263,7 +257,6 @@ def init(root_package, *, exclude: Optional[Callable[[str], bool]] = None, auto_
 
     combined_exclude = exclude
     if auto_exclude_caller:
-        # Exclude the module that called init() to reduce chances of re-entrancy
         try:
             caller_frame = inspect.stack()[1].frame
             caller_module = inspect.getmodule(caller_frame)
@@ -283,7 +276,6 @@ def init(root_package, *, exclude: Optional[Callable[[str], bool]] = None, auto_
     _container = PicoContainer()
     logging.info("🔌 Initializing 'pico-ioc'...")
 
-    # set scanning guard
     tok = _scanning.set(True)
     try:
         _scan_and_configure(root_package, _container, exclude=combined_exclude)
@@ -303,21 +295,20 @@ def factory_component(cls):
 def provides(key: Any, *, lazy: bool = True):
     """
     Declare that a factory method provides a component under 'key'.
-    By default, returns a LazyProxy that instantiates the real object upon first use.
+    By default, returns a LazyProxy that instantiates upon first real use.
     """
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return LazyProxy(lambda: func(*args, **kwargs)) if lazy else func(*args, **kwargs)
-        # keep legacy compatibility via _provides_name (string or any hashable key)
-        setattr(wrapper, '_provides_name', key)
+        setattr(wrapper, '_provides_name', key)  # legacy-compatible storage
         return wrapper
     return decorator
 
 def component(cls=None, *, name: str = None):
     """
-    Mark a class as a component.
-    Registered by class type by default, or by 'name' if provided.
+    Mark a class as a component. Registered by class type by default,
+    or by 'name' if provided.
     """
     def decorator(c):
         setattr(c, '_is_component', True)

@@ -25,13 +25,7 @@ def test_project(tmp_path):
     package_dir.mkdir()
     (package_dir / "__init__.py").touch()
 
-    # Components:
-    # - SimpleService                          (no deps)
-    # - AnotherService                         (depends on SimpleService by type)
-    # - CustomNameService                      (registered by custom name)
-    # - NeedsByName                            (depends by name only)
-    # - NeedsNameVsType                        (name should win over type)
-    # - NeedsTypeFallback                      (fallback to base type via MRO)
+    # Components
     (package_dir / "components.py").write_text(
         """
 from pico_ioc import component
@@ -82,10 +76,7 @@ class MissingDep:
 """
     )
 
-    # Factories:
-    # - complex_service (lazy via LazyProxy; counter to assert laziness)
-    # - fast_model      (by NAME)
-    # - base_interface  (by TYPE: BaseInterface)
+    # Factories
     (package_dir / "factories.py").write_text(
         """
 from pico_ioc import factory_component, provides
@@ -107,7 +98,7 @@ class ServiceFactory:
     @provides(key="fast_model")
     def create_fast_model(self):
         FAST_COUNTER["value"] += 1
-        return {"who": "fast"}  # any object; dict is convenient for identity checks
+        return {"who": "fast"}
 
     @provides(key=BaseInterface)
     def create_base_interface(self):
@@ -131,10 +122,10 @@ ioc.get(SimpleService)  # should raise RuntimeError due to re-entrant access dur
 """
     )
 
-    # Yield the root package name used by pico_ioc.init()
+    # Yield root package name used by pico_ioc.init()
     yield "test_project"
 
-    # Teardown: remove path, reset container, purge modules from cache
+    # Teardown
     sys.path.pop(0)
     pico_ioc._container = None
     mods_to_del = [m for m in list(sys.modules.keys()) if m == "test_project" or m.startswith("test_project.")]
@@ -156,10 +147,7 @@ def test_simple_component_retrieval(test_project):
 
 
 def test_dependency_injection_by_type_hint(test_project):
-    """
-    When a constructor parameter has a type hint and no provider is bound by name,
-    the container should resolve it by TYPE.
-    """
+    """Type-hinted dependency resolves by TYPE when no NAME-bound provider exists."""
     from test_project.services.components import SimpleService, AnotherService
 
     container = pico_ioc.init(test_project)
@@ -170,9 +158,7 @@ def test_dependency_injection_by_type_hint(test_project):
 
 
 def test_components_are_singletons_by_default(test_project):
-    """
-    Providers bound by the scanner are singletons: get() returns the same instance.
-    """
+    """Providers registered by the scanner behave as singletons."""
     from test_project.services.components import SimpleService
 
     container = pico_ioc.init(test_project)
@@ -184,9 +170,7 @@ def test_components_are_singletons_by_default(test_project):
 
 
 def test_get_unregistered_component_raises_error(test_project):
-    """
-    Requesting a key with no provider must raise NameError with a helpful message.
-    """
+    """Requesting an unknown key raises NameError."""
     container = pico_ioc.init(test_project)
 
     class Unregistered: ...
@@ -195,50 +179,36 @@ def test_get_unregistered_component_raises_error(test_project):
 
 
 def test_factory_provides_component_by_name(test_project):
-    """
-    A factory method annotated with @provides(key="...") is bound by NAME and is retrievable.
-    """
+    """Factory-provided component is retrievable by key; proxy behaves like real value."""
     container = pico_ioc.init(test_project)
     svc = container.get("complex_service")
-
-    # Proxy must behave like the real string for equality
     assert svc == "This is a complex service"
 
 
 def test_factory_instantiation_is_lazy_and_singleton(test_project):
-    """
-    Factory methods with default lazy=True return a LazyProxy. The real object is created on first use.
-    Also, container should cache the created instance (singleton per key).
-    """
+    """LazyProxy creates real object on first use and remains singleton per key."""
     from test_project.services.factories import CREATION_COUNTER
 
     container = pico_ioc.init(test_project)
-
     assert CREATION_COUNTER["value"] == 0
 
     proxy = container.get("complex_service")
-    # Accessing attributes/methods of the proxy should trigger creation exactly once
     assert CREATION_COUNTER["value"] == 0
     up = proxy.upper()
     assert up == "THIS IS A COMPLEX SERVICE"
     assert CREATION_COUNTER["value"] == 1
 
-    # Re-accessing via the same proxy does not create again
     _ = proxy.lower()
     assert CREATION_COUNTER["value"] == 1
 
-    # Getting the same key again should return the same singleton instance (no extra creations)
     again = container.get("complex_service")
-    assert again is proxy  # same object returned by container
+    assert again is proxy
     _ = again.strip()
     assert CREATION_COUNTER["value"] == 1
 
 
 def test_component_with_custom_name(test_project):
-    """
-    A component registered by custom name is retrievable by that name,
-    and NOT by its class.
-    """
+    """Component registered by custom name is retrievable by that name, not by class."""
     from test_project.services.components import CustomNameService
 
     container = pico_ioc.init(test_project)
@@ -250,27 +220,20 @@ def test_component_with_custom_name(test_project):
 
 
 def test_resolution_prefers_name_over_type(test_project):
-    """
-    If both a NAME-bound provider and a TYPE-bound provider exist, resolution MUST
-    prefer the NAME (parameter name) over the TYPE hint.
-    """
+    """If NAME and TYPE providers exist, NAME must win."""
     from test_project.services.components import NeedsNameVsType
     from test_project.services.factories import FAST_COUNTER, BASE_COUNTER
 
     container = pico_ioc.init(test_project)
     comp = container.get(NeedsNameVsType)
 
-    # "fast_model" name must win → uses the fast provider
     assert comp.model == {"who": "fast"}
     assert FAST_COUNTER["value"] == 1
-    # Base provider should NOT be used for this resolution
     assert BASE_COUNTER["value"] == 0
 
 
 def test_resolution_by_name_only(test_project):
-    """
-    When a ctor parameter has NO type hint, the container must resolve strictly by NAME.
-    """
+    """Ctor param without type hint resolves strictly by NAME."""
     from test_project.services.components import NeedsByName
     from test_project.services.factories import FAST_COUNTER
 
@@ -282,25 +245,19 @@ def test_resolution_by_name_only(test_project):
 
 
 def test_resolution_fallback_to_type_mro(test_project):
-    """
-    When there is no provider for the parameter NAME nor the exact TYPE,
-    the container must try TYPE's MRO and use the first available provider.
-    """
+    """If neither NAME nor exact TYPE match, fallback via TYPE MRO."""
     from test_project.services.components import NeedsTypeFallback
     from test_project.services.factories import BASE_COUNTER
 
     container = pico_ioc.init(test_project)
     comp = container.get(NeedsTypeFallback)
 
-    # Resolved via MRO to BaseInterface provider
     assert comp.impl == {"who": "base"}
     assert BASE_COUNTER["value"] == 1
 
 
 def test_missing_dependency_raises_clear_error(test_project):
-    """
-    If no provider exists for NAME nor TYPE nor MRO, resolution must raise NameError.
-    """
+    """Missing dep across NAME/TYPE/MRO raises NameError."""
     from test_project.services.components import MissingDep
 
     container = pico_ioc.init(test_project)
@@ -310,24 +267,20 @@ def test_missing_dependency_raises_clear_error(test_project):
 
 def test_reentrant_access_is_blocked_and_container_still_initializes(test_project, caplog):
     """
-    Importing a module that calls pico_ioc.init() and then container.get() at import-time
-    should:
-      - raise a RuntimeError from the guard (caught by the scanner as a warning),
+    Importing a module that calls init() and then container.get() at import-time should:
+      - raise a RuntimeError from the guard (caught as a warning by the scanner),
       - NOT prevent the container from finishing initialization,
       - allow normal component retrieval afterwards.
     """
     caplog.set_level(logging.INFO)
 
-    # Running init should NOT raise: the scanner handles the module import failure and continues.
     container = pico_ioc.init(test_project)
 
-    # Expect a warning mentioning re-entrant access during scan
     assert any(
         "re-entrant container access during scan" in rec.message
         for rec in caplog.records
     ), "Expected a warning about re-entrant access during scan"
 
-    # Container should be usable after scan completion
     from test_project.services.components import SimpleService
     svc = container.get(SimpleService)
     assert isinstance(svc, SimpleService)
