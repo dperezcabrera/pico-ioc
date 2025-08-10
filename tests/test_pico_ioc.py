@@ -86,7 +86,7 @@ class ServiceFactory:
         CREATION_COUNTER["value"] += 1
         return "This is a complex service"
 
-    @provides(key="fast_model")  # eager by default; blueprint will instantiate once
+    @provides(key="fast_model")  # eager by default; instantiated once
     def create_fast_model(self):
         FAST_COUNTER["value"] += 1
         return {"who": "fast"}
@@ -106,7 +106,7 @@ import test_project
 from test_project.services.components import SimpleService
 
 ioc = pico_ioc.init(test_project)
-ioc.get(SimpleService)  # should raise RuntimeError due to re-entrant access during scan
+ioc.get(SimpleService)  # should raise during scan; import is caught/logged by scanner
 """
     )
 
@@ -121,7 +121,7 @@ ioc.get(SimpleService)  # should raise RuntimeError due to re-entrant access dur
         sys.modules.pop(m, None)
 
 
-# --- Test Suite ---
+# --- Core behavior tests ---
 
 def test_simple_component_retrieval(test_project):
     from test_project.services.components import SimpleService
@@ -193,7 +193,7 @@ def test_resolution_prefers_name_over_type(test_project):
     container = pico_ioc.init(test_project)
     comp = container.get(NeedsNameVsType)
     assert comp.model == {"who": "fast"}
-    assert FAST_COUNTER["value"] == 1  # created once by blueprint
+    assert FAST_COUNTER["value"] == 1  # created once by factory
     assert BASE_COUNTER["value"] == 0  # still lazy
 
 
@@ -218,7 +218,6 @@ def test_resolution_fallback_to_type_mro(test_project):
 def test_missing_dependency_raises_clear_error(test_project):
     from test_project.services.components import MissingDep
     container = pico_ioc.init(test_project)
-
     proxy = container.get(MissingDep)  # returns ComponentProxy
     with pytest.raises(NameError, match="No provider found for key"):
         _ = bool(proxy)
@@ -227,6 +226,7 @@ def test_missing_dependency_raises_clear_error(test_project):
 def test_reentrant_access_is_blocked_and_container_still_initializes(test_project, caplog):
     caplog.set_level(logging.INFO)
     container = pico_ioc.init(test_project)
+    # The scanner logs a warning including the RuntimeError text thrown by get()
     assert any(
         "re-entrant container access during scan" in rec.message
         for rec in caplog.records
@@ -234,4 +234,44 @@ def test_reentrant_access_is_blocked_and_container_still_initializes(test_projec
     from test_project.services.components import SimpleService
     svc = container.get(SimpleService)
     assert isinstance(svc, SimpleService)
+
+
+# --- Plugin & Binder smoke test ---
+
+def test_plugin_hooks_and_binder(test_project):
+    """
+    Verifies that a plugin can observe classes during scan, bind a value via Binder,
+    and see lifecycle hooks firing in order.
+    """
+    calls = []
+
+    class MyPlugin:
+        def before_scan(self, package, binder):
+            calls.append("before_scan")
+
+        def visit_class(self, module, cls, binder):
+            # As an example, bind a marker when we see a specific class name
+            if cls.__name__ == "SimpleService" and not binder.has("marker"):
+                binder.bind("marker", lambda: {"ok": True}, lazy=False)
+
+        def after_scan(self, package, binder):
+            calls.append("after_scan")
+
+        def after_bind(self, container, binder):
+            calls.append("after_bind")
+
+        def before_eager(self, container, binder):
+            calls.append("before_eager")
+
+        def after_ready(self, container, binder):
+            calls.append("after_ready")
+
+    container = pico_ioc.init(test_project, plugins=(MyPlugin(),))
+
+    # Order is not strictly enforced between middle hooks, but all should be present.
+    for expected in ["before_scan", "after_scan", "after_bind", "before_eager", "after_ready"]:
+        assert expected in calls
+
+    # Marker bound by plugin should be retrievable
+    assert container.get("marker") == {"ok": True}
 
