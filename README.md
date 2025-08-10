@@ -196,6 +196,88 @@ Tip: for “missing dependency” tests, mark those components as `lazy=True` so
 
 ---
 
+## 🔌 Extensibility: Plugins, Binder, and Lifecycle Hooks
+
+From `v0.4.0` onward, Pico-IoC can be cleanly extended without patching the core.
+This enables optional integration layers like `pico-ioc-rest` for Flask, FastAPI, etc., while keeping the core dependency-free.
+
+### Plugin Protocol
+
+A plugin is any object that implements some or all of the following methods:
+
+```python
+from pico_ioc import PicoPlugin, Binder
+
+class MyPlugin:
+    def before_scan(self, package, binder: Binder): ...
+    def visit_class(self, module, cls, binder: Binder): ...
+    def after_scan(self, package, binder: Binder): ...
+    def after_bind(self, container, binder: Binder): ...
+    def before_eager(self, container, binder: Binder): ...
+    def after_ready(self, container, binder: Binder): ...
+```
+
+All hooks are optional. If present, they are called in this order during `init()`:
+
+1. **before\_scan** — called before package scanning starts.
+2. **visit\_class** — called for every class discovered during scanning.
+3. **after\_scan** — called after scanning all modules.
+4. **after\_bind** — called after the core has bound all components/factories.
+5. **before\_eager** — called right before eager (non-lazy) instantiation.
+6. **after\_ready** — called after all eager instantiation is complete.
+
+### Binder API
+
+Plugins receive a [`Binder`](#binder-api) instance in each hook, allowing them to:
+
+* **bind**: register new providers in the container.
+* **has**: check if a binding exists.
+* **get**: resolve a binding immediately.
+
+Example plugin that binds a “marker” component when a certain class is discovered:
+
+```python
+class MarkerPlugin:
+    def visit_class(self, module, cls, binder):
+        if cls.__name__ == "SpecialService" and not binder.has("marker"):
+            binder.bind("marker", lambda: {"ok": True}, lazy=False)
+
+container = init("my_app", plugins=(MarkerPlugin(),))
+assert container.get("marker") == {"ok": True}
+```
+
+### Creating Extensions
+
+With the plugin API, you can build separate packages like `pico-ioc-rest`:
+
+```python
+from pico_ioc import PicoPlugin, Binder, create_instance, resolve_param
+from flask import Flask
+
+class FlaskRestPlugin:
+    def __init__(self):
+        self.controllers = []
+
+    def visit_class(self, module, cls, binder: Binder):
+        if getattr(cls, "_is_controller", False):
+            self.controllers.append(cls)
+
+    def after_bind(self, container, binder: Binder):
+        app: Flask = container.get(Flask)
+        for ctl_cls in self.controllers:
+            ctl = create_instance(ctl_cls, container)
+            # register routes here using `resolve_param` for handler DI
+```
+
+### Public Helpers for Extensions
+
+Plugins can reuse Pico-IoC’s DI logic without duplicating it:
+
+* **`create_instance(cls, container)`** — instantiate a class with DI, respecting Pico-IoC’s resolution order.
+* **`resolve_param(container, parameter)`** — resolve a single function/class parameter via Pico-IoC rules.
+
+---
+
 ## ❓ FAQ
 
 **Q: Can I make the container lenient at startup?**
