@@ -1,17 +1,31 @@
-import functools, inspect, pkgutil, importlib, logging
-from typing import Callable, Any, Optional, Dict
+import functools
+import importlib
+import inspect
+import logging
+import pkgutil
 from contextvars import ContextVar
+from typing import Any, Callable, Dict, Optional, Protocol, Tuple, runtime_checkable
 
 try:
     from ._version import __version__
 except Exception:
     __version__ = "0.0.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    "PicoContainer",
+    "Binder",
+    "PicoPlugin",
+    "init",
+    "component",
+    "factory_component",
+    "provides",
+    "resolve_param",
+    "create_instance",
+]
 
 _scanning: ContextVar[bool] = ContextVar("pico_scanning", default=False)
 _resolving: ContextVar[bool] = ContextVar("pico_resolving", default=False)
-
 
 class PicoContainer:
     def __init__(self):
@@ -26,9 +40,7 @@ class PicoContainer:
 
     def get(self, key: Any) -> Any:
         if _scanning.get() and not _resolving.get():
-            raise RuntimeError(
-                "pico-ioc: re-entrant container access during scan."
-            )
+            raise RuntimeError("pico-ioc: re-entrant container access during scan.")
         if key in self._singletons:
             return self._singletons[key]
         prov = self._providers.get(key)
@@ -43,6 +55,40 @@ class PicoContainer:
             if not meta.get("lazy", False) and key not in self._singletons:
                 self.get(key)
 
+class Binder:
+    def __init__(self, container: PicoContainer):
+        self._c = container
+
+    def bind(self, key: Any, provider: Callable[[], Any], *, lazy: bool = False):
+        self._c.bind(key, provider, lazy=lazy)
+
+    def has(self, key: Any) -> bool:
+        return self._c.has(key)
+
+    def get(self, key: Any) -> Any:
+        return self._c.get(key)
+
+def factory_component(cls):
+    setattr(cls, '_is_factory_component', True)
+    return cls
+
+def provides(key: Any, *, lazy: bool = False):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        setattr(wrapper, '_provides_name', key)
+        setattr(wrapper, '_pico_lazy', bool(lazy))
+        return wrapper
+    return decorator
+
+def component(cls=None, *, name: Any = None, lazy: bool = False):
+    def decorator(c):
+        setattr(c, '_is_component', True)
+        setattr(c, '_component_key', name if name is not None else c)
+        setattr(c, '_component_lazy', bool(lazy))
+        return c
+    return decorator(cls) if cls else decorator
 
 class ComponentProxy:
     def __init__(self, object_creator: Callable[[], Any]):
@@ -117,8 +163,7 @@ class ComponentProxy:
     def __enter__(self): return self._get_real_object().__enter__()
     def __exit__(self, exc_type, exc_val, exc_tb): return self._get_real_object().__exit__(exc_type, exc_val, exc_tb)
 
-
-def _resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
+def resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
     if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
         raise RuntimeError("Invalid param for resolution")
     if container.has(p.name):
@@ -140,10 +185,44 @@ def _resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
     key = p.name if ann is inspect._empty else ann
     return container.get(key)
 
+def create_instance(cls: type, container: PicoContainer) -> Any:
+    sig = inspect.signature(cls.__init__)
+    deps = {}
+    tok = _resolving.set(True)
+    try:
+        for p in sig.parameters.values():
+            if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                continue
+            deps[p.name] = resolve_param(container, p)
+    finally:
+        _resolving.reset(tok)
+    return cls(**deps)
 
-def _scan_and_configure(package_or_name, container: PicoContainer, exclude: Optional[Callable[[str], bool]] = None):
+@runtime_checkable
+class PicoPlugin(Protocol):
+    def before_scan(self, package: Any, binder: Binder) -> None: ...
+    def visit_class(self, module: Any, cls: type, binder: Binder) -> None: ...
+    def after_scan(self, package: Any, binder: Binder) -> None: ...
+    def after_bind(self, container: PicoContainer, binder: Binder) -> None: ...
+    def before_eager(self, container: PicoContainer, binder: Binder) -> None: ...
+    def after_ready(self, container: PicoContainer, binder: Binder) -> None: ...
+
+def _scan_and_configure(
+    package_or_name,
+    container: PicoContainer,
+    *,
+    exclude: Optional[Callable[[str], bool]] = None,
+    plugins: Tuple[PicoPlugin, ...] = (),
+):
     package = importlib.import_module(package_or_name) if isinstance(package_or_name, str) else package_or_name
     logging.info(f"Scanning in '{package.__name__}'...")
+    binder = Binder(container)
+    for pl in plugins:
+        try:
+            if hasattr(pl, "before_scan"):
+                pl.before_scan(package, binder)
+        except Exception:
+            logging.exception("Plugin before_scan failed")
     component_classes, factory_classes = [], []
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
         if exclude and exclude(name):
@@ -152,12 +231,24 @@ def _scan_and_configure(package_or_name, container: PicoContainer, exclude: Opti
         try:
             module = importlib.import_module(name)
             for _, obj in inspect.getmembers(module, inspect.isclass):
+                for pl in plugins:
+                    try:
+                        if hasattr(pl, "visit_class"):
+                            pl.visit_class(module, obj, binder)
+                    except Exception:
+                        logging.exception("Plugin visit_class failed")
                 if getattr(obj, '_is_component', False):
                     component_classes.append(obj)
                 elif getattr(obj, '_is_factory_component', False):
                     factory_classes.append(obj)
         except Exception as e:
             logging.warning(f"Module {name} not processed: {e}")
+    for pl in plugins:
+        try:
+            if hasattr(pl, "after_scan"):
+                pl.after_scan(package, binder)
+        except Exception:
+            logging.exception("Plugin after_scan failed")
     for factory_cls in factory_classes:
         try:
             sig = inspect.signature(factory_cls.__init__)
@@ -173,36 +264,28 @@ def _scan_and_configure(package_or_name, container: PicoContainer, exclude: Opti
                             return m()
                         return _factory
                     container.bind(key, make_provider(), lazy=is_lazy)
-        except Exception as e:
-            logging.error(f"Error in factory {factory_cls.__name__}: {e}", exc_info=True)
+        except Exception:
+            logging.exception(f"Error in factory {factory_cls.__name__}")
     for component_cls in component_classes:
         key = getattr(component_cls, '_component_key', component_cls)
         is_lazy = bool(getattr(component_cls, '_component_lazy', False))
-        def create_component(cls=component_cls):
-            sig = inspect.signature(cls.__init__)
-            deps = {}
-            tok = _resolving.set(True)
-            try:
-                for p in sig.parameters.values():
-                    if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
-                        continue
-                    deps[p.name] = _resolve_param(container, p)
-            finally:
-                _resolving.reset(tok)
-            return cls(**deps)
-        def provider_factory(lazy=is_lazy, maker=create_component):
+        def provider_factory(lazy=is_lazy, cls=component_cls):
             def _factory():
                 if lazy:
-                    return ComponentProxy(maker)
-                return maker()
+                    return ComponentProxy(lambda: create_instance(cls, container))
+                return create_instance(cls, container)
             return _factory
         container.bind(key, provider_factory(), lazy=is_lazy)
 
+_container: Optional[PicoContainer] = None
 
-_container = None
-
-
-def init(root_package, *, exclude: Optional[Callable[[str], bool]] = None, auto_exclude_caller: bool = True):
+def init(
+    root_package,
+    *,
+    exclude: Optional[Callable[[str], bool]] = None,
+    auto_exclude_caller: bool = True,
+    plugins: Tuple[PicoPlugin, ...] = (),
+):
     global _container
     if _container:
         return _container
@@ -223,15 +306,35 @@ def init(root_package, *, exclude: Optional[Callable[[str], bool]] = None, auto_
                 def combined_exclude(mod: str, _caller=caller_name, _prev=prev):
                     return mod == _caller or _prev(mod)
     _container = PicoContainer()
+    binder = Binder(_container)
     logging.info("Initializing pico-ioc...")
     tok = _scanning.set(True)
     try:
-        _scan_and_configure(root_package, _container, exclude=combined_exclude)
+        _scan_and_configure(root_package, _container, exclude=combined_exclude, plugins=plugins)
     finally:
         _scanning.reset(tok)
+    for pl in plugins:
+        try:
+            if hasattr(pl, "after_bind"):
+                pl.after_bind(_container, binder)
+        except Exception:
+            logging.exception("Plugin after_bind failed")
+    for pl in plugins:
+        try:
+            if hasattr(pl, "before_eager"):
+                pl.before_eager(_container, binder)
+        except Exception:
+            logging.exception("Plugin before_eager failed")
     _container._eager_instantiate_all()
+    for pl in plugins:
+        try:
+            if hasattr(pl, "after_ready"):
+                pl.after_ready(_container, binder)
+        except Exception:
+            logging.exception("Plugin after_ready failed")
     logging.info("Container configured and ready.")
     return _container
+
 
 
 def factory_component(cls):
