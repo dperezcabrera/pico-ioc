@@ -1,0 +1,24 @@
+# Incluir ficheros importantes
+include README.md
+include LICENSE
+
+# Incluir todo el código fuente
+recursive-include src *.py
+
+# Incluir datos de tests si quieres que otros puedan correrlos desde el sdist
+# (opcional — puedes quitarlo si no quieres incluir tests en PyPI)
+recursive-include tests *.py
+
+# Excluir cosas innecesarias
+exclude .gitignore
+exclude Dockerfile*
+exclude docker-compose*.yml
+exclude Makefile
+
+# Excluir carpetas de build, virtualenvs, caches, etc.
+prune build
+prune dist
+prune .tox
+prune .pytest_cache
+prune __pycache__
+
