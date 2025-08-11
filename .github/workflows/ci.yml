@@ -32,33 +32,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install tox
 
-      - name: Run tests with coverage (and ensure suffixed file)
+      # tox must set COVERAGE_FILE to {tox_root}/.coverage in [testenv:cov]
+      - name: Run tests with coverage (writes to repo root)
         shell: bash
-        env:
-          COVERAGE_FILE: .coverage.${{ matrix.python-version }}
         run: |
           set -euxo pipefail
           tox -e cov
-
-          echo "After tox, list files:"
-          ls -la
-          echo "Search any .coverage*:"
-          find . -maxdepth 2 -type f -name ".coverage*" -print || true
-
-          # Fallback 1: si se creó como ".coverage", renómbralo
-          if [ ! -f ".coverage.${{ matrix.python-version }}" ] && [ -f ".coverage" ]; then
-            mv .coverage .coverage.${{ matrix.python-version }}
-          fi
-
-          # Fallback 2: si apareció en otro sitio, muévelo aquí
-          if [ ! -f ".coverage.${{ matrix.python-version }}" ]; then
-            CAND=$(find . -type f -name ".coverage" | head -n 1 || true)
-            if [ -n "$CAND" ]; then
-              mv "$CAND" .coverage.${{ matrix.python-version }}
-            fi
-          fi
-
-          # Verificación final (fallará el job si no existe)
+          # Rename to per-version file for artifact + merge job
+          mv .coverage .coverage.${{ matrix.python-version }}
           ls -la .coverage.${{ matrix.python-version }}
 
       - name: Upload .coverage artifact
@@ -82,7 +63,9 @@ jobs:
           path: coverage-reports
 
       - name: Combine coverage and generate reports
+        shell: bash
         run: |
+          set -euxo pipefail
           python -m pip install coverage
           files=$(find coverage-reports -type f -name ".coverage.*" -print)
           if [ -z "$files" ]; then
@@ -107,10 +90,11 @@ jobs:
           path: htmlcov
           if-no-files-found: error
 
+      # Optional: upload to Codecov (remove if not used)
       - name: Upload to Codecov
         if: always()
         uses: codecov/codecov-action@v4
         with:
           files: coverage.xml
           fail_ci_if_error: true
-
+          # token: ${{ secrets.CODECOV_TOKEN }}  # required only for private repos
