@@ -2,9 +2,9 @@ name: CI & Coverage
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 jobs:
   tests:
@@ -32,7 +32,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install tox
 
-      # tox must set COVERAGE_FILE to {tox_root}/.coverage in [testenv:cov]
       - name: Run tests with coverage (writes to repo root)
         shell: bash
         run: |
