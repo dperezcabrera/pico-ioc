@@ -335,29 +335,3 @@ def init(
     logging.info("Container configured and ready.")
     return _container
 
-
-
-def factory_component(cls):
-    setattr(cls, '_is_factory_component', True)
-    return cls
-
-
-def provides(key: Any, *, lazy: bool = False):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        setattr(wrapper, '_provides_name', key)
-        setattr(wrapper, '_pico_lazy', bool(lazy))
-        return wrapper
-    return decorator
-
-
-def component(cls=None, *, name: Any = None, lazy: bool = False):
-    def decorator(c):
-        setattr(c, '_is_component', True)
-        setattr(c, '_component_key', name if name is not None else c)
-        setattr(c, '_component_lazy', bool(lazy))
-        return c
-    return decorator(cls) if cls else decorator
-
