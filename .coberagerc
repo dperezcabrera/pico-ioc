@@ -1,0 +1,13 @@
+[run]
+branch = True
+source =
+    pico_ioc
+
+[paths]
+pico_ioc =
+    src/pico_ioc
+    .tox/*/site-packages/pico_ioc
+    */site-packages/pico_ioc
+
+[report]
+show_missing = True
