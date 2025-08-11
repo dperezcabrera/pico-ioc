@@ -73,9 +73,9 @@ jobs:
             echo "No coverage data files found"; exit 1
           fi
           coverage combine $files
-          coverage report -m
-          coverage xml -o coverage.xml
-          coverage html -d htmlcov
+          coverage report -m --rcfile=.coveragerc
+          coverage xml -o coverage.xml --rcfile=.coveragerc
+          coverage html -d htmlcov --rcfile=.coveragerc
 
       - name: Upload combined coverage XML
         uses: actions/upload-artifact@v4
@@ -91,11 +91,10 @@ jobs:
           path: htmlcov
           if-no-files-found: error
 
-      # Optional: upload to Codecov (remove if not used)
       - name: Upload to Codecov
         if: always()
         uses: codecov/codecov-action@v4
         with:
           files: coverage.xml
           fail_ci_if_error: true
-          # token: ${{ secrets.CODECOV_TOKEN }}  # required only for private repos
+
