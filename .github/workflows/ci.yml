@@ -33,15 +33,33 @@ jobs:
           pip install tox
 
       - name: Run tests with coverage (and ensure suffixed file)
+        shell: bash
         env:
           COVERAGE_FILE: .coverage.${{ matrix.python-version }}
         run: |
+          set -euxo pipefail
           tox -e cov
-          # Fallback: if tox/pytest-cov wrote ".coverage" instead of the suffixed name, rename it.
+
+          echo "After tox, list files:"
+          ls -la
+          echo "Search any .coverage*:"
+          find . -maxdepth 2 -type f -name ".coverage*" -print || true
+
+          # Fallback 1: si se creó como ".coverage", renómbralo
           if [ ! -f ".coverage.${{ matrix.python-version }}" ] && [ -f ".coverage" ]; then
             mv .coverage .coverage.${{ matrix.python-version }}
           fi
-          echo "Files after tests:" && ls -la
+
+          # Fallback 2: si apareció en otro sitio, muévelo aquí
+          if [ ! -f ".coverage.${{ matrix.python-version }}" ]; then
+            CAND=$(find . -type f -name ".coverage" | head -n 1 || true)
+            if [ -n "$CAND" ]; then
+              mv "$CAND" .coverage.${{ matrix.python-version }}
+            fi
+          fi
+
+          # Verificación final (fallará el job si no existe)
+          ls -la .coverage.${{ matrix.python-version }}
 
       - name: Upload .coverage artifact
         uses: actions/upload-artifact@v4
