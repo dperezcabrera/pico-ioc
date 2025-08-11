@@ -32,10 +32,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install tox
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (and ensure suffixed file)
         env:
           COVERAGE_FILE: .coverage.${{ matrix.python-version }}
-        run: tox -e cov
+        run: |
+          tox -e cov
+          # Fallback: if tox/pytest-cov wrote ".coverage" instead of the suffixed name, rename it.
+          if [ ! -f ".coverage.${{ matrix.python-version }}" ] && [ -f ".coverage" ]; then
+            mv .coverage .coverage.${{ matrix.python-version }}
+          fi
+          echo "Files after tests:" && ls -la
 
       - name: Upload .coverage artifact
         uses: actions/upload-artifact@v4
@@ -60,7 +66,6 @@ jobs:
       - name: Combine coverage and generate reports
         run: |
           python -m pip install coverage
-          # Encuentra todos los .coverage.* descargados
           files=$(find coverage-reports -type f -name ".coverage.*" -print)
           if [ -z "$files" ]; then
             echo "No coverage data files found"; exit 1
