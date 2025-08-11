@@ -2,6 +2,8 @@
 branch = True
 source =
     pico_ioc
+omit =
+    */_version.py
 
 [paths]
 pico_ioc =
