@@ -91,11 +91,12 @@ jobs:
           if-no-files-found: error
 
       - name: Upload to Codecov
-        if: always()
+        if: always() && !cancelled()
         uses: codecov/codecov-action@v5
+        continue-on-error: true
         with:
           files: coverage.xml
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: dperezcabrera/pico-ioc
 
