@@ -1,9 +1,3 @@
-Got it ✅
-Here’s your **updated README.md in full English**, keeping all original sections but now including the **name-first resolution** feature and new tests section.
-
----
-
-````markdown
 # 📦 Pico-IoC: A Minimalist IoC Container for Python
 
 [![PyPI](https://img.shields.io/pypi/v/pico-ioc.svg)](https://pypi.org/project/pico-ioc/)
