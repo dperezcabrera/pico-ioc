@@ -186,17 +186,42 @@ def resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
     return container.get(key)
 
 def create_instance(cls: type, container: PicoContainer) -> Any:
+    """
+    Instantiate `cls` with constructor DI from `container`.
+
+    Resolution rules:
+      - Skip `self`, *args, **kwargs.
+      - Try resolve_param(...) for each parameter.
+      - If resolve_param raises NameError AND the parameter has a default,
+        skip injecting it so Python uses the default value.
+      - Otherwise, propagate the error.
+
+    This preserves the "name > type > MRO > str(name)" precedence in resolve_param,
+    while making defaulted, annotated parameters truly optional.
+    """
     sig = inspect.signature(cls.__init__)
-    deps = {}
+    deps: Dict[str, Any] = {}
+
     tok = _resolving.set(True)
     try:
         for p in sig.parameters.values():
-            if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            if p.name == 'self' or p.kind in (
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            ):
                 continue
-            deps[p.name] = resolve_param(container, p)
+
+            try:
+                deps[p.name] = resolve_param(container, p)
+            except NameError:
+                if p.default is not inspect._empty:
+                    continue
+                raise
     finally:
         _resolving.reset(tok)
+
     return cls(**deps)
+
 
 @runtime_checkable
 class PicoPlugin(Protocol):
@@ -217,12 +242,14 @@ def _scan_and_configure(
     package = importlib.import_module(package_or_name) if isinstance(package_or_name, str) else package_or_name
     logging.info(f"Scanning in '{package.__name__}'...")
     binder = Binder(container)
+
     for pl in plugins:
         try:
             if hasattr(pl, "before_scan"):
                 pl.before_scan(package, binder)
         except Exception:
             logging.exception("Plugin before_scan failed")
+
     component_classes, factory_classes = [], []
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
         if exclude and exclude(name):
@@ -243,39 +270,83 @@ def _scan_and_configure(
                     factory_classes.append(obj)
         except Exception as e:
             logging.warning(f"Module {name} not processed: {e}")
+
     for pl in plugins:
         try:
             if hasattr(pl, "after_scan"):
                 pl.after_scan(package, binder)
         except Exception:
             logging.exception("Plugin after_scan failed")
-    for factory_cls in factory_classes:
-        try:
-            sig = inspect.signature(factory_cls.__init__)
-            instance = factory_cls(container) if 'container' in sig.parameters else factory_cls()
-            for _, method in inspect.getmembers(instance, inspect.ismethod):
-                if hasattr(method, '_provides_name'):
-                    key = getattr(method, '_provides_name')
-                    is_lazy = bool(getattr(method, '_pico_lazy', False))
-                    def make_provider(m=method, lazy=is_lazy):
-                        def _factory():
-                            if lazy:
-                                return ComponentProxy(lambda: m())
-                            return m()
-                        return _factory
-                    container.bind(key, make_provider(), lazy=is_lazy)
-        except Exception:
-            logging.exception(f"Error in factory {factory_cls.__name__}")
+            
     for component_cls in component_classes:
         key = getattr(component_cls, '_component_key', component_cls)
         is_lazy = bool(getattr(component_cls, '_component_lazy', False))
+
         def provider_factory(lazy=is_lazy, cls=component_cls):
             def _factory():
                 if lazy:
                     return ComponentProxy(lambda: create_instance(cls, container))
                 return create_instance(cls, container)
             return _factory
+
         container.bind(key, provider_factory(), lazy=is_lazy)
+
+
+    def _resolve_method_kwargs(meth) -> Dict[str, Any]:
+        sig = inspect.signature(meth)
+        deps = {}
+        tok = _resolving.set(True)
+        try:
+            for p in sig.parameters.values():
+                if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                    continue
+                try:
+                    deps[p.name] = resolve_param(container, p)
+                except NameError:
+                    if p.default is not inspect._empty:
+                        continue
+                    raise
+        finally:
+            _resolving.reset(tok)
+        return deps
+
+    for factory_cls in factory_classes:
+        try:
+            factory_instance = create_instance(factory_cls, container)
+
+            for name, func in inspect.getmembers(factory_cls, predicate=inspect.isfunction):
+                provides_key = getattr(func, '_provides_name', None)
+                if provides_key is None:
+                    continue
+
+                is_lazy = bool(getattr(func, '_pico_lazy', False))
+
+                bound_method = getattr(factory_instance, name, None)
+                if bound_method is None:
+                    bound_method = func.__get__(factory_instance, factory_cls)
+
+                fn_meta_src = getattr(bound_method, '__func__', bound_method)
+                if getattr(fn_meta_src, '_provides_name', None) is not None:
+                    provides_key = getattr(fn_meta_src, '_provides_name')
+                    is_lazy = bool(getattr(fn_meta_src, '_pico_lazy', is_lazy))
+
+                def make_provider(m=bound_method, lazy=is_lazy):
+                    def _factory():
+                        kwargs = _resolve_method_kwargs(m)
+
+                        def _call():
+                            return m(**kwargs)
+
+                        if lazy:
+                            return ComponentProxy(lambda: _call())
+                        return _call()
+                    return _factory
+
+                container.bind(provides_key, make_provider(), lazy=is_lazy)
+        except Exception:
+            logging.exception(f"Error in factory {factory_cls.__name__}")
+
+
 
 _container: Optional[PicoContainer] = None
 
