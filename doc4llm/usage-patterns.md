@@ -102,8 +102,8 @@ When `UserService` is requested, pico-ioc automatically injects a `Storage`.
 
 ## 7. Thread Safety
 
-**Q:** Is pico-ioc thread-safe?
-**A:** Yes. The container uses `ContextVar` internally to ensure safe resolution of dependencies even in multithreaded environments.
+**Q: Is pico-ioc thread-safe?**
+**A:** Yes. Dependency resolution and scanning states are tracked using `ContextVar`, which isolates these flags per thread and per async task. This ensures safe operation in multithreaded and asynchronous environments without shared-state conflicts.
 
 ---
 
