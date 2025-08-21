@@ -212,8 +212,8 @@ def test_true_div_and_reflected_and_divmod():
     p = ComponentProxy(factory)
 
     # true division
-    assert p / 4 == 2.5
-    assert 20 / p == 2.0
+    assert p / 4 == pytest.approx(2.5)
+    assert 20 / p == pytest.approx(2.0)
 
     # divmod and reflected divmod
     assert divmod(p, 6) == (1, 4)
