@@ -109,10 +109,10 @@ print(COUNTER["value"])               # 1
 
 Starting with **v0.5.0**, Pico-IoC enforces **name-first resolution**:
 
-1. **Parameter name** (highest priority)
-2. **Exact type annotation**
-3. **MRO fallback** (walk base classes)
-4. **String(name)**
+1. **Parameter name** (highest priority)  
+2. **Exact type annotation**  
+3. **MRO fallback** (walk base classes)  
+4. **String(name)**  
 
 This means that if a dependency could match both by name and type, **the name match wins**.
 
@@ -138,6 +138,18 @@ class NameVsTypeFactory:
 container = init(__name__)
 assert container.get("choose") == "by-name"
 ```
+---
+
+## 📝 Notes on Annotations (PEP 563)
+
+Pico-IoC fully supports **postponed evaluation of annotations**
+(`from __future__ import annotations`, a.k.a. **PEP 563**) in Python 3.8–3.10.
+
+* Type hints are evaluated with `typing.get_type_hints` and safely resolved.
+* Missing dependencies always raise a **`NameError`**, never a `TypeError`.
+* Behavior is consistent across Python 3.8+ and Python 3.11+ (where PEP 563 is no longer default).
+
+This means you can freely use either direct type hints or string-based annotations in your components and factories, without breaking dependency injection.
 
 ---
 

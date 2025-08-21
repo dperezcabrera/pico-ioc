@@ -3,6 +3,8 @@ import importlib
 import inspect
 import logging
 import pkgutil
+import sys
+import typing
 from contextvars import ContextVar
 from typing import Any, Callable, Dict, Optional, Protocol, Tuple, runtime_checkable
 
@@ -17,6 +19,7 @@ __all__ = [
     "Binder",
     "PicoPlugin",
     "init",
+    "reset", 
     "component",
     "factory_component",
     "provides",
@@ -163,6 +166,28 @@ class ComponentProxy:
     def __enter__(self): return self._get_real_object().__enter__()
     def __exit__(self, exc_type, exc_val, exc_tb): return self._get_real_object().__exit__(exc_type, exc_val, exc_tb)
 
+
+def _evaluated_hints(func, owner_cls: Optional[type] = None) -> Dict[str, Any]:
+    try:
+        module = sys.modules.get(func.__module__)
+        globalns = getattr(module, "__dict__", {})
+        localns = vars(owner_cls) if owner_cls is not None else {}
+        return typing.get_type_hints(func, globalns=globalns, localns=localns)
+    except Exception:
+        return {}
+
+def _resolve_annotation_to_type(ann: Any, func, owner_cls: Optional[type]) -> Any:
+    if not isinstance(ann, str):
+        return ann
+    try:
+        module = sys.modules.get(func.__module__)
+        globalns = getattr(module, "__dict__", {})
+        localns = vars(owner_cls) if owner_cls is not None else {}
+        return eval(ann, globalns, localns)
+    except Exception:
+        return ann
+
+
 def resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
     if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
         raise RuntimeError("Invalid param for resolution")
@@ -185,21 +210,18 @@ def resolve_param(container: PicoContainer, p: inspect.Parameter) -> Any:
     key = p.name if ann is inspect._empty else ann
     return container.get(key)
 
+def _evaluated_hints(func, owner_cls: Optional[type] = None) -> Dict[str, Any]:
+    try:
+        module = sys.modules.get(func.__module__)
+        globalns = getattr(module, "__dict__", {})
+        localns = vars(owner_cls) if owner_cls is not None else {}
+        return typing.get_type_hints(func, globalns=globalns, localns=localns)
+    except Exception:
+        return {}
+        
 def create_instance(cls: type, container: PicoContainer) -> Any:
-    """
-    Instantiate `cls` with constructor DI from `container`.
-
-    Resolution rules:
-      - Skip `self`, *args, **kwargs.
-      - Try resolve_param(...) for each parameter.
-      - If resolve_param raises NameError AND the parameter has a default,
-        skip injecting it so Python uses the default value.
-      - Otherwise, propagate the error.
-
-    This preserves the "name > type > MRO > str(name)" precedence in resolve_param,
-    while making defaulted, annotated parameters truly optional.
-    """
     sig = inspect.signature(cls.__init__)
+    hints = _evaluated_hints(cls.__init__, owner_cls=cls)
     deps: Dict[str, Any] = {}
 
     tok = _resolving.set(True)
@@ -211,16 +233,55 @@ def create_instance(cls: type, container: PicoContainer) -> Any:
             ):
                 continue
 
-            try:
-                deps[p.name] = resolve_param(container, p)
-            except NameError:
+            resolved = False
+            
+            if container.has(p.name):
+                deps[p.name] = container.get(p.name)
+                resolved = True
+            else:
+                raw_ann = hints.get(p.name, p.annotation)
+                ann = _resolve_annotation_to_type(raw_ann, cls.__init__, cls)
+
+                if ann is not inspect._empty:
+                    if container.has(ann):
+                        deps[p.name] = container.get(ann)
+                        resolved = True
+                    else:
+                        try:
+                            for base in getattr(ann, "__mro__", ())[1:]:
+                                if base is object:
+                                    break
+                                if container.has(base):
+                                    deps[p.name] = container.get(base)
+                                    resolved = True
+                                    break
+                        except Exception:
+                            pass
+
+                if not resolved and container.has(str(p.name)):
+                    deps[p.name] = container.get(str(p.name))
+                    resolved = True
+
+                if not resolved:
+                    key = p.name if ann is inspect._empty else ann
+                    try:
+                        deps[p.name] = container.get(key)
+                        resolved = True
+                    except NameError:
+                        resolved = False
+                        
+            if not resolved:
                 if p.default is not inspect._empty:
                     continue
-                raise
+                missing_key = hints.get(p.name, p.annotation)
+                if missing_key is inspect._empty:
+                    missing_key = p.name
+                raise NameError(f"No provider found for key: {missing_key}")
     finally:
         _resolving.reset(tok)
 
     return cls(**deps)
+
 
 
 @runtime_checkable
@@ -291,24 +352,73 @@ def _scan_and_configure(
 
         container.bind(key, provider_factory(), lazy=is_lazy)
 
-
     def _resolve_method_kwargs(meth) -> Dict[str, Any]:
         sig = inspect.signature(meth)
-        deps = {}
+
+        owner_cls = None
+        try:
+            self_obj = getattr(meth, "__self__", None)
+            if self_obj is not None:
+                owner_cls = self_obj.__class__
+        except Exception:
+            owner_cls = None
+
+        hints = _evaluated_hints(meth, owner_cls=owner_cls)
+        deps: Dict[str, Any] = {}
         tok = _resolving.set(True)
         try:
             for p in sig.parameters.values():
-                if p.name == 'self' or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                if p.name == 'self' or p.kind in (
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                ):
                     continue
-                try:
-                    deps[p.name] = resolve_param(container, p)
-                except NameError:
+
+                resolved = False
+                ann = _resolve_annotation_to_type(hints.get(p.name, p.annotation), meth, owner_cls)
+
+                if container.has(p.name):
+                    deps[p.name] = container.get(p.name)
+                    resolved = True
+   
+     
+                elif ann is not inspect._empty and container.has(ann):
+                    deps[p.name] = container.get(ann)
+                    resolved = True
+
+                elif ann is not inspect._empty:
+                    try:
+                        for base in getattr(ann, "__mro__", ())[1:]:
+                            if base is object:
+                                break
+                            if container.has(base):
+                                deps[p.name] = container.get(base)
+                                resolved = True
+                                break
+                    except Exception:
+                        pass
+ 
+                elif container.has(str(p.name)):
+                    deps[p.name] = container.get(str(p.name))
+                    resolved = True
+
+                elif ann is not inspect._empty or p.name:
+                    key = p.name if ann is inspect._empty else ann
+                    try:
+                        deps[p.name] = container.get(key)
+                        resolved = True
+                    except NameError:
+                        resolved = False
+
+                if not resolved:
                     if p.default is not inspect._empty:
                         continue
-                    raise
+                    missing_key = ann if ann is not inspect._empty else p.name
+                    raise NameError(f"No provider found for key: {missing_key}")
         finally:
             _resolving.reset(tok)
         return deps
+
 
     for factory_cls in factory_classes:
         try:
@@ -350,16 +460,22 @@ def _scan_and_configure(
 
 _container: Optional[PicoContainer] = None
 
+def reset() -> None:
+    global _container
+    _container = None
+    
 def init(
     root_package,
     *,
     exclude: Optional[Callable[[str], bool]] = None,
     auto_exclude_caller: bool = True,
     plugins: Tuple[PicoPlugin, ...] = (),
+    reuse: bool = True,
 ):
     global _container
-    if _container:
+    if reuse and _container:
         return _container
+
     combined_exclude = exclude
     if auto_exclude_caller:
         try:
