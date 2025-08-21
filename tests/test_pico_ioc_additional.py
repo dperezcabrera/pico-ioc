@@ -137,7 +137,10 @@ class BootFactory:
 
     # Teardown
     sys.path.pop(0)
-    pico_ioc._container = None
+    try:
+        pico_ioc.reset()
+    except AttributeError:
+        pico_ioc._container = None
     to_del = [m for m in list(sys.modules) if m == "extproj" or m.startswith("extproj.")]
     for m in to_del:
         sys.modules.pop(m, None)
@@ -175,7 +178,10 @@ class NameVsTypeFactory:
 
     # Force a fresh scan: reset container and unload package modules
     import pico_ioc
-    pico_ioc._container = None
+    try:
+        pico_ioc.reset()
+    except AttributeError:
+        pico_ioc._container = None
     for m in list(_sys.modules):
         if m == "extproj" or m.startswith("extproj."):
             _sys.modules.pop(m, None)

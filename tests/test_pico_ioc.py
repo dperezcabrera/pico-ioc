@@ -115,7 +115,10 @@ ioc.get(SimpleService)  # should raise during scan; import is caught/logged by s
 
     # Teardown
     sys.path.pop(0)
-    pico_ioc._container = None
+    try:
+        pico_ioc.reset()
+    except AttributeError:
+        pico_ioc._container = None
     mods_to_del = [m for m in list(sys.modules.keys()) if m == "test_project" or m.startswith("test_project.")]
     for m in mods_to_del:
         sys.modules.pop(m, None)
