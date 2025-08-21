@@ -2,33 +2,54 @@
 
 from __future__ import annotations
 
-import sys
-import importlib
-from pathlib import Path
-import textwrap
 import pytest
-
 import pico_ioc
+import importlib
+import sys
+import textwrap
+from contextlib import contextmanager
+from pathlib import Path
+from types import ModuleType
 
-
-def _make_pkg(tmp_path: Path, name: str, files: dict[str, str]) -> object:
+@contextmanager
+def _make_pkg(tmp_path: Path, name: str, files: dict[str, str]):
+    """
+    Create a temporary importable package under `tmp_path`, yield the module,
+    and clean up sys.path and sys.modules afterwards.
+    """
     pkg_dir = tmp_path / name
     pkg_dir.mkdir(parents=True)
-
     (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
     for relpath, content in files.items():
         p = pkg_dir / relpath
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(textwrap.dedent(content), encoding="utf-8")
-    sys.path.insert(0, str(tmp_path))
+
+    added_to_path = False
+    pstr = str(tmp_path)
+    if pstr not in sys.path:
+        sys.path.insert(0, pstr)
+        added_to_path = True
+
     try:
-        return importlib.import_module(name)
+        mod: ModuleType = importlib.import_module(name)
+        yield mod
     finally:
-        pass
+        # Remove package and submodules from the import cache
+        to_drop = [m for m in list(sys.modules) if m == name or m.startswith(name + ".")]
+        for m in to_drop:
+            sys.modules.pop(m, None)
+
+        # Restore sys.path if we modified it
+        if added_to_path:
+            try:
+                sys.path.remove(pstr)
+            except ValueError:
+                pass
 
 
 def test_component_injection_by_type_works(tmp_path: Path):
-    pkg = _make_pkg(
+    with _make_pkg(
         tmp_path,
         "samplepkg_ok",
         {
@@ -53,20 +74,19 @@ def test_component_injection_by_type_works(tmp_path: Path):
                         self.dep = service_b
             """,
         },
-    )
+    ) as pkg:
+        container = pico_ioc.init(pkg)
 
-    container = pico_ioc.init(pkg)
+        from samplepkg_ok.service_a import ServiceA
+        from samplepkg_ok.service_b import ServiceB
 
-    from samplepkg_ok.service_a import ServiceA
-    from samplepkg_ok.service_b import ServiceB
-
-    a = container.get(ServiceA)
-    assert isinstance(a.dep, ServiceB)
-    assert a.dep.value == 42
+        a = container.get(ServiceA)
+        assert isinstance(a.dep, ServiceB)
+        assert a.dep.value == 42
 
 
 def test_missing_provider_raises_clear_error(tmp_path: Path):
-    pkg = _make_pkg(
+    with _make_pkg(
         tmp_path,
         "samplepkg_bad",
         {
@@ -83,11 +103,10 @@ def test_missing_provider_raises_clear_error(tmp_path: Path):
                         self.dep = service_b
             """,
         },
-    )
-
-    pico_ioc.reset()
-    with pytest.raises(NameError) as ei:
-        pico_ioc.init(pkg)
+    ) as pkg:
+        pico_ioc.reset()
+        with pytest.raises(NameError) as ei:
+            pico_ioc.init(pkg)
 
     msg = str(ei.value)
     assert "No provider found for key" in msg
