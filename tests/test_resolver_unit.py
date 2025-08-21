@@ -115,6 +115,7 @@ def test_defaulted_parameter_is_skipped_when_provider_missing():
     c = PicoContainer()
     r = Resolver(c)
 
-    def fn(dep: Derived = None):  # default exists; no provider bound
-        return dep
+    fn = lambda dep=None: dep  # noqa: E731 - intentional inline fn
+    kwargs = r.kwargs_for_callable(fn)
+    assert "dep" not in kwargs
 
