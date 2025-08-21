@@ -2,9 +2,11 @@
 
 ## What is Pico-IoC?
 
-Pico-IoC is a tiny, zero-dependency Inversion of Control (IoC) container for Python. It discovers components via decorators, wires dependencies automatically, and instantiates everything eagerly by default (fail-fast). You can opt into lazy creation via a lightweight proxy.
+Pico-IoC is a tiny, zero-dependency Inversion of Control (IoC) container for Python.  
+It discovers components via decorators, wires dependencies automatically, and instantiates everything eagerly by default (fail-fast).  
+You can opt into lazy creation via a lightweight proxy.
 
-Target Python: 3.8+
+Target Python: 3.8+  
 Core design goals: minimal API, predictable resolution, easy testing, framework-agnostic.
 
 ---
@@ -18,26 +20,23 @@ Core design goals: minimal API, predictable resolution, easy testing, framework-
   A thin façade for plugins to `bind/has/get` during scan & lifecycle hooks.
 
 * **Decorators**
-
-  * `@component(cls=None, *, name=None, lazy=False)` → register a class.
-
-    * Key: class type by default, or `name` (string) if provided.
-    * `lazy=True` returns a `ComponentProxy` until first real use.
+  * `@component(cls=None, *, name=None, lazy=False)` → register a class.  
+    - Key: class type by default, or `name` (string) if provided.  
+    - `lazy=True` returns a `ComponentProxy` until first real use.
   * `@factory_component` → register a factory class whose methods can provide components.
   * `@provides(key, *, lazy=False)` → mark a factory method as a provider for `key` (string or type).
 
 * **Factory DI**
-
   * Constructor of a `@factory_component` receives DI like regular components.
   * Each `@provides` method can also have DI in its parameters (by name/type).
   * Defaulted params are **optional**: if not bound, the method uses its default.
 
-* **Resolution Order (v0.5.0)**
-
+* **Resolution Order**
   1. **parameter name**, 2) type annotation, 3) MRO fallback, 4) `str(name)`.
 
 * **ComponentProxy**
-  A transparent proxy for lazy components that defers creation until first actual interaction. Forwards common dunder methods (e.g., `__len__`, `__getitem__`, `__iter__`, `__bool__`, etc.).
+  A transparent proxy for lazy components that defers creation until first actual interaction.  
+  Forwards common dunder methods (e.g., `__len__`, `__getitem__`, `__iter__`, `__bool__`, operators, context managers, etc.).
 
 * **Re-entrancy Guard**
   Accessing `container.get(...)` during package scanning raises a clear error (prevents re-entrant use).
@@ -47,7 +46,6 @@ Core design goals: minimal API, predictable resolution, easy testing, framework-
 ## Lifecycle
 
 1. **init(root, …)**
-
    * Scans `root` package (string/module).
    * Auto-excludes the calling module by default (`auto_exclude_caller=True`).
    * Calls plugin hooks (`before_scan`, `visit_class`, `after_scan`, `after_bind`, `before_eager`, `after_ready`).
@@ -55,7 +53,8 @@ Core design goals: minimal API, predictable resolution, easy testing, framework-
    * **Blueprint**: eagerly instantiate all non-lazy bindings. Errors fail startup.
 
 2. **get(key)**
-   Returns the singleton instance for `key` (creates if needed). For lazy bindings, returns a proxy first.
+   Returns the singleton instance for `key` (creates if needed).  
+   For lazy bindings, returns a proxy first.
 
 ---
 
@@ -76,7 +75,6 @@ Given a constructor or provider method parameter `p`:
 ## Quick Recipes
 
 ### 1) Basic components
-
 ```python
 from pico_ioc import component, init
 
@@ -91,7 +89,7 @@ class Repo:
 
 c = init(__name__)
 repo = c.get(Repo)
-```
+````
 
 ### 2) Inject by name
 
@@ -151,7 +149,8 @@ class F:
   * For type-based DI: ensure that class (or a base in its MRO) is provided.
 
 * **`RuntimeError: pico-ioc: re-entrant container access during scan.`**
-  Something called `get()` while scanning modules (e.g., at import time). Move that call out of module top-level or mark the dependent thing `lazy=True` and defer access.
+  Something called `get()` while scanning modules (e.g., at import time).
+  Move that call out of module top-level or mark the dependent thing `lazy=True` and defer access.
 
 ---
 
@@ -189,6 +188,7 @@ class MarkerPlugin:
 * **Eager by default**: `lazy=False` (default) is instantiated at the end of `init()`.
 * **Lazy**: `lazy=True` yields a `ComponentProxy`; realization occurs on first real interaction.
 * **Provider DI**: Provider methods can declare DI params; defaults make them optional.
+* **Thread safety**: Scanning and resolution use `ContextVar`, isolating state per thread/async task.
 
 ---
 
@@ -209,7 +209,7 @@ When a user asks for help:
 
    * For missing name: `@component(name="…")` or a `@provides("…")`.
    * For type: ensure class is scanned or provided by a factory.
-   * For optional hint (`param: T = None`): remind that defaults are optional and no binding is required.
+   * For optional hint (`param: T = None`): remind that defaults are optional.
 
 4. **Re-entrancy**
 
@@ -217,12 +217,12 @@ When a user asks for help:
 
 5. **Factories**
 
-   * Remind that factory ctor and provider params both support DI.
+   * Factory constructor and provider params both support DI.
    * Lazy provider builds only on first use; eager builds at `init()`.
 
 6. **Testing advice**
 
-   * If you want startup to succeed but test a missing dep, mark the dependent component/provider `lazy=True` and force realization inside the test to assert the error.
+   * For missing dep scenarios, mark component/provider `lazy=True` and force realization in the test.
 
 ---
 
@@ -230,7 +230,7 @@ When a user asks for help:
 
 * Calling `container.get(...)` at module import time in scanned packages.
 * Expecting type-based injection when a **name** binding exists (name wins).
-* Registering providers that create new instances each call (Pico-IoC expects singletons; if you need factories for multiple instances, expose a callable object).
+* Providers that create new instances each call (Pico-IoC expects singletons; use callables if you need factories).
 
 ---
 
@@ -258,8 +258,8 @@ svc = container.get("heavy_service")
 
 ## FAQ (short)
 
-* **Can I bind primitives or dicts?** Yes, from a factory `@provides("name")` returning a dict, etc.
-* **Thread safety?** Singletons are created once per container. Typical startup is single-threaded; runtime access is read-mostly.
+* **Can I bind primitives or dicts?** Yes, via `@provides("name")` returning e.g. a dict.
+* **Thread safety?** Yes. Singletons are created once per container. ContextVar ensures safe state isolation.
 * **How do I exclude modules from scanning?** Use `init(root, exclude=callable)`.
 * **Can I scan by module string?** Yes: `init("myapp.services")`.
 
@@ -267,19 +267,20 @@ svc = container.get("heavy_service")
 
 ## Version Notes Relevant to LLM Answers
 
-* **v0.5.2**: Name-first resolution; defaulted params in constructors and provider methods are **optional** (if unresolved, the default is used).
-* Factories receive DI in their constructor and in each provider method.
+* **v0.6.0**: `ComponentProxy` made fully transparent — supports operators, context managers, and more dunder methods.
+* **v0.5.2**: Name-first resolution; defaulted params in constructors and provider methods are optional.
+* Earlier versions: basic DI without name-first precedence.
 
 ---
 
 ## How to “Think” When Explaining Usage (LLM prompting tips)
 
 * Be explicit about the **binding key** (type vs string).
-* Map the user’s constructor or provider params to resolved keys using the resolution order.
+* Map constructor/provider params to resolution rules.
 * Show tiny, runnable snippets (no external deps).
-* Prefer **lazy** when demonstrating failure scenarios; prefer **eager** for production patterns.
-* If a user hits `NameError`, propose 2–3 concrete fixes (name binding, type binding, factory).
-* Don’t promise async/background work; show exact code changes or CLI commands the user can run now.
+* Prefer **lazy** for failure demos; prefer **eager** for production.
+* If user hits `NameError`, propose concrete fixes (name, type, factory).
+* Don’t promise async/background work — stick to code-level fixes.
 
 ---
 
