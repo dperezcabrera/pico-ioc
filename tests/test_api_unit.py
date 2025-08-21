@@ -1,9 +1,9 @@
 # tests/test_api_unit.py
 import pytest
 
+from pico_ioc import _state
 import pico_ioc.api as api
 from pico_ioc.container import PicoContainer
-from pico_ioc import _state
 from pico_ioc._state import _scanning
 
 

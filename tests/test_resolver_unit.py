@@ -1,162 +1,120 @@
-# tests/test_api_unit.py
+# tests/test_resolver.py
+
 import types
-import builtins
 import pytest
 
-import pico_ioc.api as api
 from pico_ioc.container import PicoContainer
-from pico_ioc import _state  # <- import the module, not the value
-from pico_ioc._state import _scanning
+from pico_ioc.resolver import Resolver
+from pico_ioc._state import _resolving
 
 
-@pytest.fixture(autouse=True)
-def clean_state():
-    api.reset()
-    assert _scanning.get() is False
-    yield
-    api.reset()
-    assert _scanning.get() is False
+# ----- Test helpers -----
+
+class Base: ...
+class Derived(Base): ...
+class Unrelated: ...
+
+def bind_value(container: PicoContainer, key, value):
+    """
+    Convenience: bind a key to a fixed value (non-lazy).
+    PicoContainer.bind expects a provider callable.
+    """
+    container.bind(key, lambda: value, lazy=False)
 
 
-def test_init_calls_scan_and_sets_scanning_and_eager(monkeypatch):
-    called = {"scan": False, "eager": False, "scanning_true_inside": False}
+# ----- Tests -----
 
-    def fake_scan(root_package, container, *, exclude, plugins):
-        called["scanning_true_inside"] = _scanning.get() is True
-        called["scan"] = True
+def test_resolution_order_prefers_param_name_over_annotation_and_mro():
+    """
+    Resolution precedence in _resolve_param:
+    1) direct name key
+    2) annotation exact key
+    3) MRO (parent classes)
+    4) str(name)
+    5) fallback -> container.get(key) with name/ann (shouldn't be reached here)
+    """
+    c = PicoContainer()
+    r = Resolver(c)
 
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
+    # For param name 'dep' with annotation Derived:
+    bind_value(c, Derived, "by_ann")         # 2) exact annotation
+    bind_value(c, Base, "by_mro")            # 3) via MRO
+    bind_value(c, str("dep"), "by_str_name") # 4) str(name)
+    bind_value(c, "dep", "by_name") # same as prev (kept)
+    
+    def fn(dep: Derived):  # noqa: ANN001 - annotations intentional
+        return dep
 
-    orig_eager = PicoContainer.eager_instantiate_all
-
-    def fake_eager(self):
-        called["eager"] = True
-        return orig_eager(self)
-
-    monkeypatch.setattr(PicoContainer, "eager_instantiate_all", fake_eager)
-
-    c = api.init("some_pkg")
-
-    assert isinstance(c, PicoContainer)
-    assert called["scan"] is True
-    assert called["eager"] is True
-    assert called["scanning_true_inside"] is True
-    assert _scanning.get() is False
-
-
-def test_init_reuse_short_circuits_scan(monkeypatch):
-    counter = {"scan": 0}
-
-    def fake_scan(*a, **k):
-        counter["scan"] += 1
-
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
-
-    c1 = api.init("pkg", reuse=True)
-    c2 = api.init("pkg", reuse=True)
-
-    assert c1 is c2
-    assert counter["scan"] == 1
+    kwargs = r.kwargs_for_callable(fn)
+    assert kwargs["dep"] == "by_name"
 
 
-def test_init_reuse_false_creates_new_container_and_scans(monkeypatch):
-    counter = {"scan": 0}
+def test_resolution_uses_annotation_when_name_missing():
+    c = PicoContainer()
+    r = Resolver(c)
 
-    def fake_scan(*a, **k):
-        counter["scan"] += 1
+    bind_value(c, Derived, "by_ann")
+    bind_value(c, Base, "by_mro_fallback_should_not_be_used")
 
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
+    def fn(dep: Derived):
+        return dep
 
-    c1 = api.init("pkg", reuse=False)
-    c2 = api.init("pkg", reuse=False)
-
-    assert c1 is not c2
-    assert counter["scan"] == 2
-
-
-def test_reset_clears_cached_container(monkeypatch):
-    counter = {"scan": 0}
-
-    def fake_scan(*a, **k):
-        counter["scan"] += 1
-
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
-
-    c1 = api.init("pkg", reuse=True)
-    # read current value through the module so it reflects updates
-    assert _state._container is c1
-
-    api.reset()
-    assert _state._container is None
-
-    c2 = api.init("pkg", reuse=True)
-    assert c2 is not c1
-    assert counter["scan"] == 2
+    kwargs = r.kwargs_for_callable(fn)
+    assert kwargs["dep"] == "by_ann"
 
 
-def test_auto_exclude_caller_when_no_exclude(monkeypatch):
-    captured = {"exclude": None}
+def test_resolution_uses_mro_when_no_name_or_annotation_binding():
+    c = PicoContainer()
+    r = Resolver(c)
 
-    def fake_scan(root_package, container, *, exclude, plugins):
-        captured["exclude"] = exclude
+    bind_value(c, Base, "by_mro")
 
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
-    api.init("pkg", auto_exclude_caller=True, reuse=False)
+    def fn(dep: Derived):
+        return dep
 
-    assert callable(captured["exclude"])
-    assert captured["exclude"](__name__) is True
-    assert captured["exclude"]("some.other.module") is False
-
-
-def test_auto_exclude_caller_combines_with_user_exclude(monkeypatch):
-    captured = {"exclude": None}
-
-    def fake_scan(root_package, container, *, exclude, plugins):
-        captured["exclude"] = exclude
-
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
-
-    def user_exclude(mod: str) -> bool:
-        return mod == "foo.bar"
-
-    api.init("pkg", exclude=user_exclude, auto_exclude_caller=True, reuse=False)
-
-    ex = captured["exclude"]
-    assert callable(ex)
-    assert ex(__name__) is True
-    assert ex("foo.bar") is True
-    assert ex("x.y.z") is False
+    kwargs = r.kwargs_for_callable(fn)
+    assert kwargs["dep"] == "by_mro"
 
 
-def test_plugin_hooks_are_called_in_order(monkeypatch):
-    calls = []
+def test_resolution_uses_str_name_when_no_name_ann_or_mro():
+    c = PicoContainer()
+    r = Resolver(c)
 
-    class DummyPlugin:
-        def after_bind(self, container, binder): calls.append("after_bind")
-        def before_eager(self, container, binder): calls.append("before_eager")
-        def after_ready(self, container, binder): calls.append("after_ready")
+    bind_value(c, "dep", "by_str_name")
 
-    def fake_scan(*a, **k):
-        pass
+    def fn(dep: Unrelated):  # no binding for Unrelated nor its MRO
+        return dep
 
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
-
-    api.init("pkg", plugins=(DummyPlugin(),), reuse=False)
-
-    assert calls == ["after_bind", "before_eager", "after_ready"]
+    kwargs = r.kwargs_for_callable(fn)
+    assert kwargs["dep"] == "by_str_name"
 
 
-def test_logging_messages_emitted(caplog, monkeypatch):
-    caplog.set_level("INFO")
+def test_missing_provider_raises_nameerror_with_proper_key_in_message():
+    """
+    When no provider and no default, Resolver.kwargs_for_callable should raise
+    NameError with the missing key: the annotation if present, else the param name.
+    """
+    c = PicoContainer()
+    r = Resolver(c)
 
-    def fake_scan(*a, **k):
-        pass
+    def fn(dep: Derived):
+        return dep
 
-    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
+    with pytest.raises(NameError) as ei:
+        r.kwargs_for_callable(fn)
+    # The message should include the annotation object (Derived) or its name
+    assert "No provider found for key" in str(ei.value)
+    assert "Derived" in str(ei.value)
 
-    api.init("pkg", reuse=False)
 
-    msgs = [rec.message for rec in caplog.records]
-    assert any("Initializing pico-ioc..." in m for m in msgs)
-    assert any("Container configured and ready." in m for m in msgs)
+def test_defaulted_parameter_is_skipped_when_provider_missing():
+    """
+    If a parameter has a default value and there's no provider, it should be
+    skipped (not included in the kwargs dict) rather than raising.
+    """
+    c = PicoContainer()
+    r = Resolver(c)
+
+    def fn(dep: Derived = None):  # default exists; no provider bound
+        return dep
 
