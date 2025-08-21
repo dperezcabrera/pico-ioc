@@ -238,7 +238,3 @@ From `v0.4.0` onward, Pico-IoC can be cleanly extended without patching the core
 ## 📜 License
 
 MIT — see [LICENSE](https://opensource.org/licenses/MIT)
-
-```
-
-
