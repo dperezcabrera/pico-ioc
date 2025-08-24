@@ -1,0 +1,230 @@
+# GUIDE.md — pico-ioc
+
+> **Mission:** make dependency wiring trivial so you can ship faster and shorten feedback cycles.
+
+This guide shows how to structure a Python app with **pico-ioc**: define components, provide dependencies, bootstrap a container, and run web/CLI code predictably.
+
+---
+
+## 1) Core concepts
+
+* **Component**: a class managed by the container. Use `@component`.
+* **Factory component**: a class that *provides* concrete instances (e.g., `Flask()`, clients). Use `@factory_component`.
+* **Provider**: a method on a factory that returns a dependency and declares its **key** (usually a type). Use `@provides(key=Type)` so consumers can request by type.
+* **Container**: built via `pico_ioc.init(package_or_module)`. Resolve with `container.get(TypeOrClass)`.
+
+Resolution rule of thumb: **ask by type** (e.g., `container.get(Flask)` or inject `def __init__(..., app: Flask)`).
+
+---
+
+## 2) Quick start (Hello DI)
+
+```python
+# app/config.py
+from pico_ioc import component
+
+@component
+class Config:
+    DB_URL = "sqlite:///demo.db"
+```
+
+```python
+# app/repo.py
+from pico_ioc import component
+from .config import Config
+
+@component
+class Repo:
+    def __init__(self, cfg: Config):
+        self._url = cfg.DB_URL
+    def fetch(self) -> str:
+        return f"fetching from {self._url}"
+```
+
+```python
+# app/service.py
+from pico_ioc import component
+from .repo import Repo
+
+@component
+class Service:
+    def __init__(self, repo: Repo):
+        self.repo = repo
+    def run(self) -> str:
+        return self.repo.fetch()
+```
+
+```python
+# main.py
+from pico_ioc import init
+import app
+
+container = init(app)          # build the container from the package
+svc = container.get(app.service.Service)
+print(svc.run())               # -> "fetching from sqlite:///demo.db"
+```
+
+Run:
+
+```bash
+python main.py
+```
+
+---
+
+## 3) Web example (Flask)
+
+```python
+# app/app_factory.py
+from pico_ioc import factory_component, provides
+from flask import Flask
+
+@factory_component
+class AppFactory:
+    @provides(key=Flask)
+    def provide_flask(self) -> Flask:
+        app = Flask(__name__)
+        app.config["JSON_AS_ASCII"] = False
+        return app
+```
+
+```python
+# app/api.py
+from pico_ioc import component
+from flask import Flask, jsonify
+
+@component
+class ApiApp:
+    def __init__(self, app: Flask):
+        self.app = app
+        self._routes()
+
+    def _routes(self):
+        @self.app.get("/health")
+        def health():
+            return jsonify(status="ok")
+```
+
+```python
+# web.py
+from pico_ioc import init
+from flask import Flask
+import app
+
+c = init(app)
+flask_app = c.get(Flask)
+
+if __name__ == "__main__":
+    flask_app.run(host="0.0.0.0", port=5000)
+```
+
+Run:
+
+```bash
+python web.py
+# GET http://localhost:5000/health -> {"status":"ok"}
+```
+
+---
+
+## 4) Configuration patterns
+
+**Environment-backed config:**
+
+```python
+# app/config.py
+import os
+from pico_ioc import component
+
+@component
+class Config:
+    WORKERS: int = int(os.getenv("WORKERS", "4"))
+    DEBUG: bool = os.getenv("DEBUG", "0") == "1"
+```
+
+**Inject where needed** (constructor injection keeps code testable):
+
+```python
+@component
+class Runner:
+    def __init__(self, cfg: Config):
+        self._debug = cfg.DEBUG
+```
+
+---
+
+## 5) Testing & overrides
+
+Define a **test factory** that provides fakes using the same keys:
+
+```python
+# tests/test_overrides.py
+from pico_ioc import factory_component, provides
+from app.repo import Repo
+
+class FakeRepo(Repo):
+    def fetch(self) -> str:
+        return "fake-data"
+
+@factory_component
+class TestOverrides:
+    @provides(key=Repo)
+    def provide_repo(self) -> Repo:
+        return FakeRepo()
+```
+
+Build the container for tests with both packages (app + overrides):
+
+```python
+# tests/test_service.py
+from pico_ioc import init
+import app
+from tests import test_overrides
+
+def test_service_fetch():
+    c = init([app, test_overrides])   # pass a list (composition root for tests)
+    svc = c.get(app.service.Service)
+    assert svc.run() == "fake-data"
+```
+
+> Pattern: use a **composition module** per environment (prod/test) and call `init([...])` with the modules that declare your providers. Providers registered later override earlier ones for the same key.
+
+---
+
+## 6) Tips & guardrails
+
+* **Ask by type**: inject `Flask`, `Config`, `Repo` instead of strings.
+* **Keep constructors cheap**: do not perform I/O in `__init__`.
+* **Small components**: one responsibility per component; wire them in service classes.
+* **Factories provide externals**: frameworks, clients, DB engines belong in `@factory_component` providers.
+* **Fail fast**: build the container at startup and crash early if a dependency is missing.
+* **No globals**: let the container own lifecycle; fetch via `container.get(...)` only at the edges (bootstrap).
+
+---
+
+## 7) Troubleshooting
+
+* **“No provider for X”**
+  Ensure a `@provides(key=X)` exists in a module passed to `init(...)`, and your constructor type annotation is exactly `X`.
+
+* **Wrong instance injected**
+  Check for duplicate providers for the same key. The last registered wins; control order via the list passed to `init([module_a, module_b])`.
+
+* **Circular imports**
+  Split components or move heavy imports into providers. Keep modules acyclic where possible.
+
+* **Flask not found**
+  Verify `from flask import Flask` and that your factory uses `@provides(key=Flask)`. Resolve it with `container.get(Flask)`.
+
+---
+
+## 8) What to read next
+
+* **Architecture**: internals, resolution order, lifecycle — `architecture-pico-ioc.md`
+* **Usage patterns**: recipes, FAQs, common mistakes — `usage-patterns.md`
+
+---
+
+**TL;DR**
+Decorate components, provide externals by type, `init()` once, and let the container do the wiring—so you can **run tests, serve web apps, or batch jobs with minimal glue**.
+
