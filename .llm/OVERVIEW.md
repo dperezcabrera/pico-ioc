@@ -4,6 +4,8 @@
 **pico-ioc’s mission is to simplify dependency management and accelerate development by shortening feedback loops.**  
 It gives Python projects a tiny, predictable IoC container that removes boilerplate wiring, making apps easier to test, extend, and run.
 
+> ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` and `include_extras=True`).
+
 ---
 
 ## What is pico-ioc?
@@ -11,7 +13,7 @@ pico-ioc is a **lightweight Inversion of Control (IoC) and Dependency Injection 
 
 - **Zero dependencies**: pure Python, framework-agnostic.
 - **Automatic wiring**: discovers components via decorators.
-- **Resolution order**: name → type → base type (MRO) → string.
+- **Resolution order**: parameter name → exact type → base type (MRO) → string key.
 - **Eager by default**: fail-fast at startup; opt into `lazy=True` for proxies.
 - **Thread/async safe**: isolation via `ContextVar`.
 - **Qualifiers & collection injection**: group implementations and inject lists (`list[Annotated[T, Q]]`).
@@ -70,9 +72,41 @@ fetching from sqlite:///demo.db
 
 📌 With a few decorators and `init()`, you get a **clean DI container** that works across scripts, APIs, and services — from small apps to complex projects.
 
+
+---
+
+## Public API Helper
+
+Instead of manually re-exporting components in your `__init__.py`,  
+you can use the helper `export_public_symbols_decorated`:
+
+```python
+# app/__init__.py
+from pico_ioc.public_api import export_public_symbols_decorated
+__getattr__, __dir__ = export_public_symbols_decorated("app", include_plugins=True)
+````
+
+This automatically exposes:
+
+* All `@component` and `@factory_component` classes
+* All `@plugin` classes (if `include_plugins=True`)
+* Any symbols listed in `__all__`
+
+So you can import directly:
+
+```python
+from app import Service, Config, TracingPlugin
+```
+
+This keeps `__init__.py` **clean, declarative, and convention-driven**.
+
+---
+
+
 👉 Next steps:
 
 * [Guide](./GUIDE.md) — practical recipes & usage patterns
 * [Architecture](./ARCHITECTURE.md) — internals, algorithms & design trade-offs
+
 
 

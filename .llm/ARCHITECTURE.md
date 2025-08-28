@@ -3,6 +3,8 @@
 > Scope: internal model, wiring algorithm, lifecycle, and design trade-offs.  
 > Non-goals: user tutorials or recipes (see `GUIDE.md`), product pitch (see `OVERVIEW.md`).
 
+> ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` and `include_extras=True`).
+
 ---
 
 ## 1) Design goals & non-goals
@@ -58,7 +60,8 @@ sequenceDiagram
 
    * `key -> provider` map. Keys are usually **types**. String tokens are supported but discouraged.
 
-> **Invariant:** A key has **at most one** active provider; the **last registration wins**. This enables test overrides by ordering `init([app, test_overrides])`.
+> **Invariant:** A key has **at most one** active provider; the **last registration wins**.
+> This enables test overrides by ordering `init([app, test_overrides])`.
 
 ---
 
@@ -273,6 +276,7 @@ auto-exporting all `@component`, `@factory_component`, and `@plugin` classes, pl
 ---
 
 **TL;DR**
-`pico-ioc` builds a **deterministic dependency graph** at startup from decorated components, factories, and plugins. It resolves by **type**, supports **collection injection with qualifiers**, memoizes singletons, and fails fast—so your app wiring stays **predictable, testable, and framework-agnostic**.
+`pico-ioc` builds a **deterministic dependency graph** at startup from decorated components, factories, and plugins.
+It resolves by **type**, supports **collection injection with qualifiers**, memoizes singletons, and fails fast — so your app wiring stays **predictable, testable, and framework-agnostic**.
 
 
