@@ -92,6 +92,12 @@ tox
 
 ---
 
+## 📜 Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for version history.
+
+---
+
 ## 📜 License
 
 MIT — see [LICENSE](https://opensource.org/licenses/MIT)
