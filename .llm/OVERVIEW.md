@@ -14,6 +14,9 @@ pico-ioc is a **lightweight Inversion of Control (IoC) and Dependency Injection 
 - **Resolution order**: name → type → base type (MRO) → string.
 - **Eager by default**: fail-fast at startup; opt into `lazy=True` for proxies.
 - **Thread/async safe**: isolation via `ContextVar`.
+- **Qualifiers & collection injection**: group implementations and inject lists (`list[Annotated[T, Q]]`).
+- **Plugins**: lifecycle hooks (`before_scan`, `after_ready`) for cross-cutting concerns.
+- **Public API helper**: auto-export decorated symbols, cleaner `__init__.py`.
 
 In short: **a minimal Spring-like container for Python, without the overhead**.
 
@@ -61,10 +64,15 @@ fetching from sqlite:///demo.db
 * **Predictable lifecycle** → fail early, easy to debug.
 * **Test-friendly** → swap out components via `@provides`.
 * **Universal** → works with Flask, FastAPI, CLIs, or plain scripts.
+* **Extensible** → add tracing, logging, or metrics via plugins.
 
 ---
 
 📌 With a few decorators and `init()`, you get a **clean DI container** that works across scripts, APIs, and services — from small apps to complex projects.
 
-```
+👉 Next steps:
+
+* [Guide](./GUIDE.md) — practical recipes & usage patterns
+* [Architecture](./ARCHITECTURE.md) — internals, algorithms & design trade-offs
+
 

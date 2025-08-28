@@ -18,8 +18,10 @@ Build loosely-coupled, testable apps without manual wiring. Inspired by the Spri
 ## ✨ Key Features
 
 * **Zero dependencies** — pure Python.
-* **Decorator API** — `@component`, `@factory_component`, `@provides`.
+* **Decorator API** — `@component`, `@factory_component`, `@provides`, `@plugin`.
+* **Qualifiers** — tag components with `@qualifier(Q)` and inject lists like `list[Annotated[T, Q]]`.
 * **Auto discovery** — scans a package and registers components.
+* **Public API helper** — `export_public_symbols_decorated(...)` removes boilerplate from `__init__.py`.
 * **Eager by default, fail-fast** — non-lazy bindings are instantiated immediately after `init()`. Missing deps fail startup.
 * **Opt-in lazy** — set `lazy=True` to defer creation (wrapped in `ComponentProxy`).
 * **Factories** — encapsulate complex creation logic.
@@ -111,104 +113,142 @@ print(COUNTER["value"])               # 1
 
 Starting with **v0.5.0**, Pico-IoC enforces **name-first resolution**:
 
-1. **Parameter name** (highest priority)  
-2. **Exact type annotation**  
-3. **MRO fallback** (walk base classes)  
-4. **String(name)**  
+1. **Parameter name** (highest priority)
+2. **Exact type annotation**
+3. **MRO fallback** (walk base classes)
+4. **String(name)**
 
-This means that if a dependency could match both by name and type, **the name match wins**.
+---
 
-Example:
+## 🧩 Qualifiers and Collection Injection
+
+You can tag components with a `Qualifier` and inject all implementations of a type or a filtered subset.
 
 ```python
-from pico_ioc import component, factory_component, provides, init
+from typing import Protocol, Annotated
+from pico_ioc import component, Qualifier, qualifier
 
-class BaseType: ...
-class Impl(BaseType): ...
+class Handler(Protocol):
+    def handle(self, s: str) -> str: ...
 
-@component(name="inject_by_name")
-class InjectByName:
-    def __init__(self):
-        self.value = "by-name"
+PAYMENTS = Qualifier("payments")
 
-@factory_component
-class NameVsTypeFactory:
-    @provides("choose", lazy=True)
-    def make(self, inject_by_name, hint: BaseType = None):
-        return inject_by_name.value
+@component
+@qualifier(PAYMENTS)
+class StripeHandler(Handler): ...
+
+@component
+@qualifier(PAYMENTS)
+class PaypalHandler(Handler): ...
+
+@component
+class Orchestrator:
+    def __init__(self, handlers: list[Annotated[Handler, PAYMENTS]]):
+        self.handlers = handlers
+
+    def run(self, s: str) -> list[str]:
+        return [h.handle(s) for h in self.handlers]
 
 container = init(__name__)
-assert container.get("choose") == "by-name"
+orch = container.get(Orchestrator)
+print([h.handle("ok") for h in orch.handlers])  # ['stripe:ok', 'paypal:ok']
 ```
----
 
-## 📝 Notes on Annotations (PEP 563)
-
-Pico-IoC fully supports **postponed evaluation of annotations**
-(`from __future__ import annotations`, a.k.a. **PEP 563**) in Python 3.8–3.10.
-
-* Type hints are evaluated with `typing.get_type_hints` and safely resolved.
-* Missing dependencies always raise a **`NameError`**, never a `TypeError`.
-* Behavior is consistent across Python 3.8+ and Python 3.11+ (where PEP 563 is no longer default).
-
-This means you can freely use either direct type hints or string-based annotations in your components and factories, without breaking dependency injection.
+If you omit the qualifier (`list[Handler]`), *all* implementations are injected.
+If you specify a qualifier (`list[Annotated[Handler, PAYMENTS]]`), only matching ones are injected.
 
 ---
 
-## ⚡ Eager vs. Lazy (Blueprint Behavior)
+## 🔌 Plugins
 
-At the end of `init()`, Pico-IoC performs a **blueprint**:
+Plugins allow you to hook into the container lifecycle.
+Use the `@plugin` decorator and implement the `PicoPlugin` protocol.
 
-* **Eager** (`lazy=False`, default): instantiated immediately; failures stop startup.
-* **Lazy** (`lazy=True`): returns a `ComponentProxy`; instantiated on first real use.
+```python
+from pico_ioc import plugin
+from pico_ioc.plugins import PicoPlugin
 
-**Lifecycle:**
+@plugin
+class TracingPlugin(PicoPlugin):
+    def before_scan(self, package, binder):
+        print(f"Scanning {package}")
 
+    def after_ready(self, container, binder):
+        print("Container is ready")
 ```
-       ┌───────────────────────┐
-       │        init()         │
-       └───────────────────────┘
-                  │
-                  ▼
-       ┌───────────────────────┐
-       │   Scan & bind deps    │
-       └───────────────────────┘
-                  │
-                  ▼
-       ┌─────────────────────────────┐
-       │  Blueprint instantiates all │
-       │    non-lazy (eager) beans   │
-       └─────────────────────────────┘
-                  │
-       ┌───────────────────────┐
-       │   Container ready     │
-       └───────────────────────┘
+
+Plugins are passed explicitly to `init()`:
+
+```python
+from pico_ioc import init
+container = init(__name__, plugins=(TracingPlugin(),))
 ```
+
+---
+
+## 📤 Public API Helper
+
+Instead of polluting your `__init__.py` with manual re-exports,
+you can use the helper `export_public_symbols_decorated` to automatically expose
+all decorated classes (`@component`, `@factory_component`, `@plugin`) and any `__all__` symbols.
+
+**Example for an extension library:**
+
+```python
+# myext/__init__.py
+from pico_ioc.public_api import export_public_symbols_decorated
+__getattr__, __dir__ = export_public_symbols_decorated("myext", include_plugins=True)
+```
+
+Now you can import directly:
+
+```python
+from myext import SomeComponent, SomeFactory, SomePlugin
+```
+
+**Example for an app project:**
+
+```python
+# app/__init__.py
+from pico_ioc.public_api import export_public_symbols_decorated
+__getattr__, __dir__ = export_public_symbols_decorated("app", "app.subpkg", include_plugins=True)
+```
+
+This automatically picks up all components and plugins under `app/` and `app/subpkg/`.
 
 ---
 
 ## 🛠 API Reference
 
-### `init(root, *, exclude=None, auto_exclude_caller=True) -> PicoContainer`
+### `init(root, *, exclude=None, auto_exclude_caller=True, plugins=()) -> PicoContainer`
 
-Scan and bind components in `root` (str module name or module).
-Skips the calling module if `auto_exclude_caller=True`.
-Runs blueprint (instantiate all `lazy=False` bindings).
+Scan and bind components in `root`.
+Optional `plugins` are invoked on lifecycle hooks.
 
 ### `@component(cls=None, *, name=None, lazy=False)`
 
 Register a class as a component.
-Use `name` for a custom key.
-Set `lazy=True` to defer creation.
 
 ### `@factory_component`
 
-Mark a class as a component factory (its methods can `@provides` bindings).
+Mark a class as a component factory.
 
 ### `@provides(key, *, lazy=False)`
 
-Declare that a factory method provides a component under `key`.
-Set `lazy=True` for deferred creation (`ComponentProxy`).
+Mark a factory method as a provider.
+
+### `@plugin`
+
+Mark a class as a PicoPlugin.
+
+### `Qualifier` and `@qualifier(...)`
+
+Tag components with named qualifiers to enable filtered collection injection.
+
+### `export_public_symbols_decorated(*packages, include_also=None, include_plugins=True)`
+
+Helper to build `__getattr__`/`__dir__` for your `__init__.py`.
+Exports all decorated classes automatically.
 
 ---
 
@@ -219,23 +259,13 @@ pip install tox
 tox
 ```
 
-**New in v0.5.0:**
-Additional tests verify:
-
-* Name vs. type precedence.
-* Mixed binding key resolution in factories.
-* Eager vs. lazy instantiation edge cases.
-
----
-
-## 🔌 Extensibility: Plugins, Binder, and Lifecycle Hooks
-
-From `v0.4.0` onward, Pico-IoC can be cleanly extended without patching the core.
-
-*(plugin API docs unchanged from before)*
-
 ---
 
 ## 📜 License
 
 MIT — see [LICENSE](https://opensource.org/licenses/MIT)
+
+```
+
+
+

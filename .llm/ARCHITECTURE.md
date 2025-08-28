@@ -1,6 +1,6 @@
 # pico-ioc — Architecture
 
-> Scope: internal model, wiring algorithm, lifecycle, and design trade-offs.
+> Scope: internal model, wiring algorithm, lifecycle, and design trade-offs.  
 > Non-goals: user tutorials or recipes (see `GUIDE.md`), product pitch (see `OVERVIEW.md`).
 
 ---
@@ -42,7 +42,7 @@ sequenceDiagram
     App->>IOC: get(Service)
     IOC->>IOC: resolve deps (Repo, Config, ...)
     IOC-->>App: instance(Service)
-```
+````
 
 ---
 
@@ -53,6 +53,7 @@ sequenceDiagram
 
    * `@component` classes → registered by **type** (the class itself).
    * `@factory_component` classes → introspected for `@provides(key=...)` methods.
+   * `@plugin` classes → collected if explicitly passed to `init(…, plugins=(…))`.
 3. **Registry** (immutable after bootstrap):
 
    * `key -> provider` map. Keys are usually **types**. String tokens are supported but discouraged.
@@ -78,6 +79,15 @@ When constructing a component `C`:
 
 * No provider for a required key → **bootstrap error** (fail fast).
 * Ambiguous/incompatible registrations → **bootstrap error** with a precise hint.
+
+### 4b) Collection resolution
+
+If a constructor requests `list[T]` or `list[Annotated[T, Q]]`:
+
+* The container resolves **all** registered providers compatible with `T`.
+* If qualifiers are present (`Q`), only matching components are returned.
+* Order is stable by discovery/registration; no implicit sorting.
+* Empty list if no matches.
 
 ---
 
@@ -170,6 +180,15 @@ c = init([app, test_overrides])  # overrides win by order
 
 * **Multi-env composition**: define `app.prod`, `app.dev`, `app.test` packages that import different provider sets, then `init([app.prod])` etc.
 
+### Plugins
+
+Classes decorated with `@plugin` and implementing `PicoPlugin` can observe lifecycle events:
+
+* `before_scan(package, binder)`
+* `after_ready(container, binder)`
+
+They are passed explicitly to `init(..., plugins=(MyPlugin(),))`.
+
 ---
 
 ## 11) Performance notes
@@ -246,10 +265,14 @@ flowchart TD
 * *How do I integrate with Flask/FastAPI?*
   Provide the app/client via a factory (`@provides(key=Flask)`), then `container.get(Flask)` in your bootstrap. See `GUIDE.md`.
 
+### Public API helper
+
+`export_public_symbols_decorated` builds `__getattr__`/`__dir__` for a package’s `__init__.py`,
+auto-exporting all `@component`, `@factory_component`, and `@plugin` classes, plus any `__all__`.
+
 ---
 
 **TL;DR**
-`pico-ioc` builds a **deterministic dependency graph** at startup from decorated components and providers. It resolves by **type**, memoizes singletons, and fails fast—so your app wiring stays **predictable, testable, and framework-agnostic**.
-
+`pico-ioc` builds a **deterministic dependency graph** at startup from decorated components, factories, and plugins. It resolves by **type**, supports **collection injection with qualifiers**, memoizes singletons, and fails fast—so your app wiring stays **predictable, testable, and framework-agnostic**.
 
 
