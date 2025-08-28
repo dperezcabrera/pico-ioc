@@ -236,9 +236,9 @@ classDiagram
 
 ```mermaid
 flowchart TD
-  A[Request instance for Type T] --> B{Cached?}
+  A [Request instance for Type T] --> B{Cached?}
   B -- yes --> Z[Return cached]
-  B -- no --> C[Find provider for T (type->MRO->token)]
+  B -- no --> C[Find provider for T (type / MRO / token)]
   C -- none --> E[Raise bootstrap error]
   C -- found --> D[Resolve constructor args recursively]
   D --> F[Instantiate]
