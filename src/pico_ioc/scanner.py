@@ -1,3 +1,4 @@
+# pico_ioc/scanner.py
 import importlib
 import inspect
 import logging
@@ -17,6 +18,7 @@ from .decorators import (
 from .proxy import ComponentProxy
 from .resolver import Resolver
 from .plugins import PicoPlugin
+from . import _state
 
 
 def scan_and_configure(
@@ -124,6 +126,18 @@ def _collect_decorated_classes(
     comp_classes: List[type] = []
     factory_classes: List[type] = []
 
+    def _visit_module(module: ModuleType):
+        for _name, obj in inspect.getmembers(module, inspect.isclass):
+            # Allow plugins to inspect/transform/record classes
+            _run_plugin_hook(plugins, "visit_class", module, obj, binder)
+
+            # Collect decorated classes
+            if getattr(obj, COMPONENT_FLAG, False):
+                comp_classes.append(obj)
+            elif getattr(obj, FACTORY_FLAG, False):
+                factory_classes.append(obj)
+
+    # 1) Si es un paquete, recorrer submódulos
     for mod_name in _iter_package_modules(package):
         if exclude and exclude(mod_name):
             logging.info("Skipping module %s (excluded)", mod_name)
@@ -135,15 +149,11 @@ def _collect_decorated_classes(
             logging.warning("Module %s not processed: %s", mod_name, e)
             continue
 
-        for _name, obj in inspect.getmembers(module, inspect.isclass):
-            # Allow plugins to inspect/transform/record classes
-            _run_plugin_hook(plugins, "visit_class", module, obj, binder)
+        _visit_module(module)
 
-            # Collect decorated classes
-            if getattr(obj, COMPONENT_FLAG, False):
-                comp_classes.append(obj)
-            elif getattr(obj, FACTORY_FLAG, False):
-                factory_classes.append(obj)
+    # 2) Si el “paquete” raíz es un módulo (sin __path__), también hay que visitarlo.
+    if not hasattr(package, "__path__"):
+        _visit_module(package)
 
     return comp_classes, factory_classes
 
@@ -193,7 +203,13 @@ def _register_factory_classes(
     """
     for fcls in factory_classes:
         try:
-            finst = resolver.create_instance(fcls)
+            # Durante el escaneo, permitir la resolución de dependencias de la factory
+            # elevando temporalmente el flag `_resolving` para no chocar con la guardia.
+            tok_res = _state._resolving.set(True)
+            try:
+                finst = resolver.create_instance(fcls)
+            finally:
+                _state._resolving.reset(tok_res)
         except Exception:
             logging.exception("Error in factory %s", fcls.__name__)
             continue

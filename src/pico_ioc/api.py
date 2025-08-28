@@ -1,3 +1,5 @@
+# pico_ioc/api.py
+
 import inspect
 import logging
 from contextlib import contextmanager
@@ -10,8 +12,9 @@ from . import _state
 
 
 def reset() -> None:
-    """Reset the global container state."""
+    """Reset the global container."""
     _state._container = None
+    _state._root_name = None
 
 
 def init(
@@ -23,22 +26,15 @@ def init(
     reuse: bool = True,
 ) -> PicoContainer:
     """
-    Initialize and configure a PicoContainer with automatic scanning.
-
-    Args:
-        root_package: Root package to scan for components.
-        exclude: Optional filter to exclude specific modules.
-        auto_exclude_caller: If True, exclude the calling module automatically.
-        plugins: Plugins that can hook into the container lifecycle.
-        reuse: If True, reuse an already-initialized container.
-
-    Returns:
-        A fully configured PicoContainer instance.
+    Initialize and configure a PicoContainer by scanning a root package.
     """
-    if reuse and _state._container:
+    root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
+
+    # Reuse only if the existing container was built for the same root
+    if reuse and _state._container and _state._root_name == root_name:
         return _state._container
 
-    combined_exclude = _build_exclude(exclude, auto_exclude_caller)
+    combined_exclude = _build_exclude(exclude, auto_exclude_caller, root_name=root_name)
 
     container = PicoContainer()
     binder = Binder(container)
@@ -61,17 +57,21 @@ def init(
 
     logging.info("Container configured and ready.")
     _state._container = container
+    _state._root_name = root_name  # remember which root this container represents
     return container
 
 
-# -------------------- Private helpers --------------------
+# -------------------- helpers --------------------
 
 def _build_exclude(
     exclude: Optional[Callable[[str], bool]],
     auto_exclude_caller: bool,
+    *,
+    root_name: Optional[str] = None,
 ) -> Optional[Callable[[str], bool]]:
     """
-    Build the exclude function, optionally excluding the calling module as well.
+    Compose the exclude predicate. When auto_exclude_caller=True, exclude only
+    the exact calling module, but never exclude modules under the root being scanned.
     """
     if not auto_exclude_caller:
         return exclude
@@ -80,26 +80,23 @@ def _build_exclude(
     if not caller:
         return exclude
 
+    def _under_root(mod: str) -> bool:
+        return bool(root_name) and (mod == root_name or mod.startswith(root_name + "."))
+
     if exclude is None:
-        return lambda mod, _caller=caller: mod == _caller
+        return lambda mod, _caller=caller: (mod == _caller) and not _under_root(mod)
 
     prev = exclude
-    return lambda mod, _caller=caller, _prev=prev: (mod == _caller) or _prev(mod)
+    return lambda mod, _caller=caller, _prev=prev: (((mod == _caller) and not _under_root(mod)) or _prev(mod))
 
 
 def _get_caller_module_name() -> Optional[str]:
-    """
-    Return the module name of the code that called `init`.
-
-    Uses frame inspection with minimal depth instead of full inspect.stack()
-    to reduce overhead and complexity.
-    """
+    """Return the module name that called `init`."""
     try:
-        frame = inspect.currentframe()
+        f = inspect.currentframe()
         # frame -> _get_caller_module_name -> _build_exclude -> init
-        # We want the caller of init, which is 3 frames up.
-        if frame and frame.f_back and frame.f_back.f_back and frame.f_back.f_back.f_back:
-            mod = inspect.getmodule(frame.f_back.f_back.f_back)
+        if f and f.f_back and f.f_back.f_back and f.f_back.f_back.f_back:
+            mod = inspect.getmodule(f.f_back.f_back.f_back)
             return getattr(mod, "__name__", None)
     except Exception:
         pass
@@ -112,10 +109,6 @@ def _run_hooks(
     container: PicoContainer,
     binder: Binder,
 ) -> None:
-    """
-    Execute the given lifecycle hook safely across all plugins.
-    Exceptions are logged but do not stop execution.
-    """
     for pl in plugins:
         try:
             fn = getattr(pl, hook_name, None)
@@ -127,9 +120,6 @@ def _run_hooks(
 
 @contextmanager
 def _scanning_flag():
-    """
-    Context manager that temporarily sets the `_scanning` flag in global state.
-    """
     tok = _state._scanning.set(True)
     try:
         yield

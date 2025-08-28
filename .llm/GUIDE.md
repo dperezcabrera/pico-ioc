@@ -1,6 +1,7 @@
 # GUIDE.md — pico-ioc
 
-> **Mission:** make dependency wiring trivial so you can ship faster and shorten feedback cycles.
+> **Mission:** make dependency wiring trivial so you can ship faster and shorten feedback cycles.  
+> ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` and `include_extras=True`).
 
 This guide shows how to structure a Python app with **pico-ioc**: define components, provide dependencies, bootstrap a container, and run web/CLI code predictably.
 
@@ -292,5 +293,4 @@ from app import Service, Config, TracingPlugin
 
 **TL;DR**
 Decorate components, provide externals by type, `init()` once, and let the container do the wiring—so you can **run tests, serve web apps, or batch jobs with minimal glue**.
-
 
