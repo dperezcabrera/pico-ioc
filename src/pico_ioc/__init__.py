@@ -6,7 +6,7 @@ except Exception:
     __version__ = "0.0.0"
 
 from .container import PicoContainer, Binder
-from .decorators import component, factory_component, provides
+from .decorators import component, factory_component, provides, plugin, Qualifier, qualifier
 from .plugins import PicoPlugin
 from .resolver import Resolver
 from .api import init, reset
@@ -23,6 +23,9 @@ __all__ = [
     "component",
     "factory_component",
     "provides",
+    "plugin",
+    "Qualifier",
+    "qualifier",
     "Resolver",
 ]
 

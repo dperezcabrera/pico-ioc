@@ -26,7 +26,7 @@ from pico_ioc import component
 @component
 class Config:
     DB_URL = "sqlite:///demo.db"
-```
+````
 
 ```python
 # app/repo.py
@@ -191,6 +191,78 @@ def test_service_fetch():
 
 ---
 
+## 5b) Qualifiers & collection injection
+
+```python
+from typing import Protocol, Annotated
+from pico_ioc import component, Qualifier, qualifier
+
+class Handler(Protocol):
+    def handle(self, s: str) -> str: ...
+
+PAYMENTS = Qualifier("payments")
+
+@component
+@qualifier(PAYMENTS)
+class StripeHandler(Handler): ...
+
+@component
+@qualifier(PAYMENTS)
+class PaypalHandler(Handler): ...
+
+@component
+class Orchestrator:
+    def __init__(self, handlers: list[Annotated[Handler, PAYMENTS]]):
+        self.handlers = handlers
+
+    def run(self, s: str) -> list[str]:
+        return [h.handle("ok") for h in self.handlers]
+```
+
+If you request `list[Handler]` you get **all** implementations.
+If you request `list[Annotated[Handler, PAYMENTS]]`, you only get the tagged ones.
+
+---
+
+## 5c) Plugins & Public API helper
+
+```python
+from pico_ioc import plugin
+from pico_ioc.plugins import PicoPlugin
+
+@plugin
+class TracingPlugin(PicoPlugin):
+    def before_scan(self, package, binder):
+        print(f"Scanning {package}")
+    def after_ready(self, container, binder):
+        print("Container ready")
+```
+
+Register explicitly:
+
+```python
+from pico_ioc import init
+import app
+
+c = init(app, plugins=(TracingPlugin(),))
+```
+
+And to expose your app’s API cleanly:
+
+```python
+# app/__init__.py
+from pico_ioc.public_api import export_public_symbols_decorated
+__getattr__, __dir__ = export_public_symbols_decorated("app", include_plugins=True)
+```
+
+Now you can import directly:
+
+```python
+from app import Service, Config, TracingPlugin
+```
+
+---
+
 ## 6) Tips & guardrails
 
 * **Ask by type**: inject `Flask`, `Config`, `Repo` instead of strings.
@@ -218,13 +290,7 @@ def test_service_fetch():
 
 ---
 
-## 8) What to read next
-
-* **Architecture**: internals, resolution order, lifecycle — `architecture-pico-ioc.md`
-* **Usage patterns**: recipes, FAQs, common mistakes — `usage-patterns.md`
-
----
-
 **TL;DR**
 Decorate components, provide externals by type, `init()` once, and let the container do the wiring—so you can **run tests, serve web apps, or batch jobs with minimal glue**.
+
 
