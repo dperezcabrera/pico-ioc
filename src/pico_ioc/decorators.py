@@ -46,7 +46,7 @@ def plugin(cls):
 
 
 class Qualifier(str):
-    pass
+    __slots__ = ()  # tiny memory win; immutable like str
 
 
 def qualifier(*qs: Qualifier):
@@ -61,4 +61,16 @@ def qualifier(*qs: Qualifier):
         setattr(cls, QUALIFIERS_KEY, tuple(merged))
         return cls
     return dec
+
+
+__all__ = [
+    # decorators
+    "component", "factory_component", "provides", "plugin", "qualifier",
+    # qualifier type
+    "Qualifier",
+    # metadata keys (exported for advanced use/testing)
+    "COMPONENT_FLAG", "COMPONENT_KEY", "COMPONENT_LAZY",
+    "FACTORY_FLAG", "PROVIDES_KEY", "PROVIDES_LAZY",
+    "PLUGIN_FLAG", "QUALIFIERS_KEY",
+]
 
