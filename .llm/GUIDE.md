@@ -192,7 +192,7 @@ def test_service_fetch():
 
 ---
 
-## 5b) Qualifiers & collection injection
+## 6) Qualifiers & collection injection
 
 ```python
 from typing import Protocol, Annotated
@@ -218,14 +218,14 @@ class Orchestrator:
 
     def run(self, s: str) -> list[str]:
         return [h.handle("ok") for h in self.handlers]
-```
 
-If you request `list[Handler]` you get **all** implementations.
-If you request `list[Annotated[Handler, PAYMENTS]]`, you only get the tagged ones.
+```
+If you request list[Handler] you get all implementations.
+If you request list[Annotated[Handler, PAYMENTS]], you only get the tagged ones.
 
 ---
 
-## 5c) Plugins & Public API helper
+## 7) Plugins & Public API helper
 
 ```python
 from pico_ioc import plugin
@@ -264,7 +264,7 @@ from app import Service, Config, TracingPlugin
 
 ---
 
-## 6) Tips & guardrails
+## 8) Tips & guardrails
 
 * **Ask by type**: inject `Flask`, `Config`, `Repo` instead of strings.
 * **Keep constructors cheap**: do not perform I/O in `__init__`.
@@ -275,7 +275,7 @@ from app import Service, Config, TracingPlugin
 
 ---
 
-## 7) Troubleshooting
+## 9) Troubleshooting
 
 * **“No provider for X”**
   Ensure a `@provides(key=X)` exists in a module passed to `init(...)`, and your constructor type annotation is exactly `X`.
@@ -291,6 +291,88 @@ from app import Service, Config, TracingPlugin
 
 ---
 
+## 10) Examples
+
+### 10.1 Bootstrap & auto-imports
+
+```python
+# src/__init__.py
+from pico_ioc.public_api import export_public_symbols_decorated
+__getattr__, __dir__ = export_public_symbols_decorated("src", include_plugins=True)
+```
+
+Now you can import cleanly:
+
+```python
+from src import Service, Config, TracingPlugin
+```
+
+### 10.2 Flask with waitress
+
+```python
+# main_flask.py
+import logging
+from waitress import serve
+import pico_ioc, src
+from flask import Flask
+
+def main():
+    logging.basicConfig(level=logging.INFO)
+    c = pico_ioc.init(src)
+    app = c.get(Flask)
+    serve(app, host="0.0.0.0", port=5001, threads=8)
+```
+
+### 10.3 FastAPI with uvicorn
+
+```python
+# main_fastapi.py
+import logging
+import pico_ioc, src, uvicorn
+from fastapi import FastAPI
+
+def main():
+    logging.basicConfig(level=logging.INFO)
+    c = pico_ioc.init(src)
+    app = c.get(FastAPI)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+### 10.4 App Factory for externals
+
+```python
+# src/app_factory.py
+from pico_ioc import factory_component, provides
+from flask import Flask
+from fastapi import FastAPI
+import docker
+from .config import Config
+
+@factory_component
+class AppFactory:
+    def __init__(self):
+        self._config = Config()
+
+    @provides(key=Config)
+    def provide_config(self) -> Config:
+        return self._config
+
+    @provides(key=Flask)
+    def provide_flask(self) -> Flask:
+        return Flask(__name__)
+
+    @provides(key=FastAPI)
+    def provide_fastapi(self) -> FastAPI:
+        return FastAPI()
+
+    @provides(key=docker.DockerClient)
+    def provide_docker(self) -> docker.DockerClient:
+        return docker.from_env()
+```
+
+---
+
 **TL;DR**
 Decorate components, provide externals by type, `init()` once, and let the container do the wiring—so you can **run tests, serve web apps, or batch jobs with minimal glue**.
+
 
