@@ -75,6 +75,22 @@ Each entry has a rationale and implications. If a decision is revoked, it should
 
 ---
 
+### 7. Overrides in `init()`
+- **Decision**: `init(..., overrides={...})` allows binding custom providers/instances at bootstrap time.
+- **Rationale**:  
+  * Simplifies unit testing and ad-hoc mocking.  
+  * Avoids creating dedicated override modules when only a few dependencies need to be replaced.  
+  * Keeps semantics explicit: last binding wins.
+- **Implications**:  
+  * Overrides are applied **before eager instantiation** — ensuring replaced providers never run.  
+  * Accepted formats:
+    - `key: instance` → constant binding
+    - `key: provider_callable` → non-lazy binding
+    - `key: (provider_callable, lazy_bool)` → binding with explicit laziness
+  * If `reuse=True`, calling `init(..., overrides=...)` again applies overrides on the cached container.
+
+---
+
 ## ❌ Won’t-Do Decisions
 
 ### 1. Alternative scopes (request/session)
@@ -115,4 +131,5 @@ Features that add complexity (alternative scopes, async providers, hot reload) a
 - **2025-08**: Dropped Python 3.8/3.9 support, minimum 3.10.  
 - **2025-08**: Clarified resolution order as *name-first*.  
 - **2025-08**: Documented lifecycle, plugins, and fail-fast policy.  
+- **2025-09**: Added `init(..., overrides)` feature for test/mocking convenience.
 

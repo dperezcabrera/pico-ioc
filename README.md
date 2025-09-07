@@ -27,6 +27,7 @@ It helps you build loosely-coupled, testable apps without manual wiring. Inspire
 - **Plugins** — lifecycle hooks (`before_scan`, `after_ready`).
 - **Public API helper** — auto-export decorated symbols in `__init__.py`.
 - **Thread/async safe** — isolation via `ContextVar`.
+- **Overrides for testing** — inject mocks/fakes directly via `init(overrides={...})`.
 
 ---
 
@@ -72,7 +73,21 @@ print(svc.run())
 ```
 fetching from sqlite:///demo.db
 ```
+---
 
+### Quick overrides for testing
+
+```python
+from pico_ioc import init
+import myapp
+
+fake = {"repo": "fake-data"}
+c = init(myapp, overrides={
+    "fast_model": fake,                  # constant instance
+    "user_service": lambda: {"id": 1},   # provider
+})
+assert c.get("fast_model") == {"repo": "fake-data"}
+```
 ---
 
 ## 📖 Documentation

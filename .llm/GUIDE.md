@@ -12,7 +12,7 @@ This guide shows how to structure a Python app with **pico-ioc**: define compone
 * **Component**: a class managed by the container. Use `@component`.
 * **Factory component**: a class that *provides* concrete instances (e.g., `Flask()`, clients). Use `@factory_component`.
 * **Provider**: a method on a factory that returns a dependency and declares its **key** (usually a type). Use `@provides(key=Type)` so consumers can request by type.
-* **Container**: built via `pico_ioc.init(package_or_module)`. Resolve with `container.get(TypeOrClass)`.
+* **Container**: built via `pico_ioc.init(package_or_module, ..., overrides=...)`. Resolve with `container.get(TypeOrClass)`.
 
 Resolution rule of thumb: **ask by type** (e.g., `container.get(Flask)` or inject `def __init__(..., app: Flask)`).
 
@@ -156,10 +156,15 @@ class Runner:
 
 ## 5) Testing & overrides
 
+You often want to replace real dependencies with fakes or mocks in tests.  
+There are two main patterns:
+
+### 5.1 Composition modules
+
 Define a **test factory** that provides fakes using the same keys:
 
 ```python
-# tests/test_overrides.py
+# tests/test_overrides_module.py
 from pico_ioc import factory_component, provides
 from app.repo import Repo
 
@@ -172,24 +177,52 @@ class TestOverrides:
     @provides(key=Repo)
     def provide_repo(self) -> Repo:
         return FakeRepo()
-```
+````
 
 Build the container for tests with both packages (app + overrides):
 
 ```python
-# tests/test_service.py
 from pico_ioc import init
 import app
-from tests import test_overrides
+from tests import test_overrides_module
 
 def test_service_fetch():
-    c = init([app, test_overrides])   # pass a list (composition root for tests)
+    c = init([app, test_overrides_module])
     svc = c.get(app.service.Service)
     assert svc.run() == "fake-data"
 ```
 
-> Pattern: use a **composition module** per environment (prod/test) and call `init([...])` with the modules that declare your providers. Providers registered later override earlier ones for the same key.
+### 5.2 Direct `overrides` argument
 
+`init()` also accepts an `overrides` dict for ad-hoc mocks. Each entry can be:
+
+* **Instance** → bound as constant.
+* **Callable** (0 args) → bound as provider, non-lazy.
+* **(provider, lazy\_bool)** → provider with explicit laziness.
+
+```python
+from pico_ioc import init
+import app
+
+fake_repo = object()
+
+c = init(app, overrides={
+    app.repo.Repo: fake_repo,            # constant
+    "fast_model": lambda: {"id": 123},   # provider
+    "expensive": (lambda: object(), True) # lazy provider
+})
+```
+
+This is handy for **quick mocking in unit tests**:
+
+```python
+def test_with_direct_overrides():
+    c = init(app, overrides={"fast_model": {"fake": True}}, reuse=False)
+    svc = c.get(app.service.Service)
+    assert svc.repo.fetch() == "fake-data"
+```
+
+> Note: if you call `init(..., reuse=True, overrides=...)` on an already built container, the overrides are applied on the cached container.
 ---
 
 ## 6) Qualifiers & collection injection

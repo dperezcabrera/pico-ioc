@@ -165,7 +165,9 @@ class Config:
 
 ## 10) Extensibility & overrides
 
-* **Test overrides**: register a factory after the app module.
+### Test overrides (module-based)
+
+Register a factory after the app module:
 
 ```python
 @factory_component
@@ -173,7 +175,7 @@ class TestOverrides:
     @provides(key=Repo)   # same key as production
     def provide_repo(self) -> Repo:
         return FakeRepo()
-```
+````
 
 Then:
 
@@ -181,7 +183,29 @@ Then:
 c = init([app, test_overrides])  # overrides win by order
 ```
 
-* **Multi-env composition**: define `app.prod`, `app.dev`, `app.test` packages that import different provider sets, then `init([app.prod])` etc.
+### Direct overrides argument
+
+`init()` also accepts an `overrides` dict for ad-hoc replacement:
+
+```python
+c = init(app, overrides={
+    Repo: FakeRepo(),                         # constant instance
+    "fast_model": lambda: {"mock": True},     # provider
+    "expensive": (lambda: object(), True),    # provider with lazy=True
+})
+```
+
+* **Applied before eager instantiation** → replaced providers never run.
+* **Formats supported**:
+
+  * `key: instance` → constant
+  * `key: callable` → non-lazy provider
+  * `key: (callable, lazy_bool)` → provider with explicit laziness
+* With `reuse=True`, calling `init(..., overrides=...)` again mutates the cached container bindings.
+
+### Multi-env composition
+
+Define `app.prod`, `app.dev`, `app.test` packages that import different provider sets, then call `init([app.prod])`, etc.
 
 ### Plugins
 

@@ -28,6 +28,9 @@ class PicoContainer:
         self._singletons: Dict[Any, Any] = {}
 
     def bind(self, key: Any, provider, *, lazy: bool):
+        # 🔧 rebind must evict any cached singleton for this key
+        self._singletons.pop(key, None)
+
         meta = {"factory": provider, "lazy": bool(lazy)}
         try:
             q = getattr(key, QUALIFIERS_KEY, ())
