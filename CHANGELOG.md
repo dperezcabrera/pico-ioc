@@ -34,6 +34,23 @@ These were evaluated and **rejected** to keep pico-ioc simple, deterministic, an
 
 ---
 
+## [1.1.0] — 2025-09-08
+
+### ✨ New
+- **Overrides in `init()`**
+  - Added `overrides` argument to `init(...)` for ad-hoc mocking/testing.
+  - Accepted formats:
+    - `key: instance` → constant binding
+    - `key: callable` → non-lazy provider
+    - `key: (callable, lazy_bool)` → provider with explicit laziness
+  - Applied **before eager instantiation**, so replaced providers never run.
+  - If `reuse=True`, calling `init(..., overrides=...)` again mutates the cached container.
+
+### 📚 Docs
+- Updated **README.md**, **GUIDE.md**, **OVERVIEW.md**, **DECISIONS.md**, and **ARCHITECTURE.md** to document overrides support.
+
+---
+
 ## [Unreleased]
 - Upcoming improvements and fixes will be listed here.
 
