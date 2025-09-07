@@ -121,3 +121,77 @@ def test_logging_messages_emitted(caplog, monkeypatch):
     assert any("Initializing pico-ioc..." in m for m in msgs)
     assert any("Container configured and ready." in m for m in msgs)
 
+
+# --- Overrides tests -----------------------------------------------------------
+
+def test_overrides_bind_instance_provider_and_lazy(monkeypatch):
+    """
+    Verify that `overrides` supports:
+      - constant instance bindings,
+      - provider callable bindings (non-lazy),
+      - (provider, lazy_bool) bindings (lazy).
+    And that overrides are applied BEFORE eager instantiation so that
+    scanned providers don't run if they are replaced.
+    """
+    calls = {"scanned_x": 0, "prov_y": 0, "lazy_z": 0}
+
+    # Fake scan that would bind an eager provider for key "x"
+    def fake_scan(root_package, container, *, exclude, plugins):
+        container.bind("x", lambda: ("scanned", calls.__setitem__("scanned_x", calls["scanned_x"] + 1)), lazy=False)
+
+    monkeypatch.setattr(api, "scan_and_configure", fake_scan)
+
+    # Prepare overrides:
+    #  - "x": constant instance → must replace scanned provider and avoid its execution
+    #  - "y": provider (non-lazy) → executed during eager
+    #  - "z": (provider, True) lazy → executed only on first get()
+    def prov_y():
+        calls["prov_y"] += 1
+        return {"y": "from-provider"}
+
+    def prov_z():
+        calls["lazy_z"] += 1
+        return {"z": "lazy-provider"}
+
+    c = api.init(
+        "pkg",
+        reuse=False,
+        overrides={
+            "x": {"x": "constant"},    # instance
+            "y": prov_y,               # provider, non-lazy
+            "z": (prov_z, True),       # provider, lazy=True
+        },
+    )
+
+    # "x" should be the constant instance; scanned provider must not have run
+    assert c.get("x") == {"x": "constant"}
+    assert calls["scanned_x"] == 0
+
+    # "y" is non-lazy → created during eager (exactly once)
+    assert c.get("y") == {"y": "from-provider"}
+    assert calls["prov_y"] == 1
+
+    # "z" is lazy → not created at eager time
+    assert calls["lazy_z"] == 0
+    assert c.get("z") == {"z": "lazy-provider"}
+    assert calls["lazy_z"] == 1
+    # Cached singleton on subsequent gets
+    assert c.get("z") == {"z": "lazy-provider"}
+    assert calls["lazy_z"] == 1
+
+
+def test_overrides_apply_on_reused_container(monkeypatch):
+    """
+    If reuse=True and the root matches, calling init() again with new overrides
+    should apply them on the cached container.
+    """
+    monkeypatch.setattr(api, "scan_and_configure", lambda *a, **k: None)
+
+    c1 = api.init("pkg", reuse=True, overrides={"k": {"v": 1}})
+    assert c1.get("k") == {"v": 1}
+
+    # Reuse the same root, override with a different value
+    c2 = api.init("pkg", reuse=True, overrides={"k": {"v": 2}})
+    assert c1 is c2
+    assert c2.get("k") == {"v": 2}  # updated
+

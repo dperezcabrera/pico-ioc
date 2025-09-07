@@ -67,6 +67,7 @@ fetching from sqlite:///demo.db
 * **Test-friendly** → swap out components via `@provides`.
 * **Universal** → works with Flask, FastAPI, CLIs, or plain scripts.
 * **Extensible** → add tracing, logging, or metrics via plugins.
+* **Overrides for testing** → inject mocks/fakes directly via `init(overrides={...})`.
 
 ---
 
@@ -102,6 +103,26 @@ This keeps `__init__.py` **clean, declarative, and convention-driven**.
 
 ---
 
+## Testing with overrides
+
+You can replace providers on the fly during tests:
+
+```python
+from pico_ioc import init
+import myapp
+
+fake = {"repo": "fake-data"}
+c = init(myapp, overrides={
+    "fast_model": fake,                     # constant instance
+    "user_service": lambda: {"id": 1},      # provider
+})
+
+svc = c.get("fast_model")
+assert svc == {"repo": "fake-data"}
+
+```
+
+---
 
 👉 Next steps:
 
