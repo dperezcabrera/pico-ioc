@@ -90,6 +90,32 @@ assert c.get("fast_model") == {"repo": "fake-data"}
 ```
 ---
 
+### Scoped subgraphs
+
+For unit tests or lightweight integration, you can bootstrap **only a subset of the graph**.
+
+```python
+from pico_ioc import scope
+from src.runner_service import RunnerService
+from tests.fakes import FakeDocker, TestRegistry
+import src
+
+c = scope(
+    modules=[src],
+    roots=[RunnerService],  # only RunnerService and its deps
+    overrides={
+        "docker.DockerClient": FakeDocker(),
+        TestRegistry: TestRegistry(),
+    },
+    strict=True,   # fail if something is missing
+    lazy=True,     # instantiate on demand
+)
+svc = c.get(RunnerService)
+```
+
+This way you don’t need to bootstrap your entire app (`controllers`, `http`, …) just to test one service.
+
+---
 ## 📖 Documentation
 
 * [Overview](.llm/OVERVIEW.md) — mission & concepts

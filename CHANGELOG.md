@@ -51,6 +51,25 @@ These were evaluated and **rejected** to keep pico-ioc simple, deterministic, an
 
 ---
 
+## [1.2.0] — 2025-09-13
+
+### ✨ New
+- **Scoped subgraphs with `scope()`**
+  - Added `pico_ioc.scope(...)` to build a container limited to a dependency subgraph.
+  - Useful for unit tests, integration-lite scenarios, and CLI tools.
+  - Parameters:
+    - `roots=[...]` → define entrypoints of the subgraph
+    - `modules=[...]` → packages to scan
+    - `overrides={...}` → inject fakes/mocks
+    - `strict=True` → fail if dependency not in subgraph
+    - `lazy=True` → instantiate on-demand
+  - Can be used as a context manager for clean setup/teardown.
+
+### 🧪 Testing
+- New pytest-friendly fixture examples with `scope(...)` for lightweight injection.
+
+---
+
 ## [Unreleased]
 - Upcoming improvements and fixes will be listed here.
 

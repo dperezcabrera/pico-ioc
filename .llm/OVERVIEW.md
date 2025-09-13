@@ -121,6 +121,35 @@ svc = c.get("fast_model")
 assert svc == {"repo": "fake-data"}
 
 ```
+---
+
+## Scoped subgraphs for testing & tools
+
+Besides global `init(...)`, you can build a **bounded container** with only the
+dependencies of certain roots. This is ideal for unit tests, CLI tools, or
+integration-lite scenarios.
+
+```python
+from pico_ioc import scope
+from src.runner_service import RunnerService
+from tests.fakes import FakeDocker, TestRegistry
+import src
+
+c = scope(
+    modules=[src],
+    roots=[RunnerService],
+    overrides={
+        "docker.DockerClient": FakeDocker(),
+        TestRegistry: TestRegistry(),
+    },
+    strict=True,
+    lazy=True,
+)
+svc = c.get(RunnerService)
+```
+
+This avoids bootstrapping the entire app (controllers, HTTP, etc.) just to test
+a single service.
 
 ---
 
@@ -128,6 +157,4 @@ assert svc == {"repo": "fake-data"}
 
 * [Guide](./GUIDE.md) — practical recipes & usage patterns
 * [Architecture](./ARCHITECTURE.md) — internals, algorithms & design trade-offs
-
-
 
