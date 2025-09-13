@@ -1,9 +1,11 @@
 # pico_ioc/api.py
 
+from __future__ import annotations
+
 import inspect
 import logging
 from contextlib import contextmanager
-from typing import Callable, Optional, Tuple, Any, Dict
+from typing import Callable, Optional, Tuple, Any, Dict, Iterable
 
 from .container import PicoContainer, Binder
 from .plugins import PicoPlugin
