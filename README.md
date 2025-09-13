@@ -28,6 +28,7 @@ It helps you build loosely-coupled, testable apps without manual wiring. Inspire
 - **Public API helper** — auto-export decorated symbols in `__init__.py`.
 - **Thread/async safe** — isolation via `ContextVar`.
 - **Overrides for testing** — inject mocks/fakes directly via `init(overrides={...})`.
+- **Scoped subgraph for tests** — `scope(modules=…, roots=…, overrides=…, strict=…, lazy=…, include_tags=…, exclude_tags=…)` to load only what you need.
 
 ---
 
@@ -95,17 +96,16 @@ assert c.get("fast_model") == {"repo": "fake-data"}
 For unit tests or lightweight integration, you can bootstrap **only a subset of the graph**.
 
 ```python
-from pico_ioc import scope
+from pico_ioc
 from src.runner_service import RunnerService
-from tests.fakes import FakeDocker, TestRegistry
+from tests.fakes import FakeDocker
 import src
 
-c = scope(
+c = pico_ioc.scope(
     modules=[src],
     roots=[RunnerService],  # only RunnerService and its deps
     overrides={
         "docker.DockerClient": FakeDocker(),
-        TestRegistry: TestRegistry(),
     },
     strict=True,   # fail if something is missing
     lazy=True,     # instantiate on demand

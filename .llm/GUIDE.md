@@ -230,13 +230,13 @@ For unit tests or lightweight integration you can build a **reduced container** 
 includes the dependencies reachable from certain root components.
 
 ```python
-from pico_ioc import scope
+from pico_ioc
 from src.runner_service import RunnerService
 from tests.fakes import FakeDocker, TestRegistry
 import src
 
 def test_runner_service_subset():
-    c = scope(
+    c = pico_ioc.scope(
         modules=[src],
         roots=[RunnerService],   # only RunnerService and its deps
         overrides={
@@ -257,6 +257,64 @@ Benefits:
 
 > Note: `scope` does *not* add new lifecycles. It creates a **bounded container**
 > with the same singleton-per-container semantics.
+
+**Tag filtering**
+
+You can limit the subgraph by **tags**:
+
+- Tag components/factories:
+```python
+  from pico_ioc import component, factory_component, provides
+
+  @component(tags={"runtime", "docker"})
+  class DockerClient: ...
+
+  @factory_component
+  class ObservabilityFactory:
+      @provides("metrics", tags={"observability"})
+      def make_metrics(self): ...
+```
+
+* Filter during `scope()`:
+
+### API Reference: `scope(...)`
+
+```python
+pico_ioc.scope(
+    *,
+    modules: Iterable[Any] = (),
+    roots: Iterable[type] = (),
+    overrides: Optional[Dict[Any, Any]] = None,
+    base: Optional[PicoContainer] = None,
+    include_tags: Optional[set[str]] = None,
+    exclude_tags: Optional[set[str]] = None,
+    strict: bool = True,
+    lazy: bool = True,
+) -> PicoContainer
+```
+
+**Parameters**
+
+* `modules` — list of packages/modules to scan.
+* `roots` — root components to keep; container is pruned to their subgraph.
+* `overrides` — same format as in `init()`, replace bindings.
+* `base` — optional base container to reuse existing providers.
+* `include_tags` — only include providers with one of these tags (if set).
+* `exclude_tags` — drop any provider with these tags.
+* `strict` — if `True`, missing deps cause `NameError`; otherwise skipped.
+* `lazy` — if `True`, instantiate only on demand; if `False`, instantiate eagerly.
+
+**Notes**
+
+* `scope` does not add new lifecycles — it’s still singleton-per-container.
+* Tag filters are applied before traversal; excluded providers behave as missing.
+
+
+**Rules**
+
+* If a provider has **no tags**, it’s considered neutral (passes unless excluded via other criteria).
+* `exclude_tags` wins over `include_tags` for any provider that matches both.
+* Filtering is applied **before** traversal; pruned providers are treated as missing (and will error in `strict=True`).
 
 ---
 

@@ -14,6 +14,8 @@ from .decorators import (
     FACTORY_FLAG,
     PROVIDES_KEY,
     PROVIDES_LAZY,
+    COMPONENT_TAGS, 
+    PROVIDES_TAGS,
 )
 from .proxy import ComponentProxy
 from .resolver import Resolver
@@ -175,15 +177,12 @@ def _register_component_classes(
     for cls in classes:
         key = getattr(cls, COMPONENT_KEY, cls)
         is_lazy = bool(getattr(cls, COMPONENT_LAZY, False))
-
+        tags = tuple(getattr(cls, COMPONENT_TAGS, ()))
         def _provider_factory(c=cls, lazy=is_lazy):
             def _factory():
-                if lazy:
-                    return ComponentProxy(lambda: resolver.create_instance(c))
-                return resolver.create_instance(c)
+                return ComponentProxy(lambda: resolver.create_instance(c)) if lazy else resolver.create_instance(c)
             return _factory
-
-        container.bind(key, _provider_factory(), lazy=is_lazy)
+        container.bind(key, _provider_factory(), lazy=is_lazy, tags=tags)
 
 
 def _register_factory_classes(
@@ -218,21 +217,14 @@ def _register_factory_classes(
             provided_key = getattr(func, PROVIDES_KEY, None)
             if provided_key is None:
                 continue
-
             is_lazy = bool(getattr(func, PROVIDES_LAZY, False))
-            # `bound` is the bound method on the instance (so it has `self`)
+            tags = tuple(getattr(func, PROVIDES_TAGS, ()))
             bound = getattr(finst, attr_name, func.__get__(finst, fcls))
-
             def _make_provider(m=bound, owner=fcls, lazy=is_lazy):
                 def _factory():
-                    # Compute kwargs at call time to ensure up-to-date dependency resolution
                     kwargs = resolver.kwargs_for_callable(m, owner_cls=owner)
-
-                    def _call():
-                        return m(**kwargs)
-
+                    def _call(): return m(**kwargs)
                     return ComponentProxy(lambda: _call()) if lazy else _call()
                 return _factory
-
-            container.bind(provided_key, _make_provider(), lazy=is_lazy)
+            container.bind(provided_key, _make_provider(), lazy=is_lazy, tags=tags)
 

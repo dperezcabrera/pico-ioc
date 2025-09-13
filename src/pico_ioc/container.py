@@ -12,8 +12,8 @@ class Binder:
     def __init__(self, container: "PicoContainer"):
         self._c = container
 
-    def bind(self, key: Any, provider, *, lazy: bool):
-        self._c.bind(key, provider, lazy=lazy)
+    def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
+        self._c.bind(key, provider, lazy=lazy, tags=tags)
 
     def has(self, key: Any) -> bool:
         return self._c.has(key)
@@ -27,16 +27,16 @@ class PicoContainer:
         self._providers: Dict[Any, Dict[str, Any]] = {}
         self._singletons: Dict[Any, Any] = {}
 
-    def bind(self, key: Any, provider, *, lazy: bool):
-        # 🔧 rebind must evict any cached singleton for this key
+    def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
         self._singletons.pop(key, None)
-
         meta = {"factory": provider, "lazy": bool(lazy)}
+        # qualifiers already present:
         try:
             q = getattr(key, QUALIFIERS_KEY, ())
         except Exception:
             q = ()
         meta["qualifiers"] = tuple(q) if q else ()
+        meta["tags"] = tuple(tags) if tags else ()
         self._providers[key] = meta
 
     def has(self, key: Any) -> bool:
