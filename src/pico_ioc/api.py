@@ -66,45 +66,64 @@ def init(
     return container
 
 
-
 def scope(
     *,
     modules: Iterable[Any] = (),
     roots: Iterable[type] = (),
     overrides: Optional[Dict[Any, Any]] = None,
     base: Optional[PicoContainer] = None,
-    include: Optional[set[str]] = None,
-    exclude: Optional[set[str]] = None,
+    include: Optional[set[str]] = None,   # tag include (any-match)
+    exclude: Optional[set[str]] = None,   # tag exclude (any-match)
     strict: bool = True,
-    lazy: bool = True,
-    auto_mock: bool = False,
+    lazy: bool = True,                    # if True -> do NOT instantiate roots here
 ) -> PicoContainer:
     """
-    Build a sub-container limited to a dependency subgraph from given roots.
+    Build a lightweight container: scan, apply overrides, filter by tags, prune
+    to the dependency subgraph reachable from `roots`, and (optionally) instantiate roots.
+    - No global eager.
+    - If strict=False and base is provided, missing keys fall back to base.
     """
-    container = PicoContainer()
-    binder = Binder(container)
-    resolver = Resolver(container)
+    c = _ScopedContainer(base=base, strict=strict)
 
-    # reuse providers from base if given
-    if base:
-        for k, prov in base._providers.items():
-            container._providers[k] = dict(prov)
-
-    # scan modules if provided
-    for m in modules:
-        scan_and_configure(m, container)
-
-    # TODO: compute subgraph reachable from roots (future enhancement)
-    # for now: just rely on normal resolver
+    logging.info("Initializing pico-ioc scope...")
+    with _scanning_flag():
+        for m in modules:
+            scan_and_configure(m, c, exclude=None, plugins=())
 
     if overrides:
-        _apply_overrides(container, overrides)
+        _apply_overrides(c, overrides)
 
+    # Tag filter (apply BEFORE reachability pruning)
+    def _tag_ok(meta: dict) -> bool:
+        if include and not set(include).intersection(meta.get("tags", ())):
+            return False
+        if exclude and set(exclude).intersection(meta.get("tags", ())):
+            return False
+        return True
+
+    c._providers = {k: v for k, v in c._providers.items() if _tag_ok(v)}  # type: ignore[attr-defined]
+
+    # Reachability from roots (subgraph) + keep overrides
+    allowed = _compute_allowed_subgraph(c, roots)
+    keep_keys: set[Any] = set(allowed) | (set(overrides.keys()) if overrides else set())
+    c._providers = {k: v for k, v in c._providers.items() if k in keep_keys}  # type: ignore[attr-defined]
+
+    # Instantiate roots only when NOT lazy
     if not lazy:
-        container.eager_instantiate_all()
+        from .proxy import ComponentProxy
+        for rk in roots or ():
+            try:
+                obj = c.get(rk)
+                if isinstance(obj, ComponentProxy):
+                    _ = obj._get_real_object()
+            except NameError:
+                if strict:
+                    raise
+                # non-strict: skip missing root
+                continue
 
-    return container
+    logging.info("Scope container ready.")
+    return c
 
 # -------------------- helpers --------------------
 
@@ -179,4 +198,92 @@ def _scanning_flag():
         yield
     finally:
         _state._scanning.reset(tok)
+        
+def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -> set:
+    """
+    Traverse constructor annotations from roots to collect reachable provider keys.
+    Includes implementations for collection injections (list[T]/tuple[T]).
+    """
+    from .resolver import _get_hints
+    from .container import _is_compatible  # structural / subclass check
+    import inspect
+    from typing import get_origin, get_args, Annotated
 
+    allowed: set[Any] = set()
+    stack = list(roots or ())
+
+    # Helper: add all provider keys whose class is compatible with `base`
+    def _add_impls_for_base(base_t):
+        for prov_key, meta in container._providers.items():  # type: ignore[attr-defined]
+            cls = prov_key if isinstance(prov_key, type) else None
+            if cls is None:
+                continue
+            if _is_compatible(cls, base_t):
+                if prov_key not in allowed:
+                    allowed.add(prov_key)
+                    stack.append(prov_key)
+
+    while stack:
+        k = stack.pop()
+        if k in allowed:
+            continue
+        allowed.add(k)
+
+        cls = k if isinstance(k, type) else None
+        if cls is None or not container.has(k):
+            # not a class or not currently bound → no edges to follow
+            continue
+
+        try:
+            sig = inspect.signature(cls.__init__)
+        except Exception:
+            continue
+
+        hints = _get_hints(cls.__init__, owner_cls=cls)
+        for pname, param in sig.parameters.items():
+            if pname == "self":
+                continue
+            ann = hints.get(pname, param.annotation)
+
+            origin = get_origin(ann) or ann
+            if origin in (list, tuple):
+                inner = (get_args(ann) or (object,))[0]
+                if get_origin(inner) is Annotated:
+                    inner = (get_args(inner) or (object,))[0]
+                # We don’t know exact impls yet, so:
+                if isinstance(inner, type):
+                    # keep the base “type” in allowed for clarity
+                    allowed.add(inner)
+                    # And include ALL implementations present in providers
+                    _add_impls_for_base(inner)
+                continue
+
+            if isinstance(ann, type):
+                stack.append(ann)
+            elif container.has(pname):
+                stack.append(pname)
+
+    return allowed
+
+
+class _ScopedContainer(PicoContainer):
+    def __init__(self, base: Optional[PicoContainer], strict: bool):
+        super().__init__()
+        self._base = base
+        self._strict = strict
+
+    # allow `with pico_ioc.scope(...) as c:`
+    def __enter__(self):
+        return self
+
+    # no resource suppression; placeholder for future cleanup/shutdown
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def get(self, key: Any):
+        try:
+            return super().get(key)
+        except NameError as e:
+            if not self._strict and self._base is not None and self._base.has(key):
+                return self._base.get(key)
+            raise e

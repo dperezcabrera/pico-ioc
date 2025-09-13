@@ -102,7 +102,7 @@ Each entry has a rationale and implications. If a decision is revoked, it should
   * Parameters: `roots`, `modules`, `overrides`, `include/exclude tags`, `strict`, `lazy`.  
   * Can be used as context manager to ensure clean teardown.  
   * Useful outside tests as well (CLI tools, benchmarks, isolated utilities).
-
+- Tag filtering: `scope()` supports `include_tags` / `exclude_tags`. Untagged providers are neutral; `exclude_tags` takes precedence when both match.
 ---
 
 ## ❌ Won’t-Do Decisions

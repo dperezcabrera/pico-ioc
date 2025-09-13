@@ -64,6 +64,7 @@ These were evaluated and **rejected** to keep pico-ioc simple, deterministic, an
     - `strict=True` → fail if dependency not in subgraph
     - `lazy=True` → instantiate on-demand
   - Can be used as a context manager for clean setup/teardown.
+  - `scope(..., include_tags=..., exclude_tags=...)` to prune the subgraph by provider tags from `@component(tags=...)` / `@provides(..., tags=...)`.
 
 ### 🧪 Testing
 - New pytest-friendly fixture examples with `scope(...)` for lightweight injection.

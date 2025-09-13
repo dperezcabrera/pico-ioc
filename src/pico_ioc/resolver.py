@@ -3,7 +3,9 @@
 from __future__ import annotations
 import inspect
 from typing import Any, Annotated, get_args, get_origin, get_type_hints
+from contextvars import ContextVar
 
+_path: ContextVar[list[tuple[str, str]]] = ContextVar("pico_resolve_path", default=[])
 
 def _get_hints(obj, owner_cls=None) -> dict:
     """type hints with include_extras=True and correct globals/locals."""
@@ -50,17 +52,22 @@ class Resolver:
         hints = _get_hints(cls.__init__, owner_cls=cls)
         kwargs = {}
         for name, param in sig.parameters.items():
-            if name == "self":
-                continue
-            if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            if name == "self" or param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
                 continue
             ann = hints.get(name, param.annotation)
+            st = _path.get()
+            _path.set(st + [(cls.__name__, name)])
             try:
                 value = self._resolve_param(name, ann)
-            except NameError:
+            except NameError as e:
+                # ⬅️ Important: skip if parameter has a default
                 if param.default is not inspect._empty:
                     continue
-                raise
+                chain = " -> ".join(f"{c}.__init__.{p}" for c, p in _path.get())
+                raise NameError(f"{e} (required by {chain})") from e
+            finally:
+                cur = _path.get()
+                _path.set(cur[:-1] if cur else [])
             kwargs[name] = value
         return cls(**kwargs)
 
@@ -68,18 +75,26 @@ class Resolver:
         sig = inspect.signature(fn)
         hints = _get_hints(fn, owner_cls=owner_cls)
         kwargs = {}
+        owner_name = getattr(owner_cls, "__name__", getattr(fn, "__qualname__", "callable"))
         for name, param in sig.parameters.items():
-            if name == "self":
-                continue
-            if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            if name == "self" or param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
                 continue
             ann = hints.get(name, param.annotation)
+            st = _path.get()
+            _path.set(st + [(owner_name, name)])
             try:
                 value = self._resolve_param(name, ann)
-            except NameError:
+            except NameError as e:
+                # ⬅️ Important: skip if parameter has a default
                 if param.default is not inspect._empty:
+                    # do not include in kwargs
+                    _path.set(st)  # pop before continue
                     continue
-                raise
+                chain = " -> ".join(f"{c}.__init__.{p}" for c, p in _path.get())
+                raise NameError(f"{e} (required by {chain})") from e
+            finally:
+                cur = _path.get()
+                _path.set(cur[:-1] if cur else [])
             kwargs[name] = value
         return kwargs
 
@@ -107,4 +122,3 @@ class Resolver:
 
         missing = ann if ann is not inspect._empty else name
         raise NameError(f"No provider found for key {missing!r}")
-

@@ -9,7 +9,7 @@ from .container import PicoContainer, Binder
 from .decorators import component, factory_component, provides, plugin, Qualifier, qualifier
 from .plugins import PicoPlugin
 from .resolver import Resolver
-from .api import init, reset
+from .api import init, reset, scope
 from .proxy import ComponentProxy
 
 __all__ = [
@@ -19,6 +19,7 @@ __all__ = [
     "PicoPlugin",
     "ComponentProxy",
     "init",
+    "scope",
     "reset",
     "component",
     "factory_component",
