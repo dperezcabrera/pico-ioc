@@ -24,11 +24,13 @@ It helps you build loosely-coupled, testable apps without manual wiring. Inspire
 - **Opt-in lazy** — `lazy=True` wraps with `ComponentProxy`.
 - **Smart resolution order** — parameter name → type annotation → MRO → string.
 - **Qualifiers & collections** — `list[Annotated[T, Q]]` filters by qualifier.
+- **Scoped subgraphs** — `scope(...)` lets you load only part of the graph for tests or tools.
+- **Overrides for testing** — inject mocks/fakes directly via `init(overrides={...})`.
+- **Interceptors API** — observe/modify resolution, instantiation, invocation, errors.
+- **Conditional providers** — activate components by env vars or predicates.
 - **Plugins** — lifecycle hooks (`before_scan`, `after_ready`).
 - **Public API helper** — auto-export decorated symbols in `__init__.py`.
 - **Thread/async safe** — isolation via `ContextVar`.
-- **Overrides for testing** — inject mocks/fakes directly via `init(overrides={...})`.
-- **Scoped subgraph for tests** — `scope(modules=…, roots=…, overrides=…, strict=…, lazy=…, include_tags=…, exclude_tags=…)` to load only what you need.
 
 ---
 

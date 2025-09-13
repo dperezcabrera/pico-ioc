@@ -1,150 +1,165 @@
 # DECISIONS.md — pico-ioc
 
-This document records **technical and architectural decisions** made for pico-ioc.  
-Each entry has a rationale and implications. If a decision is revoked, it should be marked as **[REVOKED]** with a link to the replacement.
+This document records **technical and architectural decisions** for pico-ioc.  
+Each entry includes a rationale and implications. If a decision is later changed, mark it **[REVOKED]** and link to the replacement.
 
 ---
 
 ## ✅ Current Decisions
 
-### 1. Minimum Python version: **3.10**
-- **Decision**: Drop support for Python 3.8 and 3.9. Require Python **3.10+**.
-- **Rationale**:  
-  * Uses `typing.Annotated` and `typing.get_type_hints(..., include_extras=True)`.  
-  * Simplifies code paths and avoids backports/conditionals.  
-  * Encourages modern typing practices.
-- **Implications**:  
-  * Users on older runtimes must upgrade.  
-  * CI/CD matrix only tests Python 3.10+.
+### 1) Minimum Python version: **3.10**
+**Decision**: Require Python **3.10+**; drop 3.8/3.9.  
+**Rationale**: `typing.Annotated` + `get_type_hints(..., include_extras=True)` simplify internals and enable qualifiers/collections.  
+**Implications**: Users on older runtimes must upgrade; CI matrix targets 3.10+.
 
 ---
 
-### 2. Resolution order: **name-first**
-- **Decision**: Parameter name has precedence over type annotation.  
-- **Order**: **param name → exact type → MRO fallback → string token**.
-- **Rationale**:  
-  * Matches ergonomic use-cases (config by name).  
-  * Keeps deterministic behavior and avoids ambiguity.
-- **Implications**:  
-  * Breaking change from earlier versions (<0.5.0).  
-  * Documented in README and GUIDE.
+### 2) Resolution order: **param name → exact type → MRO → string token**
+**Decision**: Name-first resolution with deterministic fallback.  
+**Rationale**: Ergonomic for common configs by name; still strongly typed.  
+**Implications**: Documented behavior; potential behavior change from older pre-1.0 versions.
 
 ---
 
-### 3. Lifecycle: **singleton per container**
-- **Decision**: Every provider produces exactly one instance per container.  
-- **Rationale**:  
-  * Matches common Python app architecture (config, DB clients, service classes).  
-  * Simple mental model, cheap lookups.  
-- **Implications**:  
-  * No per-request or session scopes at the IoC level (delegate that to frameworks).  
-  * Lazy proxies supported via `lazy=True`.
+### 3) Lifecycle model: **singleton per container**
+**Decision**: One instance per key per container.  
+**Rationale**: Matches typical Python app composition (config/clients/services); simple and fast.  
+**Implications**: No request/session scopes at IoC level; use framework facilities if needed. `lazy=True` is available but not default.
 
 ---
 
-### 4. Fail-fast bootstrap
-- **Decision**: All eager components are instantiated immediately after `init()`.  
-- **Rationale**:  
-  * Surfaces missing dependencies early.  
-  * Avoids hidden runtime errors deep into request handling.  
-- **Implications**:  
-  * Slower startup if many components are eager.  
-  * Recommended to keep constructors cheap.
+### 4) Fail-fast bootstrap
+**Decision**: Instantiate eager components after `init()`; surface errors early.  
+**Rationale**: Deterministic startup; no hidden runtime surprises.  
+**Implications**: Keep constructors cheap; push heavy I/O to explicit start/serve phases.
 
 ---
 
-### 5. Plugins: **explicit registration**
-- **Decision**: Plugins must be passed explicitly to `init(..., plugins=(...))`.  
-- **Rationale**:  
-  * Keeps scanning predictable and avoids magical discovery.  
-  * Encourages explicit boundaries in app wiring.
-- **Implications**:  
-  * More verbose in user code, but safer and testable.  
-  * `@plugin` decorator only marks, does not auto-register.
+### 5) Keys: **typed keys preferred; string tokens allowed but discouraged**
+**Decision**: Prefer class/type keys (e.g., `Flask`) over string tokens.  
+**Rationale**: Better IDE support, fewer collisions, clearer intent.  
+**Implications**: String tokens remain for interop, but are a last resort.
 
 ---
 
-### 6. Public API helper (`export_public_symbols_decorated`)
-- **Decision**: Auto-export all decorated classes/components/plugins via `__getattr__`/`__dir__`.  
-- **Rationale**:  
-  * Reduces `__init__.py` boilerplate.  
-  * Encourages convention-over-configuration.  
-- **Implications**:  
-  * Explicit imports may be replaced by dynamic export.  
-  * Errors in scanning are suppressed (non-fatal).
+### 6) Qualifiers & collection injection are **first-class**
+**Decision**: Support `Annotated[T, Q]` and `list[Annotated[T, Q]]` for filtering.  
+**Rationale**: Enables side-by-side implementations (primary/fallback) without custom registries.  
+**Implications**: Stable registration order is preserved for lists; empty lists are valid.
 
 ---
 
-### 7. Overrides in `init()`
-- **Decision**: `init(..., overrides={...})` allows binding custom providers/instances at bootstrap time.
-- **Rationale**:  
-  * Simplifies unit testing and ad-hoc mocking.  
-  * Avoids creating dedicated override modules when only a few dependencies need to be replaced.  
-  * Keeps semantics explicit: last binding wins.
-- **Implications**:  
-  * Overrides are applied **before eager instantiation** — ensuring replaced providers never run.  
-  * Accepted formats:
-    - `key: instance` → constant binding
-    - `key: provider_callable` → non-lazy binding
-    - `key: (provider_callable, lazy_bool)` → binding with explicit laziness
-  * If `reuse=True`, calling `init(..., overrides=...)` again applies overrides on the cached container.
+### 7) Plugins are **explicitly registered**
+**Decision**: No magical discovery; pass plugins to `init(..., plugins=(...))`.  
+**Rationale**: Predictability and testability.  
+**Implications**: Slightly more verbose, but boundaries stay explicit.
 
 ---
 
-### 8. Scoped subgraphs (`scope`)
-- **Decision**: Introduce `scope(...)` API to build a container restricted to the dependency subgraph of given root components.  
-- **Rationale**:  
-  * Enables lightweight unit/integration tests without bootstrapping the whole app.  
-  * Supports deterministic overrides (fakes, mocks) per scope.  
-  * Keeps the lifecycle model unchanged (still singleton per container).  
-- **Implications**:  
-  * `scope(...)` is not a new lifecycle scope — it is a *bounded container*.  
-  * Parameters: `roots`, `modules`, `overrides`, `include/exclude tags`, `strict`, `lazy`.  
-  * Can be used as context manager to ensure clean teardown.  
-  * Useful outside tests as well (CLI tools, benchmarks, isolated utilities).
-- Tag filtering: `scope()` supports `include_tags` / `exclude_tags`. Untagged providers are neutral; `exclude_tags` takes precedence when both match.
+### 8) Public API helper (`export_public_symbols_decorated`)
+**Decision**: Provide a helper to auto-export decorated symbols in a package’s `__init__.py`.  
+**Rationale**: Reduces boilerplate; favors convention over configuration.  
+**Implications**: Dynamic export is opt-in; does not auto-register providers by itself.
+
+---
+
+### 9) Overrides in `init(...)`
+**Decision**: `init(..., overrides={...})` replaces bindings at bootstrap.  
+**Rationale**: Simple unit testing/mocking without extra modules.  
+**Implications**:
+- Applied **before eager instantiation** → replaced providers never run.  
+- Accepted forms:  
+  - `key: instance` (constant)  
+  - `key: callable` (provider, non-lazy)  
+  - `key: (callable, lazy_bool)` (provider with explicit laziness)  
+- With `reuse=True`, subsequent `init(..., overrides=...)` mutates cached bindings.
+
+---
+
+### 10) Scoped subgraphs with `scope(...)`
+**Decision**: Provide `scope(...)` to build a bounded container limited to the dependency subgraph of given roots.  
+**Rationale**: Faster, deterministic unit/integration setups; great for CLIs/benchmarks.  
+**Implications**:
+- **Not** a new lifecycle: still singleton-per-container.  
+- Supports `include_tags`/`exclude_tags` (tags from `@component(..., tags=...)` / `@provides(..., tags=...)`).  
+- `strict=True` fails if deps are outside subgraph.  
+- Works as a context manager to ensure clean teardown.
+
+---
+
+### 11) **Interceptors API** (lifecycle hooks)
+**Decision**: Introduce **interceptors** to observe/modify wiring.  
+**Hooks**: `on_resolve`, `on_before_create`, `on_after_create` (may wrap/replace), `on_invoke`, `on_exception`.  
+**Rationale**: Structured logging, metrics/timing, tracing, audit trails, guards/policies, safe wrappers (retry/circuit breaker) without full AOP complexity.  
+**Implications**:
+- Deterministic ordering via `order` (lower runs first).  
+- Register at bootstrap (`init(..., interceptors=[...])`) or programmatically (`container.add_interceptor(...)`).  
+- `on_exception` must re-raise if you don’t intend to mask errors.
+
+---
+
+### 12) **Conditional providers** (profiles)
+**Decision**: `@conditional(require_env=(...), predicate=callable)` activates providers based on environment vars or logic.  
+**Rationale**: Profile-driven wiring (`PROFILE=test/prod/ci`), optional integrations (Redis/S3) without code changes.  
+**Implications**:
+- If no active provider satisfies a required type → **bootstrap error** (or at resolution if lazy).  
+- Multiple candidates may be active (use qualifiers/collections to select).  
+- Works seamlessly with `scope(...)`; conditionals apply before traversal.
+
+---
+
+### 13) Deterministic registration: **last-wins**
+**Decision**: For a given key, the **last** registered provider is the active one.  
+**Rationale**: Predictable overrides by module ordering; simple mental model.  
+**Implications**: Document ordering in tests; use `init([app, test_overrides])` to replace prod bindings.
+
+---
+
+### 14) Concurrency & safety
+**Decision**: Container is immutable after `init()`; caches are isolated and safe across threads/tasks; no global singletons.  
+**Rationale**: Avoid shared mutable state; enable safe parallel use.  
+**Implications**: Make your **own** instances thread/async-safe if they’re shared.
+
 ---
 
 ## ❌ Won’t-Do Decisions
 
-### 1. Alternative scopes (request/session)
-- **Decision**: no additional scopes beyond *singleton per container* will be implemented.  
-- **Rationale**:  
-  * The simplicity of the current model (one instance per container) is a core value of pico-ioc.  
-  * Web frameworks (Flask, FastAPI, etc.) already manage request/session lifecycles.  
-  * Adding scopes would introduce unnecessary complexity and ambiguity about object ownership.  
+### A) Alternative scopes (request/session)
+**Decision**: No extra lifecycles beyond singleton-per-container.  
+**Rationale**: Keep model simple; delegate per-request/session to frameworks.  
+**Implications**: Avoids ownership ambiguity and complexity.
 
 ---
 
-### 2. Asynchronous providers
-- **Decision**: no support for `async def` components or asynchronous resolution inside the container.  
-- **Rationale**:  
-  * Keeping the library **100% synchronous** preserves the current API (`container.get(...)` is always immediate).  
-  * Async support would require event-loop integration, `await` semantics, and multiple runtime strategies → breaking simplicity.  
-  * If a dependency needs async initialization, it should be handled inside the component itself, not by the container.  
+### B) Asynchronous providers (`async def`)
+**Decision**: Not supported inside the container.  
+**Rationale**: Simplicity and determinism; no loop coupling in core.  
+**Implications**: If async init is required, handle it inside your component explicitly.
 
 ---
 
-### 3. Hot reload / dynamic re-scan
-- **Decision**: no hot reload or dynamic re-scan of modules will be supported.  
-- **Rationale**:  
-  * Contradicts the **fail-fast** philosophy (surface errors at startup).  
-  * Breaks the **determinism** guarantee (container is immutable after `init()`).  
-  * Makes debugging harder: old instances may linger, state may become inconsistent, resources may leak.  
-  * Development-time hot reload is already handled by frameworks (`uvicorn --reload`, etc.).  
+### C) Hot reload / dynamic re-scan
+**Decision**: Not supported.  
+**Rationale**: Conflicts with fail-fast and immutability; complicates debugging.  
+**Implications**: Use framework/dev tools for code reload (e.g., `uvicorn --reload`).
 
 ---
 
-📌 **Summary:** pico-ioc stays **simple, deterministic, and fail-fast**.  
-Features that add complexity (alternative scopes, async providers, hot reload) are intentionally excluded. 
+## 🗃️ Deprecated / Revoked
+
+_No entries currently._
 
 ---
 
 ## 📜 Changelog of Decisions
 
-- **2025-08**: Dropped Python 3.8/3.9 support, minimum 3.10.  
-- **2025-08**: Clarified resolution order as *name-first*.  
-- **2025-08**: Documented lifecycle, plugins, and fail-fast policy.  
-- **2025-09**: Added `init(..., overrides)` feature for test/mocking convenience.
-- **2025-09**: Added `scope(...)` for subgraph containers, primarily for testing and lightweight scenarios.
+- **2025-08**: Minimum Python 3.10; name-first resolution; fail-fast clarified; typed keys preferred.  
+- **2025-09-08**: Introduced `init(..., overrides)` with defined precedence and laziness semantics.  
+- **2025-09-13**: Added `scope(...)` for bounded containers with tag pruning and strict mode.  
+- **2025-09-14**: Added **Interceptors API** and **Conditional providers (profiles)** as first-class features; documented last-wins registration and concurrency stance.
+
+---
+
+**Summary**: pico-ioc remains **simple, deterministic, and fail-fast**.  
+We favor typed wiring, explicit registration, and small, composable primitives (overrides, scope, interceptors, conditionals) instead of heavyweight AOP or multi-scope lifecycles.
 

@@ -1,30 +1,34 @@
 # 📦 pico-ioc — Overview
 
-## Mission
+## 🎯 Mission
 **pico-ioc’s mission is to simplify dependency management and accelerate development by shortening feedback loops.**  
 It gives Python projects a tiny, predictable IoC container that removes boilerplate wiring, making apps easier to test, extend, and run.
 
-> ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` and `include_extras=True`).
+> ⚠️ **Requires Python 3.10+** (relies on `typing.Annotated` and `include_extras=True`).
 
 ---
 
-## What is pico-ioc?
-pico-ioc is a **lightweight Inversion of Control (IoC) and Dependency Injection (DI) container for Python**.
+## 🔍 What is pico-ioc?
+pico-ioc is a **minimal Inversion of Control (IoC) and Dependency Injection (DI) container for Python**.
 
-- **Zero dependencies**: pure Python, framework-agnostic.
-- **Automatic wiring**: discovers components via decorators.
-- **Resolution order**: parameter name → exact type → base type (MRO) → string key.
-- **Eager by default**: fail-fast at startup; opt into `lazy=True` for proxies.
-- **Thread/async safe**: isolation via `ContextVar`.
-- **Qualifiers & collection injection**: group implementations and inject lists (`list[Annotated[T, Q]]`).
-- **Plugins**: lifecycle hooks (`before_scan`, `after_ready`) for cross-cutting concerns.
-- **Public API helper**: auto-export decorated symbols, cleaner `__init__.py`.
+- **Zero dependencies** → pure Python, framework-agnostic.  
+- **Decorator API** → `@component`, `@factory_component`, `@provides`, `@plugin`.  
+- **Automatic wiring** → resolves by: param name → exact type → MRO base → string key.  
+- **Fail-fast bootstrap** → eager by default; opt into `lazy=True` proxies.  
+- **Scoped subgraphs** → load only what you need with `scope(...)`.  
+- **Overrides** → replace providers directly in `init(overrides={...})`.  
+- **Qualifiers & collections** → tag/group implementations; inject `list[Annotated[T, Q]]`.  
+- **Interceptors API** → observe/modify resolution, instantiation, invocation, errors.  
+- **Conditional providers** → enable components by env vars or predicates (profiles).  
+- **Plugins** → lifecycle hooks (`before_scan`, `after_ready`).  
+- **Thread/async safe** → isolation via `ContextVar`.  
+- **Public API helper** → auto-export decorated symbols, cleaner `__init__.py`.
 
-In short: **a minimal Spring-like container for Python, without the overhead**.
+In short: **a Spring-like container for Python — tiny, predictable, and test-oriented.**
 
 ---
 
-## Example: Hello World Service
+## ⚡ Example: Hello Service
 
 ```python
 from pico_ioc import component, init
@@ -47,8 +51,8 @@ class Service:
 
 # bootstrap
 import myapp
-container = init(myapp)
-svc = container.get(Service)
+c = init(myapp)
+svc = c.get(Service)
 print(svc.run())
 ````
 
@@ -60,52 +64,20 @@ fetching from sqlite:///demo.db
 
 ---
 
-## Why pico-ioc?
+## 🚀 Why pico-ioc?
 
-* **Less glue code** → no manual wiring.
-* **Predictable lifecycle** → fail early, easy to debug.
-* **Test-friendly** → swap out components via `@provides`.
-* **Universal** → works with Flask, FastAPI, CLIs, or plain scripts.
-* **Extensible** → add tracing, logging, or metrics via plugins.
-* **Overrides for testing** → inject mocks/fakes directly via `init(overrides={...})`.
-
----
-
-📌 With a few decorators and `init()`, you get a **clean DI container** that works across scripts, APIs, and services — from small apps to complex projects.
-
+* **Less glue code** — no manual wiring.
+* **Predictable lifecycle** — fail early, debug easily.
+* **Test-friendly** — overrides & scoped subgraphs make mocking trivial.
+* **Universal** — works with Flask, FastAPI, CLIs, or scripts.
+* **Extensible** — logging, metrics, tracing via interceptors or plugins.
+* **Profiles** — conditionals let you switch implementations by env/config.
 
 ---
 
-## Public API Helper
+## 🧪 Testing patterns
 
-Instead of manually re-exporting components in your `__init__.py`,  
-you can use the helper `export_public_symbols_decorated`:
-
-```python
-# app/__init__.py
-from pico_ioc.public_api import export_public_symbols_decorated
-__getattr__, __dir__ = export_public_symbols_decorated("app", include_plugins=True)
-````
-
-This automatically exposes:
-
-* All `@component` and `@factory_component` classes
-* All `@plugin` classes (if `include_plugins=True`)
-* Any symbols listed in `__all__`
-
-So you can import directly:
-
-```python
-from app import Service, Config, TracingPlugin
-```
-
-This keeps `__init__.py` **clean, declarative, and convention-driven**.
-
----
-
-## Testing with overrides
-
-You can replace providers on the fly during tests:
+Replace providers quickly in tests:
 
 ```python
 from pico_ioc import init
@@ -113,48 +85,59 @@ import myapp
 
 fake = {"repo": "fake-data"}
 c = init(myapp, overrides={
-    "fast_model": fake,                     # constant instance
-    "user_service": lambda: {"id": 1},      # provider
+    "fast_model": fake,                  # constant
+    "user_service": lambda: {"id": 1},   # provider
 })
-
-svc = c.get("fast_model")
-assert svc == {"repo": "fake-data"}
-
+assert c.get("fast_model") == {"repo": "fake-data"}
 ```
----
 
-## Scoped subgraphs for testing & tools
-
-Besides global `init(...)`, you can build a **bounded container** with only the
-dependencies of certain roots. This is ideal for unit tests, CLI tools, or
-integration-lite scenarios.
+Or use `scope()` to build only a subgraph:
 
 ```python
 from pico_ioc import scope
 from src.runner_service import RunnerService
-from tests.fakes import FakeDocker, TestRegistry
+from tests.fakes import FakeDocker
 import src
 
 c = scope(
     modules=[src],
     roots=[RunnerService],
-    overrides={
-        "docker.DockerClient": FakeDocker(),
-        TestRegistry: TestRegistry(),
-    },
-    strict=True,
-    lazy=True,
+    overrides={"docker.DockerClient": FakeDocker()},
+    strict=True, lazy=True,
 )
 svc = c.get(RunnerService)
 ```
 
-This avoids bootstrapping the entire app (controllers, HTTP, etc.) just to test
-a single service.
+---
+
+## 📦 Public API Helper
+
+Instead of manual exports in `__init__.py`:
+
+```python
+# app/__init__.py
+from pico_ioc.public_api import export_public_symbols_decorated
+__getattr__, __dir__ = export_public_symbols_decorated("app", include_plugins=True)
+```
+
+This auto-exposes:
+
+* All `@component` and `@factory_component` classes
+* All `@plugin` classes (if `include_plugins=True`)
+* Any symbols in `__all__`
+
+So you can import cleanly:
+
+```python
+from app import Service, Config, TracingPlugin
+```
 
 ---
 
-👉 Next steps:
+## 📌 Next steps
 
-* [Guide](./GUIDE.md) — practical recipes & usage patterns
-* [Architecture](./ARCHITECTURE.md) — internals, algorithms & design trade-offs
+* [Guide](./GUIDE.md) — recipes, testing, interceptors, profiles.
+* [Architecture](./ARCHITECTURE.md) — internals, algorithms, design trade-offs.
+* [Changelog](./CHANGELOG.md) — release history.
+
 
