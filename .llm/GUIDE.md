@@ -223,6 +223,41 @@ def test_with_direct_overrides():
 ```
 
 > Note: if you call `init(..., reuse=True, overrides=...)` on an already built container, the overrides are applied on the cached container.
+
+### 5.3 Scoped subgraphs with `scope(...)`
+
+For unit tests or lightweight integration you can build a **reduced container** that only
+includes the dependencies reachable from certain root components.
+
+```python
+from pico_ioc import scope
+from src.runner_service import RunnerService
+from tests.fakes import FakeDocker, TestRegistry
+import src
+
+def test_runner_service_subset():
+    c = scope(
+        modules=[src],
+        roots=[RunnerService],   # only RunnerService and its deps
+        overrides={
+            "docker.DockerClient": FakeDocker(),
+            TestRegistry: TestRegistry(),
+        },
+        strict=True,   # fail if dep is outside the subgraph
+        lazy=True,     # instantiate on demand
+    )
+    svc = c.get(RunnerService)
+    assert isinstance(svc, RunnerService)
+```
+Benefits:
+
+* **Fast**: you don’t need to bootstrap the entire app (HTTP, controllers, etc.).
+* **Deterministic**: fails early if a dependency is missing.
+* **Flexible**: works outside tests as well (e.g. CLI tools, benchmarks).
+
+> Note: `scope` does *not* add new lifecycles. It creates a **bounded container**
+> with the same singleton-per-container semantics.
+
 ---
 
 ## 6) Qualifiers & collection injection

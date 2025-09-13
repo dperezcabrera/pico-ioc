@@ -299,6 +299,49 @@ auto-exporting all `@component`, `@factory_component`, and `@plugin` classes, pl
 
 ---
 
+## 16) Scoped subgraphs (`scope`)
+
+For **unit tests**, lightweight integration, or CLI tools you can build a reduced container
+that only includes the dependencies of specific *roots*.
+
+```python
+from pico_ioc import scope
+from src.runner_service import RunnerService
+from tests.fakes import FakeDocker, TestRegistry
+import src
+
+c = scope(
+    modules=[src],                # packages to scan
+    roots=[RunnerService],        # entrypoints of the subgraph
+    overrides={
+        "docker.DockerClient": FakeDocker(),
+        TestRegistry: TestRegistry(),
+    },
+    strict=True,   # error if a dep is outside the subgraph
+    lazy=True,     # instantiate on demand
+)
+svc = c.get(RunnerService)
+```
+
+### Semantics
+
+* **Limited reach**: only edges reachable from `roots` are followed.
+* **Deterministic overrides**: `overrides > scope.providers > base > autowire`.
+* **Optional tags**: `include={"runtime"}`, `exclude={"http"}`.
+* **Strict mode**: controls whether fallback to the base container is allowed.
+* **Context manager**: `with scope(...):` ensures clean teardown.
+
+### Use cases
+
+* **Unit tests**: run `RunnerService` with fakes without bootstrapping HTTP or sidecars.
+* **Integration-lite**: e.g. `WorkflowRunner` + `RunnerService`, but no controllers.
+* **Tools/CLI**: bootstrap only `WorkspaceService`.
+
+> Note: `scope` does **not** introduce a new lifecycle scope (like request/session).
+> It creates a **bounded container** with the same singleton-per-container semantics.
+
+---
+
 **TL;DR**
 `pico-ioc` builds a **deterministic dependency graph** at startup from decorated components, factories, and plugins.
 It resolves by **type**, supports **collection injection with qualifiers**, memoizes singletons, and fails fast — so your app wiring stays **predictable, testable, and framework-agnostic**.

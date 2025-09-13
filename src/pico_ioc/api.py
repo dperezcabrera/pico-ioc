@@ -3,7 +3,7 @@
 import inspect
 import logging
 from contextlib import contextmanager
-from typing import Callable, Optional, Tuple, Any, Dict  # ⬅️ Any, Dict
+from typing import Callable, Optional, Tuple, Any, Dict
 
 from .container import PicoContainer, Binder
 from .plugins import PicoPlugin
@@ -24,7 +24,7 @@ def init(
     auto_exclude_caller: bool = True,
     plugins: Tuple[PicoPlugin, ...] = (),
     reuse: bool = True,
-    overrides: Optional[Dict[Any, Any]] = None,  # ⬅️ NUEVO
+    overrides: Optional[Dict[Any, Any]] = None,
 ) -> PicoContainer:
 
     root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
@@ -63,6 +63,46 @@ def init(
     _state._root_name = root_name
     return container
 
+
+
+def scope(
+    *,
+    modules: Iterable[Any] = (),
+    roots: Iterable[type] = (),
+    overrides: Optional[Dict[Any, Any]] = None,
+    base: Optional[PicoContainer] = None,
+    include: Optional[set[str]] = None,
+    exclude: Optional[set[str]] = None,
+    strict: bool = True,
+    lazy: bool = True,
+    auto_mock: bool = False,
+) -> PicoContainer:
+    """
+    Build a sub-container limited to a dependency subgraph from given roots.
+    """
+    container = PicoContainer()
+    binder = Binder(container)
+    resolver = Resolver(container)
+
+    # reuse providers from base if given
+    if base:
+        for k, prov in base._providers.items():
+            container._providers[k] = dict(prov)
+
+    # scan modules if provided
+    for m in modules:
+        scan_and_configure(m, container)
+
+    # TODO: compute subgraph reachable from roots (future enhancement)
+    # for now: just rely on normal resolver
+
+    if overrides:
+        _apply_overrides(container, overrides)
+
+    if not lazy:
+        container.eager_instantiate_all()
+
+    return container
 
 # -------------------- helpers --------------------
 
