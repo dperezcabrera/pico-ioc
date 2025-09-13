@@ -1,11 +1,15 @@
 # pico_ioc/container.py
 from __future__ import annotations
 import inspect
-from typing import Any, Dict, get_origin, get_args, Annotated
-import typing as _t 
+from typing import Any, Dict, get_origin, get_args, Annotated, Sequence, Optional, Callable, Union, Tuple
+import typing as _t
+from .proxy import IoCProxy
+from .interceptors import MethodInterceptor
+
+_InterceptorLike = Union[MethodInterceptor, type]
 
 from .decorators import QUALIFIERS_KEY
-from . import _state  # re-entrancy guard
+from . import _state
 
 
 class Binder:
@@ -23,14 +27,53 @@ class Binder:
 
 
 class PicoContainer:
-    def __init__(self):
+    def __init__(self, *, method_interceptors: Sequence[_InterceptorLike] = ()):
         self._providers: Dict[Any, Dict[str, Any]] = {}
         self._singletons: Dict[Any, Any] = {}
+        self._method_interceptors_raw: tuple[_InterceptorLike, ...] = tuple(method_interceptors)
+        self._method_interceptors: tuple[MethodInterceptor, ...] = ()
+        # deferred defaults: selector -> list of {factory, lazy, tags, priority}
+        self._deferred_defaults: Dict[Any, list[Dict[str, Any]]] = {}
+        if self._method_interceptors_raw:
+            self._build_interceptors()
+
+    def set_method_interceptors(self, interceptors: Sequence[_InterceptorLike]) -> None:
+        self._method_interceptors_raw = tuple(interceptors)
+        self._build_interceptors()
+
+    def _build_interceptors(self) -> None:
+        built: list[MethodInterceptor] = []
+        for it in self._method_interceptors_raw:
+            if isinstance(it, type):
+                try:
+                    built.append(it(self))
+                except TypeError:
+                    built.append(it())      # fallback to no-arg ctor
+            else:
+                built.append(it)            # already callable
+        self._method_interceptors = tuple(built)
+
+    def _register_default(self, selector: Any, *, factory, lazy: bool, tags: tuple[str, ...], priority: int):
+        self._deferred_defaults.setdefault(selector, []).append({
+            "factory": factory, "lazy": bool(lazy), "tags": tuple(tags) if tags else (),
+            "priority": int(priority)
+        })
+
+    def apply_defaults(self):
+        """
+        After scan + policy; bind highest-priority default for missing selectors.
+        Deterministic: ties break by insertion order.
+        """
+        for selector, candidates in list(self._deferred_defaults.items()):
+            if self.has(selector):
+                continue
+            best = max(candidates, key=lambda d: d["priority"])
+            self.bind(selector, best["factory"], lazy=best["lazy"], tags=best["tags"])
+        self._deferred_defaults.clear()
 
     def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
         self._singletons.pop(key, None)
         meta = {"factory": provider, "lazy": bool(lazy)}
-        # qualifiers already present:
         try:
             q = getattr(key, QUALIFIERS_KEY, ())
         except Exception:
@@ -43,7 +86,6 @@ class PicoContainer:
         return key in self._providers
 
     def get(self, key: Any):
-        # block only when scanning and NOT currently resolving a dependency
         if _state._scanning.get() and not _state._resolving.get():
             raise RuntimeError("re-entrant container access during scan")
 
@@ -54,14 +96,16 @@ class PicoContainer:
         if key in self._singletons:
             return self._singletons[key]
 
-        # mark resolving around factory execution
         tok = _state._resolving.set(True)
         try:
             instance = prov["factory"]()
         finally:
             _state._resolving.reset(tok)
 
-        # memoize always (both lazy and non-lazy after first get)
+        # Wrap with IoCProxy if interceptors are present
+        if self._method_interceptors and not isinstance(instance, IoCProxy):
+            instance = IoCProxy(instance, self._method_interceptors)
+
         self._singletons[key] = instance
         return instance
 
@@ -82,13 +126,8 @@ class PicoContainer:
             cls = provider_key if isinstance(provider_key, type) else None
             if cls is None:
                 continue
-
-            # Avoid self-inclusion loops: if the class itself requires a collection
-            # of `base_type` in its __init__, don't treat it as an implementation
-            # of `base_type` when building that collection.
             if _requires_collection_of_base(cls, base_type):
                 continue
-
             if _is_compatible(cls, base_type):
                 prov_qs = meta.get("qualifiers", ())
                 if all(q in prov_qs for q in qualifiers):
@@ -109,7 +148,6 @@ def _is_compatible(cls, base) -> bool:
         pass
 
     if _is_protocol(base):
-        # simple structural check: ensure methods/attrs declared on the Protocol exist on the class
         names = set(getattr(base, "__annotations__", {}).keys())
         names.update(n for n in getattr(base, "__dict__", {}).keys() if not n.startswith("_"))
         for n in names:
@@ -121,12 +159,11 @@ def _is_compatible(cls, base) -> bool:
 
     return False
 
+
 def _requires_collection_of_base(cls, base) -> bool:
     """
     Return True if `cls.__init__` has any parameter annotated as a collection
-    (list/tuple, including Annotated variants) of `base`. This prevents treating
-    `cls` as an implementation of `base` while building that collection,
-    avoiding recursion.
+    (list/tuple, including Annotated variants) of `base`. Avoids recursion.
     """
     try:
         sig = inspect.signature(cls.__init__)
@@ -134,7 +171,7 @@ def _requires_collection_of_base(cls, base) -> bool:
         return False
 
     try:
-        from .resolver import _get_hints  # type: ignore
+        from .resolver import _get_hints  # deferred import
         hints = _get_hints(cls.__init__, owner_cls=cls)
     except Exception:
         hints = {}
@@ -146,7 +183,6 @@ def _requires_collection_of_base(cls, base) -> bool:
         origin = get_origin(ann) or ann
         if origin in (list, tuple, _t.List, _t.Tuple):
             inner = (get_args(ann) or (object,))[0]
-            # Unwrap Annotated[T, ...] si aparece
             if get_origin(inner) is Annotated:
                 args = get_args(inner)
                 if args:
@@ -154,5 +190,4 @@ def _requires_collection_of_base(cls, base) -> bool:
             if inner is base:
                 return True
     return False
-
 

@@ -1,20 +1,20 @@
 # pico_ioc/api.py
-
 from __future__ import annotations
 
 import inspect
 import logging
+import os
 from contextlib import contextmanager
 from typing import Callable, Optional, Tuple, Any, Dict, Iterable
 
 from .container import PicoContainer, Binder
+from .core_policy import apply_core_policy
 from .plugins import PicoPlugin
 from .scanner import scan_and_configure
 from . import _state
 
 
 def reset() -> None:
-    """Reset the global container."""
     _state._container = None
     _state._root_name = None
 
@@ -22,6 +22,7 @@ def reset() -> None:
 def init(
     root_package,
     *,
+    profiles: Optional[list[str]] = None,
     exclude: Optional[Callable[[str], bool]] = None,
     auto_exclude_caller: bool = True,
     plugins: Tuple[PicoPlugin, ...] = (),
@@ -31,10 +32,16 @@ def init(
 
     root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
 
+    requested_profiles = profiles or [p.strip() for p in os.getenv("PICO_PROFILE", "").split(",") if p.strip()]
     if reuse and _state._container and _state._root_name == root_name:
-        if overrides:
-            _apply_overrides(_state._container, overrides)
-        return _state._container
+        live = _state._container
+        live_profiles = getattr(live, "_active_profiles", None)
+        if (requested_profiles and live_profiles is not None and live_profiles != tuple(requested_profiles)):
+            reuse = False
+        if reuse:
+            if overrides:
+                _apply_overrides(live, overrides)
+            return live
 
     combined_exclude = _build_exclude(exclude, auto_exclude_caller, root_name=root_name)
 
@@ -56,6 +63,15 @@ def init(
     _run_hooks(plugins, "after_bind", container, binder)
     _run_hooks(plugins, "before_eager", container, binder)
 
+    try:
+        container._build_interceptors()
+    except Exception:
+        logging.exception("Failed to build method interceptors")
+
+    apply_core_policy(container, profiles=requested_profiles)
+    container._active_profiles = tuple(requested_profiles)
+    container.apply_defaults()
+
     container.eager_instantiate_all()
 
     _run_hooks(plugins, "after_ready", container, binder)
@@ -70,19 +86,14 @@ def scope(
     *,
     modules: Iterable[Any] = (),
     roots: Iterable[type] = (),
+    profiles: Optional[list[str]] = None,
     overrides: Optional[Dict[Any, Any]] = None,
     base: Optional[PicoContainer] = None,
     include: Optional[set[str]] = None,   # tag include (any-match)
     exclude: Optional[set[str]] = None,   # tag exclude (any-match)
     strict: bool = True,
-    lazy: bool = True,                    # if True -> do NOT instantiate roots here
+    lazy: bool = True,
 ) -> PicoContainer:
-    """
-    Build a lightweight container: scan, apply overrides, filter by tags, prune
-    to the dependency subgraph reachable from `roots`, and (optionally) instantiate roots.
-    - No global eager.
-    - If strict=False and base is provided, missing keys fall back to base.
-    """
     c = _ScopedContainer(base=base, strict=strict)
 
     logging.info("Initializing pico-ioc scope...")
@@ -93,7 +104,6 @@ def scope(
     if overrides:
         _apply_overrides(c, overrides)
 
-    # Tag filter (apply BEFORE reachability pruning)
     def _tag_ok(meta: dict) -> bool:
         if include and not set(include).intersection(meta.get("tags", ())):
             return False
@@ -103,12 +113,20 @@ def scope(
 
     c._providers = {k: v for k, v in c._providers.items() if _tag_ok(v)}  # type: ignore[attr-defined]
 
-    # Reachability from roots (subgraph) + keep overrides
     allowed = _compute_allowed_subgraph(c, roots)
     keep_keys: set[Any] = set(allowed) | (set(overrides.keys()) if overrides else set())
     c._providers = {k: v for k, v in c._providers.items() if k in keep_keys}  # type: ignore[attr-defined]
 
-    # Instantiate roots only when NOT lazy
+    try:
+        c._build_interceptors()
+    except Exception:
+        logging.exception("Failed to build method interceptors for scope")
+
+    requested_profiles = profiles or [p.strip() for p in os.getenv("PICO_PROFILE", "").split(",") if p.strip()]
+    apply_core_policy(c, profiles=requested_profiles)
+    c._active_profiles = tuple(requested_profiles)
+    c.apply_defaults()
+
     if not lazy:
         from .proxy import ComponentProxy
         for rk in roots or ():
@@ -119,13 +137,11 @@ def scope(
             except NameError:
                 if strict:
                     raise
-                # non-strict: skip missing root
                 continue
 
     logging.info("Scope container ready.")
     return c
 
-# -------------------- helpers --------------------
 
 def _apply_overrides(container: PicoContainer, overrides: Dict[Any, Any]) -> None:
     for key, val in overrides.items():
@@ -167,7 +183,6 @@ def _build_exclude(
 def _get_caller_module_name() -> Optional[str]:
     try:
         f = inspect.currentframe()
-        # frame -> _get_caller_module_name -> _build_exclude -> init
         if f and f.f_back and f.f_back.f_back and f.f_back.f_back.f_back:
             mod = inspect.getmodule(f.f_back.f_back.f_back)
             return getattr(mod, "__name__", None)
@@ -198,11 +213,12 @@ def _scanning_flag():
         yield
     finally:
         _state._scanning.reset(tok)
-        
+
 def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -> set:
     """
     Traverse constructor annotations from roots to collect reachable provider keys.
     Includes implementations for collection injections (list[T]/tuple[T]).
+    Also include implementations for a root base class itself.
     """
     from .resolver import _get_hints
     from .container import _is_compatible  # structural / subclass check
@@ -212,7 +228,6 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
     allowed: set[Any] = set()
     stack = list(roots or ())
 
-    # Helper: add all provider keys whose class is compatible with `base`
     def _add_impls_for_base(base_t):
         for prov_key, meta in container._providers.items():  # type: ignore[attr-defined]
             cls = prov_key if isinstance(prov_key, type) else None
@@ -229,9 +244,12 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
             continue
         allowed.add(k)
 
+        # NEW: if k is a base class, include its implementations too
+        if isinstance(k, type):
+            _add_impls_for_base(k)
+
         cls = k if isinstance(k, type) else None
         if cls is None or not container.has(k):
-            # not a class or not currently bound → no edges to follow
             continue
 
         try:
@@ -250,11 +268,8 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
                 inner = (get_args(ann) or (object,))[0]
                 if get_origin(inner) is Annotated:
                     inner = (get_args(inner) or (object,))[0]
-                # We don’t know exact impls yet, so:
                 if isinstance(inner, type):
-                    # keep the base “type” in allowed for clarity
                     allowed.add(inner)
-                    # And include ALL implementations present in providers
                     _add_impls_for_base(inner)
                 continue
 
@@ -266,17 +281,16 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
     return allowed
 
 
+
 class _ScopedContainer(PicoContainer):
     def __init__(self, base: Optional[PicoContainer], strict: bool):
         super().__init__()
         self._base = base
         self._strict = strict
 
-    # allow `with pico_ioc.scope(...) as c:`
     def __enter__(self):
         return self
 
-    # no resource suppression; placeholder for future cleanup/shutdown
     def __exit__(self, exc_type, exc, tb):
         return False
 
@@ -287,3 +301,4 @@ class _ScopedContainer(PicoContainer):
             if not self._strict and self._base is not None and self._base.has(key):
                 return self._base.get(key)
             raise e
+

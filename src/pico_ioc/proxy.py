@@ -1,6 +1,11 @@
 # pico_ioc/proxy.py
 
-from typing import Any, Callable
+from __future__ import annotations
+from functools import lru_cache
+from typing import Any, Callable, Sequence
+import inspect
+
+from .interceptors import Invocation, dispatch, MethodInterceptor
 
 class ComponentProxy:
     def __init__(self, object_creator: Callable[[], Any]):
@@ -74,4 +79,39 @@ class ComponentProxy:
     def __call__(self, *args, **kwargs): return self._get_real_object()(*args, **kwargs)
     def __enter__(self): return self._get_real_object().__enter__()
     def __exit__(self, exc_type, exc_val, exc_tb): return self._get_real_object().__exit__(exc_type, exc_val, exc_tb)
+    
+class IoCProxy:
+    __slots__ = ("_target", "_interceptors")
+
+    def __init__(self, target: object, interceptors: Sequence[MethodInterceptor]):
+        self._target = target
+        self._interceptors = tuple(interceptors)
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._target, name)
+        if not callable(attr):
+            return attr
+        if hasattr(attr, "__get__"):
+            fn = attr.__get__(self._target, type(self._target))
+        else:
+            fn = attr
+
+        @lru_cache(maxsize=None)
+        def _wrap(bound_fn: Callable[..., Any]):
+            if inspect.iscoroutinefunction(bound_fn):
+                async def aw(*args, **kwargs):
+                    inv = Invocation(self._target, name, bound_fn, args, kwargs)
+                    # dispatch returns a coroutine for async methods
+                    return await dispatch(self._interceptors, inv)
+                return aw
+            else:
+                def sw(*args, **kwargs):
+                    inv = Invocation(self._target, name, bound_fn, args, kwargs)
+                    # dispatch returns a *value* for sync methods
+                    res = dispatch(self._interceptors, inv)
+                    if inspect.isawaitable(res):
+                        raise RuntimeError(f"Async interceptor on sync method: {name}")
+                    return res
+                return sw
+        return _wrap(fn)
 

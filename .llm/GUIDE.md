@@ -1,6 +1,6 @@
 # GUIDE.md — pico-ioc
 
-> **Mission:** make dependency wiring trivial so you can ship faster and shorten feedback cycles.  
+> **Mission:** Make dependency wiring trivial so you can ship faster and shorten feedback cycles.  
 > ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` and `include_extras=True`).
 
 This guide shows how to structure a Python app with **pico-ioc**: define components, provide dependencies, bootstrap a container, and run web/CLI code predictably.
@@ -9,12 +9,13 @@ This guide shows how to structure a Python app with **pico-ioc**: define compone
 
 ## 1) Core concepts
 
-* **Component**: a class managed by the container. Use `@component`.
-* **Factory component**: a class that *provides* concrete instances (e.g., `Flask()`, clients). Use `@factory_component`.
-* **Provider**: a method on a factory that returns a dependency and declares its **key** (usually a type). Use `@provides(key=Type)` so consumers can request by type.
-* **Container**: built via `pico_ioc.init(package_or_module, ..., overrides=...)`. Resolve with `container.get(TypeOrClass)`.
+- **Component** → a class managed by the container. Use `@component`.  
+- **Factory component** → a class that *provides* concrete instances (e.g. `Flask()`, DB clients). Use `@factory_component`.  
+- **Provider** → a method on a factory that returns a dependency and declares its **key** (usually a type). Use `@provides(key=Type)` so consumers can request by type.  
+- **Container** → built via `pico_ioc.init(package_or_module, ..., overrides=...)`.  
+  Resolve with `container.get(TypeOrClass)`.
 
-Resolution rule of thumb: **ask by type** (e.g., `container.get(Flask)` or inject `def __init__(..., app: Flask)`).
+👉 Rule of thumb: **inject by type** (e.g., `def __init__(..., app: Flask)`).  
 
 ---
 
@@ -60,15 +61,9 @@ class Service:
 from pico_ioc import init
 import app
 
-container = init(app)          # build the container from the package
-svc = container.get(app.service.Service)
-print(svc.run())               # -> "fetching from sqlite:///demo.db"
-```
-
-Run:
-
-```bash
-python main.py
+c = init(app)
+svc = c.get(app.service.Service)
+print(svc.run())  # -> "fetching from sqlite:///demo.db"
 ```
 
 ---
@@ -119,21 +114,13 @@ if __name__ == "__main__":
     flask_app.run(host="0.0.0.0", port=5000)
 ```
 
-Run:
-
-```bash
-python web.py
-# GET http://localhost:5000/health -> {"status":"ok"}
-```
-
 ---
 
 ## 4) Configuration patterns
 
-**Environment-backed config:**
+**Env-backed config:**
 
 ```python
-# app/config.py
 import os
 from pico_ioc import component
 
@@ -143,7 +130,7 @@ class Config:
     DEBUG: bool = os.getenv("DEBUG", "0") == "1"
 ```
 
-**Inject where needed** (constructor injection keeps code testable):
+**Inject into consumers:**
 
 ```python
 @component
@@ -156,202 +143,153 @@ class Runner:
 
 ## 5) Testing & overrides
 
-You often want to replace real dependencies with fakes or mocks in tests.  
-There are two main patterns:
+You often want to replace real deps with fakes/mocks.
 
-### 5.1 Composition modules
-
-Define a **test factory** that provides fakes using the same keys:
+### 5.1 Test modules
 
 ```python
-# tests/test_overrides_module.py
 from pico_ioc import factory_component, provides
 from app.repo import Repo
 
 class FakeRepo(Repo):
-    def fetch(self) -> str:
-        return "fake-data"
+    def fetch(self) -> str: return "fake-data"
 
 @factory_component
 class TestOverrides:
     @provides(key=Repo)
-    def provide_repo(self) -> Repo:
-        return FakeRepo()
-````
-
-Build the container for tests with both packages (app + overrides):
+    def provide_repo(self) -> Repo: return FakeRepo()
+```
 
 ```python
+import app, tests.test_overrides_module as test_mod
 from pico_ioc import init
-import app
-from tests import test_overrides_module
 
 def test_service_fetch():
-    c = init([app, test_overrides_module])
+    c = init([app, test_mod])
     svc = c.get(app.service.Service)
     assert svc.run() == "fake-data"
 ```
 
-### 5.2 Direct `overrides` argument
-
-`init()` also accepts an `overrides` dict for ad-hoc mocks. Each entry can be:
-
-* **Instance** → bound as constant.
-* **Callable** (0 args) → bound as provider, non-lazy.
-* **(provider, lazy\_bool)** → provider with explicit laziness.
+### 5.2 Direct `overrides`
 
 ```python
-from pico_ioc import init
-import app
-
-fake_repo = object()
-
 c = init(app, overrides={
-    app.repo.Repo: fake_repo,            # constant
-    "fast_model": lambda: {"id": 123},   # provider
-    "expensive": (lambda: object(), True) # lazy provider
+    app.repo.Repo: object(),                # constant
+    "fast_model": lambda: {"id": 123},      # provider
+    "clock": (lambda: object(), True),      # lazy provider
 })
 ```
 
-This is handy for **quick mocking in unit tests**:
+### 5.3 Scoped subgraphs
 
 ```python
-def test_with_direct_overrides():
-    c = init(app, overrides={"fast_model": {"fake": True}}, reuse=False)
-    svc = c.get(app.service.Service)
-    assert svc.repo.fetch() == "fake-data"
-```
-
-> Note: if you call `init(..., reuse=True, overrides=...)` on an already built container, the overrides are applied on the cached container.
-
-### 5.3 Scoped subgraphs with `scope(...)`
-
-For unit tests or lightweight integration you can build a **reduced container** that only
-includes the dependencies reachable from certain root components.
-
-```python
-from pico_ioc
+import pico_ioc, src
+from tests.fakes import FakeDocker
 from src.runner_service import RunnerService
-from tests.fakes import FakeDocker, TestRegistry
-import src
 
-def test_runner_service_subset():
-    c = pico_ioc.scope(
+def test_runner():
+    with pico_ioc.scope(
         modules=[src],
-        roots=[RunnerService],   # only RunnerService and its deps
-        overrides={
-            "docker.DockerClient": FakeDocker(),
-            TestRegistry: TestRegistry(),
-        },
-        strict=True,   # fail if dep is outside the subgraph
-        lazy=True,     # instantiate on demand
-    )
-    svc = c.get(RunnerService)
-    assert isinstance(svc, RunnerService)
+        roots=[RunnerService],
+        overrides={"docker.DockerClient": FakeDocker()},
+        strict=True, lazy=True,
+    ) as c:
+        svc = c.get(RunnerService)
+        assert isinstance(svc, RunnerService)
 ```
-Benefits:
-
-* **Fast**: you don’t need to bootstrap the entire app (HTTP, controllers, etc.).
-* **Deterministic**: fails early if a dependency is missing.
-* **Flexible**: works outside tests as well (e.g. CLI tools, benchmarks).
-
-> Note: `scope` does *not* add new lifecycles. It creates a **bounded container**
-> with the same singleton-per-container semantics.
-
-**Tag filtering**
-
-You can limit the subgraph by **tags**:
-
-- Tag components/factories:
-```python
-  from pico_ioc import component, factory_component, provides
-
-  @component(tags={"runtime", "docker"})
-  class DockerClient: ...
-
-  @factory_component
-  class ObservabilityFactory:
-      @provides("metrics", tags={"observability"})
-      def make_metrics(self): ...
-```
-
-* Filter during `scope()`:
-
-### API Reference: `scope(...)`
-
-```python
-pico_ioc.scope(
-    *,
-    modules: Iterable[Any] = (),
-    roots: Iterable[type] = (),
-    overrides: Optional[Dict[Any, Any]] = None,
-    base: Optional[PicoContainer] = None,
-    include_tags: Optional[set[str]] = None,
-    exclude_tags: Optional[set[str]] = None,
-    strict: bool = True,
-    lazy: bool = True,
-) -> PicoContainer
-```
-
-**Parameters**
-
-* `modules` — list of packages/modules to scan.
-* `roots` — root components to keep; container is pruned to their subgraph.
-* `overrides` — same format as in `init()`, replace bindings.
-* `base` — optional base container to reuse existing providers.
-* `include_tags` — only include providers with one of these tags (if set).
-* `exclude_tags` — drop any provider with these tags.
-* `strict` — if `True`, missing deps cause `NameError`; otherwise skipped.
-* `lazy` — if `True`, instantiate only on demand; if `False`, instantiate eagerly.
-
-**Notes**
-
-* `scope` does not add new lifecycles — it’s still singleton-per-container.
-* Tag filters are applied before traversal; excluded providers behave as missing.
-
-
-**Rules**
-
-* If a provider has **no tags**, it’s considered neutral (passes unless excluded via other criteria).
-* `exclude_tags` wins over `include_tags` for any provider that matches both.
-* Filtering is applied **before** traversal; pruned providers are treated as missing (and will error in `strict=True`).
 
 ---
 
-## 6) Qualifiers & collection injection
+## 6) Qualifiers & collections
 
 ```python
 from typing import Protocol, Annotated
-from pico_ioc import component, Qualifier, qualifier
+from pico_ioc import component, qualifier
 
-class Handler(Protocol):
-    def handle(self, s: str) -> str: ...
+class Payment(Protocol):
+    def pay(self, cents: int): ...
 
-PAYMENTS = Qualifier("payments")
+@qualifier("primary")
+class Primary: pass
 
-@component
-@qualifier(PAYMENTS)
-class StripeHandler(Handler): ...
-
-@component
-@qualifier(PAYMENTS)
-class PaypalHandler(Handler): ...
+@qualifier("fallback")
+class Fallback: pass
 
 @component
-class Orchestrator:
-    def __init__(self, handlers: list[Annotated[Handler, PAYMENTS]]):
-        self.handlers = handlers
+class Stripe(Payment): ...
 
-    def run(self, s: str) -> list[str]:
-        return [h.handle("ok") for h in self.handlers]
+@component
+class Paypal(Payment): ...
 
+@component
+class Billing:
+    def __init__(
+        self,
+        all_methods: list[Payment],
+        primary: Annotated[Payment, Primary],
+        fallbacks: list[Annotated[Payment, Fallback]] = [],
+    ):
+        self.all = all_methods
+        self.primary = primary
+        self.fallbacks = fallbacks
 ```
-If you request list[Handler] you get all implementations.
-If you request list[Annotated[Handler, PAYMENTS]], you only get the tagged ones.
+
+* Inject `list[T]` → all implementations.
+* Inject `list[Annotated[T, Q]]` → only tagged ones.
 
 ---
 
-## 7) Plugins & Public API helper
+## 7) Interceptors API
+
+Interceptors let you **observe/modify lifecycle**.
+
+```python
+from pico_ioc import Interceptor
+
+class LoggingInterceptor(Interceptor):
+    def on_resolve(self, key, ann, quals): print("resolving", key)
+    def on_before_create(self, key): print("creating", key)
+    def on_after_create(self, key, inst): print("created", key); return inst
+    def on_exception(self, key, exc): print("error", key, exc); raise
+```
+
+```python
+import pico_ioc, myapp
+c = pico_ioc.init(myapp, interceptors=[LoggingInterceptor()])
+```
+
+Hooks: `on_resolve`, `on_before_create`, `on_after_create`, `on_invoke`, `on_exception`.
+Use cases: logging, metrics, tracing, policies, audit.
+
+---
+
+## 8) Profiles & conditionals
+
+Switch impls by env/predicate.
+
+```python
+from pico_ioc import component, conditional
+
+class Cache: ...
+
+@component
+@conditional(require_env=("REDIS_URL",))
+class RedisCache(Cache): ...
+
+@component
+@conditional(predicate=lambda: os.getenv("PROFILE") == "test")
+class InMemoryCache(Cache): ...
+```
+
+* `require_env=(...)` → all must exist.
+* `predicate=callable` → custom rule.
+* Missing providers → bootstrap error (fail-fast).
+
+Use cases: **profiles** (`test`, `prod`, `ci`), optional deps, feature flags.
+
+---
+
+## 9) Plugins & Public API helper
 
 ```python
 from pico_ioc import plugin
@@ -359,22 +297,15 @@ from pico_ioc.plugins import PicoPlugin
 
 @plugin
 class TracingPlugin(PicoPlugin):
-    def before_scan(self, package, binder):
-        print(f"Scanning {package}")
-    def after_ready(self, container, binder):
-        print("Container ready")
+    def before_scan(self, pkg, binder): print("scanning", pkg)
+    def after_ready(self, c, binder): print("ready")
 ```
 
-Register explicitly:
-
 ```python
-from pico_ioc import init
-import app
-
 c = init(app, plugins=(TracingPlugin(),))
 ```
 
-And to expose your app’s API cleanly:
+Expose public API:
 
 ```python
 # app/__init__.py
@@ -382,123 +313,60 @@ from pico_ioc.public_api import export_public_symbols_decorated
 __getattr__, __dir__ = export_public_symbols_decorated("app", include_plugins=True)
 ```
 
-Now you can import directly:
+---
 
-```python
-from app import Service, Config, TracingPlugin
-```
+## 10) Tips & guardrails
+
+* Inject by type, not by string.
+* Keep constructors cheap (no I/O).
+* One responsibility per component.
+* Use factories for externals (DBs, clients, frameworks).
+* Fail fast: bootstrap at startup.
+* No globals; only resolve at edges.
 
 ---
 
-## 8) Tips & guardrails
+## 11) Troubleshooting
 
-* **Ask by type**: inject `Flask`, `Config`, `Repo` instead of strings.
-* **Keep constructors cheap**: do not perform I/O in `__init__`.
-* **Small components**: one responsibility per component; wire them in service classes.
-* **Factories provide externals**: frameworks, clients, DB engines belong in `@factory_component` providers.
-* **Fail fast**: build the container at startup and crash early if a dependency is missing.
-* **No globals**: let the container own lifecycle; fetch via `container.get(...)` only at the edges (bootstrap).
+* **No provider for X** → missing `@provides(key=X)`.
+* **Wrong instance** → duplicates; last registered wins.
+* **Circular imports** → split modules or move imports inside providers.
+* **Framework not found** → check correct `@provides(key=FrameworkType)`.
 
 ---
 
-## 9) Troubleshooting
+## 12) Examples
 
-* **“No provider for X”**
-  Ensure a `@provides(key=X)` exists in a module passed to `init(...)`, and your constructor type annotation is exactly `X`.
-
-* **Wrong instance injected**
-  Check for duplicate providers for the same key. The last registered wins; control order via the list passed to `init([module_a, module_b])`.
-
-* **Circular imports**
-  Split components or move heavy imports into providers. Keep modules acyclic where possible.
-
-* **Flask not found**
-  Verify `from flask import Flask` and that your factory uses `@provides(key=Flask)`. Resolve it with `container.get(Flask)`.
-
----
-
-## 10) Examples
-
-### 10.1 Bootstrap & auto-imports
+* **Bootstrap auto-exports**
 
 ```python
 # src/__init__.py
 from pico_ioc.public_api import export_public_symbols_decorated
-__getattr__, __dir__ = export_public_symbols_decorated("src", include_plugins=True)
+__getattr__, __dir__ = export_public_symbols_decorated("src")
 ```
 
-Now you can import cleanly:
+* **Flask with waitress**
 
 ```python
-from src import Service, Config, TracingPlugin
-```
-
-### 10.2 Flask with waitress
-
-```python
-# main_flask.py
-import logging
-from waitress import serve
 import pico_ioc, src
-from flask import Flask
-
-def main():
-    logging.basicConfig(level=logging.INFO)
-    c = pico_ioc.init(src)
-    app = c.get(Flask)
-    serve(app, host="0.0.0.0", port=5001, threads=8)
+from waitress import serve
+c = pico_ioc.init(src)
+app = c.get("flask.Flask")
+serve(app, host="0.0.0.0", port=5001)
 ```
 
-### 10.3 FastAPI with uvicorn
+* **FastAPI with uvicorn**
 
 ```python
-# main_fastapi.py
-import logging
 import pico_ioc, src, uvicorn
-from fastapi import FastAPI
-
-def main():
-    logging.basicConfig(level=logging.INFO)
-    c = pico_ioc.init(src)
-    app = c.get(FastAPI)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-```
-
-### 10.4 App Factory for externals
-
-```python
-# src/app_factory.py
-from pico_ioc import factory_component, provides
-from flask import Flask
-from fastapi import FastAPI
-import docker
-from .config import Config
-
-@factory_component
-class AppFactory:
-    def __init__(self):
-        self._config = Config()
-
-    @provides(key=Config)
-    def provide_config(self) -> Config:
-        return self._config
-
-    @provides(key=Flask)
-    def provide_flask(self) -> Flask:
-        return Flask(__name__)
-
-    @provides(key=FastAPI)
-    def provide_fastapi(self) -> FastAPI:
-        return FastAPI()
-
-    @provides(key=docker.DockerClient)
-    def provide_docker(self) -> docker.DockerClient:
-        return docker.from_env()
+c = pico_ioc.init(src)
+app = c.get("fastapi.FastAPI")
+uvicorn.run(app, host="0.0.0.0", port=8000)
 ```
 
 ---
 
 **TL;DR**
-Decorate components, provide externals by type, `init()` once, and let the container do the wiring—so you can **run tests, serve web apps, or batch jobs with minimal glue**.
+Decorate components, provide externals by type, `init()` once, and let the container wire everything — so you can run tests, serve web apps, or batch jobs with minimal glue.
 
 

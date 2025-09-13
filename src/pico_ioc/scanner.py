@@ -139,7 +139,6 @@ def _collect_decorated_classes(
             elif getattr(obj, FACTORY_FLAG, False):
                 factory_classes.append(obj)
 
-    # 1) Si es un paquete, recorrer submódulos
     for mod_name in _iter_package_modules(package):
         if exclude and exclude(mod_name):
             logging.info("Skipping module %s (excluded)", mod_name)
@@ -153,7 +152,6 @@ def _collect_decorated_classes(
 
         _visit_module(module)
 
-    # 2) Si el “paquete” raíz es un módulo (sin __path__), también hay que visitarlo.
     if not hasattr(package, "__path__"):
         _visit_module(package)
 
@@ -184,7 +182,6 @@ def _register_component_classes(
             return _factory
         container.bind(key, _provider_factory(), lazy=is_lazy, tags=tags)
 
-
 def _register_factory_classes(
     *,
     factory_classes: List[type],
@@ -194,16 +191,16 @@ def _register_factory_classes(
     """
     Register products of @factory_component classes.
 
-    For each factory class:
-        - Instantiate the factory via the resolver.
-        - For each method with @provides:
-            - Bind the provided key to a callable that calls the factory method.
-            - If PROVIDES_LAZY is True, bind a proxy that defers the method call.
+    Method with @provides:
+      - If `provided_key` is a class/type -> bind under a unique composite key
+        ( (base_type, "Factory.method") ), mark provider with `._pico_alias_for = base_type`.
+        The core policy will later alias the base to the chosen composite.
+      - If `provided_key` is NOT a type (e.g., a string name) -> bind directly
+        with that key (keeps backwards compatibility with tests expecting names
+        like "svc_sync").
     """
     for fcls in factory_classes:
         try:
-            # Durante el escaneo, permitir la resolución de dependencias de la factory
-            # elevando temporalmente el flag `_resolving` para no chocar con la guardia.
             tok_res = _state._resolving.set(True)
             try:
                 finst = resolver.create_instance(fcls)
@@ -220,11 +217,25 @@ def _register_factory_classes(
             is_lazy = bool(getattr(func, PROVIDES_LAZY, False))
             tags = tuple(getattr(func, PROVIDES_TAGS, ()))
             bound = getattr(finst, attr_name, func.__get__(finst, fcls))
+
             def _make_provider(m=bound, owner=fcls, lazy=is_lazy):
                 def _factory():
                     kwargs = resolver.kwargs_for_callable(m, owner_cls=owner)
                     def _call(): return m(**kwargs)
                     return ComponentProxy(lambda: _call()) if lazy else _call()
                 return _factory
-            container.bind(provided_key, _make_provider(), lazy=is_lazy, tags=tags)
+
+            prov = _make_provider()
+
+            if isinstance(provided_key, type):
+                # type-key → composite binding to avoid collisions
+                try:
+                    setattr(prov, "_pico_alias_for", provided_key)
+                except Exception:
+                    pass
+                unique_key = (provided_key, f"{fcls.__name__}.{attr_name}")
+                container.bind(unique_key, prov, lazy=is_lazy, tags=tags)
+            else:
+                # non-type key → preserve direct name binding (e.g. "svc_sync")
+                container.bind(provided_key, prov, lazy=is_lazy, tags=tags)
 
