@@ -212,7 +212,6 @@ def test_scope_collections_and_qualifiers(tmp_path: Path):
         assert names_pay == {"Stripe", "Paypal"}
 
 
-@pytest.mark.xfail(reason="Context manager for scope() optional; mark xfail until implemented")
 def test_scope_context_manager(tmp_path: Path):
     with _make_pkg(
         tmp_path,

@@ -323,6 +323,14 @@ c = scope(
 svc = c.get(RunnerService)
 ```
 
+**Tag-based pruning**
+
+Providers carry `tags: set[str]` metadata (from `@component(tags=...)` or `@provides(..., tags=...)`). `scope()` evaluates tags before walking edges:
+
+- keep if `(include_tags is empty or tags ∩ include_tags ≠ ∅)` and `(tags ∩ exclude_tags = ∅)`.
+- Untagged providers behave as neutral (eligible unless excluded).
+- This happens prior to dependency traversal, so pruned providers are invisible to the subgraph.
+
 ### Semantics
 
 * **Limited reach**: only edges reachable from `roots` are followed.
