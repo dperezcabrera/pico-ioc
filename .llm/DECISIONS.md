@@ -91,6 +91,20 @@ Each entry has a rationale and implications. If a decision is revoked, it should
 
 ---
 
+### 8. Scoped subgraphs (`scope`)
+- **Decision**: Introduce `scope(...)` API to build a container restricted to the dependency subgraph of given root components.  
+- **Rationale**:  
+  * Enables lightweight unit/integration tests without bootstrapping the whole app.  
+  * Supports deterministic overrides (fakes, mocks) per scope.  
+  * Keeps the lifecycle model unchanged (still singleton per container).  
+- **Implications**:  
+  * `scope(...)` is not a new lifecycle scope — it is a *bounded container*.  
+  * Parameters: `roots`, `modules`, `overrides`, `include/exclude tags`, `strict`, `lazy`.  
+  * Can be used as context manager to ensure clean teardown.  
+  * Useful outside tests as well (CLI tools, benchmarks, isolated utilities).
+
+---
+
 ## ❌ Won’t-Do Decisions
 
 ### 1. Alternative scopes (request/session)
@@ -132,4 +146,5 @@ Features that add complexity (alternative scopes, async providers, hot reload) a
 - **2025-08**: Clarified resolution order as *name-first*.  
 - **2025-08**: Documented lifecycle, plugins, and fail-fast policy.  
 - **2025-09**: Added `init(..., overrides)` feature for test/mocking convenience.
+- **2025-09**: Added `scope(...)` for subgraph containers, primarily for testing and lightweight scenarios.
 
