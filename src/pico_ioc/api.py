@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from typing import Callable, Optional, Tuple, Any, Dict, Iterable, Sequence
 from .interceptors import MethodInterceptor, ContainerInterceptor
 from .container import PicoContainer, Binder
-from .core_policy import apply_core_policy
+from .policy import apply_policy
 from .plugins import PicoPlugin
 from .scanner import scan_and_configure
 from . import _state
@@ -68,7 +68,7 @@ def init(
     _run_hooks(plugins, "after_bind", container, binder)
     _run_hooks(plugins, "before_eager", container, binder)
 
-    apply_core_policy(container, profiles=requested_profiles)
+    apply_policy(container, profiles=requested_profiles)
     container._active_profiles = tuple(requested_profiles)
     container.apply_defaults()
 
@@ -125,7 +125,7 @@ def scope(
     c._providers = {k: v for k, v in c._providers.items() if k in keep_keys}  # type: ignore[attr-defined]
 
     requested_profiles = profiles or [p.strip() for p in os.getenv("PICO_PROFILE", "").split(",") if p.strip()]
-    apply_core_policy(c, profiles=requested_profiles)
+    apply_policy(c, profiles=requested_profiles)
     c._active_profiles = tuple(requested_profiles)
     c.apply_defaults()
 
@@ -282,7 +282,6 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
     return allowed
 
 
-
 class _ScopedContainer(PicoContainer):
     def __init__(
         self,
@@ -303,6 +302,13 @@ class _ScopedContainer(PicoContainer):
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def has(self, key: Any) -> bool:
+        if super().has(key):
+            return True
+        if not self._strict and self._base is not None:
+            return self._base.has(key)
         return False
 
     def get(self, key: Any):
