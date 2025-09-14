@@ -5,7 +5,7 @@ import logging
 import pkgutil
 from types import ModuleType
 from typing import Any, Callable, Optional, Tuple, List, Iterable
-
+from .plugins import run_plugin_hook
 from .container import PicoContainer, Binder
 from .decorators import (
     COMPONENT_FLAG,
@@ -45,7 +45,7 @@ def scan_and_configure(
     binder = Binder(container)
     resolver = Resolver(container)
 
-    _run_plugin_hook(plugins, "before_scan", package, binder)
+    run_plugin_hook(plugins, "before_scan", package, binder)
 
     comp_classes, factory_classes = _collect_decorated_classes(
         package=package,
@@ -54,7 +54,7 @@ def scan_and_configure(
         binder=binder,
     )
 
-    _run_plugin_hook(plugins, "after_scan", package, binder)
+    run_plugin_hook(plugins, "after_scan", package, binder)
 
     _register_component_classes(
         classes=comp_classes,
@@ -78,22 +78,6 @@ def _as_module(package_or_name: Any) -> ModuleType:
     if hasattr(package_or_name, "__spec__"):
         return package_or_name  # type: ignore[return-value]
     raise TypeError("package_or_name must be a module or importable package name (str).")
-
-
-def _run_plugin_hook(
-    plugins: Tuple[PicoPlugin, ...],
-    hook_name: str,
-    *args,
-    **kwargs,
-) -> None:
-    """Run a lifecycle hook across all plugins, logging (but not raising) exceptions."""
-    for pl in plugins:
-        try:
-            fn = getattr(pl, hook_name, None)
-            if fn:
-                fn(*args, **kwargs)
-        except Exception:
-            logging.exception("Plugin %s failed", hook_name)
 
 
 def _iter_package_modules(
@@ -131,7 +115,7 @@ def _collect_decorated_classes(
     def _visit_module(module: ModuleType):
         for _name, obj in inspect.getmembers(module, inspect.isclass):
             # Allow plugins to inspect/transform/record classes
-            _run_plugin_hook(plugins, "visit_class", module, obj, binder)
+            run_plugin_hook(plugins, "visit_class", module, obj, binder)
 
             # Collect decorated classes
             if getattr(obj, COMPONENT_FLAG, False):
