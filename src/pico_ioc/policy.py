@@ -17,27 +17,25 @@ from .decorators import (
 def _target_from_provider(provider):
     """
     Best-effort: find the real target behind a provider closure.
-    We try to pull a bound method, then a function, then a class from closure cells.
-    Falls back to the provider itself.
+    Priority: bound method > plain function > class. Fallback to the provider itself.
     """
     fn = provider
     try:
         cells = getattr(fn, "__closure__", None) or ()
-        # prefer bound method
+        first_func = None
+        first_cls = None
         for cell in cells:
             cc = getattr(cell, "cell_contents", None)
             if inspect.ismethod(cc):
-                return cc
-        # then plain function
-        for cell in cells:
-            cc = getattr(cell, "cell_contents", None)
-            if inspect.isfunction(cc):
-                return cc
-        # then class
-        for cell in cells:
-            cc = getattr(cell, "cell_contents", None)
-            if inspect.isclass(cc):
-                return cc
+                return cc                    # highest priority: bound method
+            if first_func is None and inspect.isfunction(cc):
+                first_func = cc              # keep first function seen
+            elif first_cls is None and inspect.isclass(cc):
+                first_cls = cc               # keep first class seen
+        if first_func is not None:
+            return first_func
+        if first_cls is not None:
+            return first_cls
     except Exception:
         pass
     return fn
@@ -61,45 +59,41 @@ def _owner_func(obj):
     return None
 
 
-def _has_flag(obj, flag_name: str) -> bool:
+def _find_attribute_on_target(target: Any, attr_name: str) -> Any:
     """
-    Read a boolean decorator flag from:
-      - the object itself,
-      - its __func__ (for bound methods),
-      - or the owner function (class attribute).
+    Finds an attribute on a target object, searching the object itself,
+    its __func__ (for bound methods), or the owning class's function.
     """
-    if getattr(obj, flag_name, False):
-        return True
-    base = getattr(obj, "__func__", None)
-    if base is not None and getattr(base, flag_name, False):
-        return True
-    own = _owner_func(obj)
-    if own is not None and getattr(own, flag_name, False):
-        return True
-    return False
+    # 1. Check the object itself
+    value = getattr(target, attr_name, None)
+    if value is not None:
+        return value
 
-
-def _get_meta(obj, meta_name: str):
-    """
-    Read a metadata dict from:
-      - the object itself,
-      - its __func__ (for bound methods),
-      - or the owner function (class attribute).
-    """
-    val = getattr(obj, meta_name, None)
-    if val is not None:
-        return val
-    base = getattr(obj, "__func__", None)
-    if base is not None:
-        val = getattr(base, meta_name, None)
-        if val is not None:
-            return val
-    own = _owner_func(obj)
-    if own is not None:
-        val = getattr(own, meta_name, None)
-        if val is not None:
-            return val
+    # 2. Check the underlying function for bound methods
+    base_func = getattr(target, "__func__", None)
+    if base_func is not None:
+        value = getattr(base_func, attr_name, None)
+        if value is not None:
+            return value
+    
+    # 3. Check the function on the owner class
+    owner_func = _owner_func(target)
+    if owner_func is not None:
+        value = getattr(owner_func, attr_name, None)
+        if value is not None:
+            return value
+            
     return None
+
+
+def _has_flag(obj, flag_name: str) -> bool:
+    """Reads a boolean decorator flag from the target."""
+    return bool(_find_attribute_on_target(obj, flag_name))
+
+
+def _get_meta(obj, meta_name: str) -> Any:
+    """Reads metadata (e.g., a dict) from the target."""
+    return _find_attribute_on_target(obj, meta_name)
 
 
 def _on_missing_meta(target):
@@ -114,11 +108,6 @@ def _on_missing_meta(target):
     selector = meta.get("selector")
     prio = int(meta.get("priority", 0))
     return (selector, prio)
-
-
-def _is_class_key(key: Any) -> bool:
-    return inspect.isclass(key)
-
 
 def _conditional_active(target, *, profiles: List[str]) -> bool:
     """
@@ -157,6 +146,12 @@ def _conditional_active(target, *, profiles: List[str]) -> bool:
 
     # default: active
     return True
+
+def _create_delegating_factory(container, target_key: Any) -> Callable:
+    """Creates a factory that delegates the get() call to the container."""
+    def _factory():
+        return container.get(target_key)
+    return _factory
 
 # ---------------- public API ----------------
 
@@ -258,12 +253,9 @@ def _collapse_identical_keys_preferring_primary(container) -> None:
 
         if len(entries) == 1:
             keep_key, _ = entries[0]
-            def _make_delegate(_chosen_key=keep_key):
-                def _factory():
-                    return container.get(_chosen_key)
-                return _factory
             if (not container.has(base)) or (base != keep_key):
-                container.bind(base, _make_delegate(), lazy=True)
+                factory = _create_delegating_factory(container, keep_key)
+                container.bind(base, factory, lazy=True)
             continue
 
         primaries: list[tuple[Any, dict]] = []
@@ -274,12 +266,9 @@ def _collapse_identical_keys_preferring_primary(container) -> None:
 
         if primaries:
             keep_key, _ = primaries[0]
-            def _make_delegate(_chosen_key=keep_key):
-                def _factory():
-                    return container.get(_chosen_key)
-                return _factory
             if (not container.has(base)) or (base != keep_key):
-                container.bind(base, _make_delegate(), lazy=True)
+                factory = _create_delegating_factory(container, keep_key)
+                container.bind(base, factory, lazy=True)
             for (kk, _mm) in entries:
                 if kk != keep_key and kk != base:
                     container._providers.pop(kk, None)  # type: ignore[attr-defined]
@@ -344,10 +333,6 @@ def _create_active_component_base_aliases(container, *, profiles: List[str]) -> 
         if chosen_key is None:
             continue
 
-        def _make_delegate(_chosen_key=chosen_key):
-            def _factory():
-                return container.get(_chosen_key)
-            return _factory
-
-        container.bind(base, _make_delegate(), lazy=True)
+        factory = _create_delegating_factory(container, chosen_key)
+        container.bind(base, factory, lazy=True)
 

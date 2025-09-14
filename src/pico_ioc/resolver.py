@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 import inspect
-from typing import Any, Annotated, get_args, get_origin, get_type_hints
+from typing import Any, Annotated, get_args, get_origin, get_type_hints, Callable
 from contextvars import ContextVar
+
 
 _path: ContextVar[list[tuple[str, str]]] = ContextVar("pico_resolve_path", default=[])
 
@@ -47,56 +48,52 @@ class Resolver:
         self.c = container
         self._prefer_name_first = bool(prefer_name_first)
 
-    def create_instance(self, cls):
-        sig = inspect.signature(cls.__init__)
-        hints = _get_hints(cls.__init__, owner_cls=cls)
-        kwargs = {}
-        for name, param in sig.parameters.items():
-            if name == "self" or param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
-                continue
-            ann = hints.get(name, param.annotation)
-            st = _path.get()
-            _path.set(st + [(cls.__name__, name)])
-            try:
-                value = self._resolve_param(name, ann)
-            except NameError as e:
-                # ⬅️ Important: skip if parameter has a default
-                if param.default is not inspect._empty:
-                    continue
-                chain = " -> ".join(f"{c}.__init__.{p}" for c, p in _path.get())
-                raise NameError(f"{e} (required by {chain})") from e
-            finally:
-                cur = _path.get()
-                _path.set(cur[:-1] if cur else [])
-            kwargs[name] = value
-        return cls(**kwargs)
 
-    def kwargs_for_callable(self, fn, *, owner_cls=None):
+    def _resolve_dependencies_for_callable(self, fn: Callable, owner_cls: Any = None) -> dict:
         sig = inspect.signature(fn)
         hints = _get_hints(fn, owner_cls=owner_cls)
         kwargs = {}
-        owner_name = getattr(owner_cls, "__name__", getattr(fn, "__qualname__", "callable"))
+    
+        path_owner = getattr(owner_cls, "__name__", getattr(fn, "__qualname__", "callable"))
+        if fn.__name__ == "__init__" and owner_cls:
+            path_owner = f"{path_owner}.__init__"
+
         for name, param in sig.parameters.items():
-            if name == "self" or param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD) or name == "self":
                 continue
+        
             ann = hints.get(name, param.annotation)
             st = _path.get()
-            _path.set(st + [(owner_name, name)])
+            _path.set(st + [(path_owner, name)])
             try:
                 value = self._resolve_param(name, ann)
+                kwargs[name] = value
             except NameError as e:
-                # ⬅️ Important: skip if parameter has a default
-                if param.default is not inspect._empty:
-                    # do not include in kwargs
-                    _path.set(st)  # pop before continue
+                if param.default is not inspect.Parameter.empty:
+                    _path.set(st)
                     continue
-                chain = " -> ".join(f"{c}.__init__.{p}" for c, p in _path.get())
+
+                # If the error is already formatted with a chain, re-raise to preserve the full context.
+                if "(required by" in str(e):
+                    raise
+
+                # Otherwise, this is a fresh error; add the full chain for the first time.
+                chain = " -> ".join(f"{owner}.{param}" for owner, param in _path.get())
                 raise NameError(f"{e} (required by {chain})") from e
             finally:
                 cur = _path.get()
-                _path.set(cur[:-1] if cur else [])
-            kwargs[name] = value
+                if cur:
+                    _path.set(cur[:-1])
         return kwargs
+
+    def create_instance(self, cls: type) -> Any:
+        """Creates an instance of a class by resolving its __init__ dependencies."""
+        constructor_kwargs = self._resolve_dependencies_for_callable(cls.__init__, owner_cls=cls)
+        return cls(**constructor_kwargs)
+
+    def kwargs_for_callable(self, fn: Callable, *, owner_cls: Any = None) -> dict:
+        """Resolves all keyword arguments for any callable."""
+        return self._resolve_dependencies_for_callable(fn, owner_cls=owner_cls)
 
 
     def _notify_resolve(self, key, ann, quals=()):

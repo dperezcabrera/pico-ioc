@@ -61,7 +61,7 @@ def test_init_continues_and_logs_on_plugin_failure(monkeypatch, caplog):
 
 
 def test_scope_filters_by_include_tag(tmp_path):
-    # Verifies the 'include' parameter in scope() filters components by tag.
+    # Verifies the 'include_tags' parameter in scope() filters components by tag.
     import types
     from pico_ioc import component, scope
 
@@ -76,14 +76,14 @@ def test_scope_filters_by_include_tag(tmp_path):
     pkg.ComponentB = ComponentB
 
     # Add roots to prevent subgraph pruning from removing all components.
-    container = scope(modules=[pkg], include={"tag_a"}, roots=[ComponentA, ComponentB])
+    container = scope(modules=[pkg], include_tags={"tag_a"}, roots=[ComponentA, ComponentB])
 
     assert container.has(ComponentA) is True
     assert container.has(ComponentB) is False
 
 
 def test_scope_filters_by_exclude_tag(tmp_path):
-    # Verifies the 'exclude' parameter in scope() filters components by tag.
+    # Verifies the 'exclude_tags' parameter in scope() filters components by tag.
     import types
     from pico_ioc import component, scope
 
@@ -98,7 +98,7 @@ def test_scope_filters_by_exclude_tag(tmp_path):
     pkg.ComponentB = ComponentB
 
     # Add roots to prevent subgraph pruning from removing all components.
-    container = scope(modules=[pkg], exclude={"tag_a"}, roots=[ComponentA, ComponentB])
+    container = scope(modules=[pkg], exclude_tags={"tag_a"}, roots=[ComponentA, ComponentB])
 
     assert container.has(ComponentA) is False
     assert container.has(ComponentB) is True
