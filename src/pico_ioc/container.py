@@ -4,7 +4,7 @@ import inspect
 from typing import Any, Dict, get_origin, get_args, Annotated, Sequence, Optional, Callable, Union, Tuple
 import typing as _t
 from .proxy import IoCProxy
-from .interceptors import MethodInterceptor
+from .interceptors import MethodInterceptor, ContainerInterceptor
 
 _InterceptorLike = Union[MethodInterceptor, type]
 
@@ -27,7 +27,12 @@ class Binder:
 
 
 class PicoContainer:
-    def __init__(self, *, method_interceptors: Sequence[_InterceptorLike] = ()):
+    def __init__(
+        self,
+        *,
+        method_interceptors: Sequence[_InterceptorLike] = (),
+        container_interceptors: Sequence[ContainerInterceptor] = (),
+    ):
         self._providers: Dict[Any, Dict[str, Any]] = {}
         self._singletons: Dict[Any, Any] = {}
         self._method_interceptors_raw: tuple[_InterceptorLike, ...] = tuple(method_interceptors)
@@ -36,7 +41,13 @@ class PicoContainer:
         self._deferred_defaults: Dict[Any, list[Dict[str, Any]]] = {}
         if self._method_interceptors_raw:
             self._build_interceptors()
+        self._container_interceptors: tuple[ContainerInterceptor, ...] = tuple(container_interceptors)
+        if self._method_interceptors_raw:
+            self._build_interceptors()
 
+    def set_container_interceptors(self, interceptors: Sequence[ContainerInterceptor]) -> None:
+        self._container_interceptors = tuple(interceptors)
+        
     def set_method_interceptors(self, interceptors: Sequence[_InterceptorLike]) -> None:
         self._method_interceptors_raw = tuple(interceptors)
         self._build_interceptors()
@@ -88,26 +99,44 @@ class PicoContainer:
     def get(self, key: Any):
         if _state._scanning.get() and not _state._resolving.get():
             raise RuntimeError("re-entrant container access during scan")
-
         prov = self._providers.get(key)
         if prov is None:
             raise NameError(f"No provider found for key {key!r}")
-
         if key in self._singletons:
             return self._singletons[key]
 
+        # on_before_create
+        for ci in self._container_interceptors:
+            try: ci.on_before_create(key)
+            except Exception: pass
+
         tok = _state._resolving.set(True)
         try:
-            instance = prov["factory"]()
+            try:
+                instance = prov["factory"]()
+            except BaseException as exc:
+                for ci in self._container_interceptors:
+                    try: ci.on_exception(key, exc)
+                    except Exception: pass
+                raise
         finally:
             _state._resolving.reset(tok)
 
-        # Wrap with IoCProxy if interceptors are present
         if self._method_interceptors and not isinstance(instance, IoCProxy):
             instance = IoCProxy(instance, self._method_interceptors)
 
+        # on_after_create (permite reemplazar)
+        for ci in self._container_interceptors:
+            try:
+                maybe = ci.on_after_create(key, instance)
+                if maybe is not None:
+                    instance = maybe
+            except Exception:
+                pass
+
         self._singletons[key] = instance
         return instance
+
 
     def eager_instantiate_all(self):
         for key, prov in list(self._providers.items()):
