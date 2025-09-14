@@ -8,9 +8,9 @@ from contextlib import contextmanager
 from typing import Callable, Optional, Tuple, Any, Dict, Iterable, Sequence
 from .interceptors import MethodInterceptor, ContainerInterceptor
 from .container import PicoContainer, Binder
-from .policy import apply_policy
+from .policy import apply_policy, apply_defaults
 from .plugins import PicoPlugin
-from .scanner import scan_and_configure
+from .scanner import scan_and_configure, _run_plugin_hook
 from . import _state
 
 
@@ -65,16 +65,16 @@ def init(
     if overrides:
         _apply_overrides(container, overrides)
 
-    _run_hooks(plugins, "after_bind", container, binder)
-    _run_hooks(plugins, "before_eager", container, binder)
+    _run_plugin_hook(plugins, "after_bind", container, binder)
+    _run_plugin_hook(plugins, "before_eager", container, binder)
 
     apply_policy(container, profiles=requested_profiles)
     container._active_profiles = tuple(requested_profiles)
-    container.apply_defaults()
+    apply_defaults(container)
 
     container.eager_instantiate_all()
 
-    _run_hooks(plugins, "after_ready", container, binder)
+    _run_plugin_hook(plugins, "after_ready", container, binder)
 
     logging.info("Container configured and ready.")
     _state._container = container
@@ -127,7 +127,7 @@ def scope(
     requested_profiles = profiles or [p.strip() for p in os.getenv("PICO_PROFILE", "").split(",") if p.strip()]
     apply_policy(c, profiles=requested_profiles)
     c._active_profiles = tuple(requested_profiles)
-    c.apply_defaults()
+    apply_defaults(c)
 
     if not lazy:
         from .proxy import ComponentProxy
@@ -191,21 +191,6 @@ def _get_caller_module_name() -> Optional[str]:
     except Exception:
         pass
     return None
-
-
-def _run_hooks(
-    plugins: Tuple[PicoPlugin, ...],
-    hook_name: str,
-    container: PicoContainer,
-    binder: Binder,
-) -> None:
-    for pl in plugins:
-        try:
-            fn = getattr(pl, hook_name, None)
-            if fn:
-                fn(container, binder)
-        except Exception:
-            logging.exception("Plugin %s failed", hook_name)
 
 
 @contextmanager

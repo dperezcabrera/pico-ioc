@@ -20,6 +20,7 @@ It helps you build loosely-coupled, testable apps without manual wiring. Inspire
 
 * **Focus & Simplicity**: A minimal core for one job: managing dependencies. It avoids accidental complexity by doing one thing well.
 * **Predictable & Explicit**: No magic. Behavior is deterministic, relying on explicit decorators and a clear resolution order.
+* **Unified Composition Root**: The application is assembled from a single entry point (`init`) which defines a clear, predictable boundary. This ensures a stable and understandable bootstrap process.
 * **Fail-Fast Bootstrap**: Catches dependency graph errors at startup, not in production. If the application runs, it's wired correctly.
 * **Testability First**: Features like `scope()` and `overrides` are first-class citizens, enabling fast and isolated testing.
 * **Extensible by Design**: Lifecycle hooks and AOP are available through a clean Plugin and Interceptor API without altering the core.
@@ -48,6 +49,7 @@ It helps you build loosely-coupled, testable apps without manual wiring. Inspire
 ### Core
 
 * **Zero dependencies** — pure Python, framework-agnostic.
+* **Single Entry Point (`init`)** — Robustly bootstrap your entire application from a single root package, enforcing a clean "Composition Root" pattern.
 * **Decorator API** — `@component`, `@factory_component`, `@provides`, `@plugin`.
 * **Fail-fast bootstrap** — eager by default; missing deps surface at startup.
 * **Opt-in lazy** — `lazy=True` wraps with `ComponentProxy`.
@@ -59,7 +61,7 @@ It helps you build loosely-coupled, testable apps without manual wiring. Inspire
 ### Advanced
 
 * **Qualifiers & collections** — `list[Annotated[T, Q]]` filters by qualifier.
-* **Scoped subgraphs** — `scope(...)` loads only part of the graph for tests/tools.
+* **Flexible Scopes (`scope`)** — Create lightweight, temporary containers from multiple modules, ideal for testing, scripting, or modular tasks.
 * **Interceptors API** — observe/modify resolution, instantiation, invocation, errors.
 * **Conditional providers** — activate components by env vars or predicates.
 * **Plugins** — lifecycle hooks (`before_scan`, `after_ready`).
