@@ -98,26 +98,34 @@ class Resolver:
             kwargs[name] = value
         return kwargs
 
+
+    def _notify_resolve(self, key, ann, quals=()):
+        for ci in getattr(self.c, "_container_interceptors", ()):
+            try: ci.on_resolve(key, ann, tuple(quals) if quals else ())
+            except Exception: pass
+
     def _resolve_param(self, name: str, ann: Any):
-        # collections (list/tuple) with optional qualifiers via Annotated
+        # Colecciones (list/tuple)
         if _is_collection_hint(ann):
             base, quals, container_kind = _base_and_qualifiers_from_hint(ann)
+            self._notify_resolve(base, ann, quals)
             items = self.c._resolve_all_for_base(base, qualifiers=quals)
             return list(items) if container_kind is list else tuple(items)
 
-        # precedence: by name > by exact annotation > by MRO > by name again
+        # Precedencias
         if self._prefer_name_first and self.c.has(name):
+            self._notify_resolve(name, ann, ())
             return self.c.get(name)
-
         if ann is not inspect._empty and self.c.has(ann):
+            self._notify_resolve(ann, ann, ())
             return self.c.get(ann)
-
         if ann is not inspect._empty and isinstance(ann, type):
             for base in ann.__mro__[1:]:
                 if self.c.has(base):
+                    self._notify_resolve(base, ann, ())
                     return self.c.get(base)
-
         if self.c.has(name):
+            self._notify_resolve(name, ann, ())
             return self.c.get(name)
 
         missing = ann if ann is not inspect._empty else name

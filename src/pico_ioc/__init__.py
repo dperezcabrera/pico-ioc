@@ -14,7 +14,7 @@ from .plugins import PicoPlugin
 from .resolver import Resolver
 from .api import init, reset, scope
 from .proxy import ComponentProxy, IoCProxy
-from .interceptors import Invocation, MethodInterceptor
+from .interceptors import Invocation, MethodInterceptor, ContainerInterceptor
 
 __all__ = [
     "__version__",
@@ -25,6 +25,7 @@ __all__ = [
     "IoCProxy",
     "Invocation",
     "MethodInterceptor",
+    "ContainerInterceptor",
     "init",
     "scope",
     "reset",
