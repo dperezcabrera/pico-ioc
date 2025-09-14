@@ -37,8 +37,6 @@ class PicoContainer:
         self._singletons: Dict[Any, Any] = {}
         self._method_interceptors_raw: tuple[_InterceptorLike, ...] = tuple(method_interceptors)
         self._method_interceptors: tuple[MethodInterceptor, ...] = ()
-        # deferred defaults: selector -> list of {factory, lazy, tags, priority}
-        self._deferred_defaults: Dict[Any, list[Dict[str, Any]]] = {}
         if self._method_interceptors_raw:
             self._build_interceptors()
         self._container_interceptors: tuple[ContainerInterceptor, ...] = tuple(container_interceptors)
@@ -64,23 +62,6 @@ class PicoContainer:
                 built.append(it)            # already callable
         self._method_interceptors = tuple(built)
 
-    def _register_default(self, selector: Any, *, factory, lazy: bool, tags: tuple[str, ...], priority: int):
-        self._deferred_defaults.setdefault(selector, []).append({
-            "factory": factory, "lazy": bool(lazy), "tags": tuple(tags) if tags else (),
-            "priority": int(priority)
-        })
-
-    def apply_defaults(self):
-        """
-        After scan + policy; bind highest-priority default for missing selectors.
-        Deterministic: ties break by insertion order.
-        """
-        for selector, candidates in list(self._deferred_defaults.items()):
-            if self.has(selector):
-                continue
-            best = max(candidates, key=lambda d: d["priority"])
-            self.bind(selector, best["factory"], lazy=best["lazy"], tags=best["tags"])
-        self._deferred_defaults.clear()
 
     def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
         self._singletons.pop(key, None)
