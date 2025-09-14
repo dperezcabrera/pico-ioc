@@ -5,8 +5,8 @@ import inspect
 import logging
 import os
 from contextlib import contextmanager
-from typing import Callable, Optional, Tuple, Any, Dict, Iterable
-
+from typing import Callable, Optional, Tuple, Any, Dict, Iterable, Sequence
+from .interceptors import MethodInterceptor, ContainerInterceptor
 from .container import PicoContainer, Binder
 from .core_policy import apply_core_policy
 from .plugins import PicoPlugin
@@ -28,6 +28,8 @@ def init(
     plugins: Tuple[PicoPlugin, ...] = (),
     reuse: bool = True,
     overrides: Optional[Dict[Any, Any]] = None,
+    method_interceptors: Sequence[MethodInterceptor | type] = (),
+    interceptors: Sequence[ContainerInterceptor] = (), 
 ) -> PicoContainer:
 
     root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
@@ -45,7 +47,10 @@ def init(
 
     combined_exclude = _build_exclude(exclude, auto_exclude_caller, root_name=root_name)
 
-    container = PicoContainer()
+    container = PicoContainer(
+        method_interceptors=method_interceptors,
+        container_interceptors=interceptors,
+    )
     binder = Binder(container)
     logging.info("Initializing pico-ioc...")
 
@@ -62,11 +67,6 @@ def init(
 
     _run_hooks(plugins, "after_bind", container, binder)
     _run_hooks(plugins, "before_eager", container, binder)
-
-    try:
-        container._build_interceptors()
-    except Exception:
-        logging.exception("Failed to build method interceptors")
 
     apply_core_policy(container, profiles=requested_profiles)
     container._active_profiles = tuple(requested_profiles)
@@ -89,12 +89,19 @@ def scope(
     profiles: Optional[list[str]] = None,
     overrides: Optional[Dict[Any, Any]] = None,
     base: Optional[PicoContainer] = None,
-    include: Optional[set[str]] = None,   # tag include (any-match)
-    exclude: Optional[set[str]] = None,   # tag exclude (any-match)
+    include: Optional[set[str]] = None,
+    exclude: Optional[set[str]] = None,
     strict: bool = True,
     lazy: bool = True,
+    method_interceptors: Sequence[MethodInterceptor | type] = (),
+    interceptors: Sequence[ContainerInterceptor] = (), 
 ) -> PicoContainer:
-    c = _ScopedContainer(base=base, strict=strict)
+    c = _ScopedContainer(
+        base=base,
+        strict=strict,
+        method_interceptors=method_interceptors,
+        container_interceptors=interceptors,
+    )
 
     logging.info("Initializing pico-ioc scope...")
     with _scanning_flag():
@@ -116,11 +123,6 @@ def scope(
     allowed = _compute_allowed_subgraph(c, roots)
     keep_keys: set[Any] = set(allowed) | (set(overrides.keys()) if overrides else set())
     c._providers = {k: v for k, v in c._providers.items() if k in keep_keys}  # type: ignore[attr-defined]
-
-    try:
-        c._build_interceptors()
-    except Exception:
-        logging.exception("Failed to build method interceptors for scope")
 
     requested_profiles = profiles or [p.strip() for p in os.getenv("PICO_PROFILE", "").split(",") if p.strip()]
     apply_core_policy(c, profiles=requested_profiles)
@@ -244,7 +246,6 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
             continue
         allowed.add(k)
 
-        # NEW: if k is a base class, include its implementations too
         if isinstance(k, type):
             _add_impls_for_base(k)
 
@@ -283,8 +284,18 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
 
 
 class _ScopedContainer(PicoContainer):
-    def __init__(self, base: Optional[PicoContainer], strict: bool):
-        super().__init__()
+    def __init__(
+        self,
+        base: Optional[PicoContainer],
+        strict: bool,
+        *,
+        method_interceptors: Sequence[MethodInterceptor | type] = (),
+        container_interceptors: Sequence[ContainerInterceptor] = (),
+    ):
+        super().__init__(
+            method_interceptors=method_interceptors,
+            container_interceptors=container_interceptors,
+        )
         self._base = base
         self._strict = strict
 
