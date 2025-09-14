@@ -1,7 +1,7 @@
 # pico_ioc/decorators.py
 from __future__ import annotations
 import functools
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional, Callable
 
 COMPONENT_FLAG = "_is_component"
 COMPONENT_KEY = "_component_key"
@@ -78,7 +78,7 @@ def on_missing(selector: object, *, priority: int = 0):
     Mark this provider as a default for `selector`, used ONLY if no binding exists for `selector`.
 
     NOTE: We store metadata as {"selector": selector, "priority": int}.
-    The core policy reader (`_on_missing_meta`) MUST read the same keys.
+    The policy reader (`_on_missing_meta`) MUST read the same keys.
     """
     def dec(obj):
         setattr(obj, ON_MISSING_META, {"selector": selector, "priority": int(priority)})
@@ -92,13 +92,26 @@ def primary(obj):
     return obj
 
 
-def conditional(*, profiles: tuple[str, ...] = (), require_env: tuple[str, ...] = ()):
+def conditional(
+    *,
+    profiles: tuple[str, ...] = (),
+    require_env: tuple[str, ...] = (),
+    predicate: Optional[Callable[[], bool]] = None,
+):
     """
-    Attach activation conditions. Activated when (profile ∈ profiles) OR (all require_env present).
-    Enforced during core policy.
+    Attach activation conditions. Activated when:
+      - (if provided) any requested profile is in `profiles`, AND
+      - (if provided) all env vars in `require_env` are non-empty, AND
+      - (if provided) `predicate()` returns True (errors → inactive).
+
+    Conditions are evaluated during policy application at bootstrap.
     """
     def dec(obj):
-        setattr(obj, CONDITIONAL_META, {"profiles": tuple(profiles), "require_env": tuple(require_env)})
+        setattr(obj, CONDITIONAL_META, {
+            "profiles": tuple(profiles),
+            "require_env": tuple(require_env),
+            "predicate": predicate,
+        })
         return obj
     return dec
 

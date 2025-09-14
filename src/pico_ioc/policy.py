@@ -1,4 +1,4 @@
-# pico_ioc/core_policy.py
+# pico_ioc/policy.py
 from __future__ import annotations
 
 import inspect
@@ -42,6 +42,7 @@ def _target_from_provider(provider):
         pass
     return fn
 
+
 def _owner_func(obj):
     """
     If obj is a bound method, return the unbound function owned by the class (if resolvable).
@@ -59,6 +60,7 @@ def _owner_func(obj):
         pass
     return None
 
+
 def _has_flag(obj, flag_name: str) -> bool:
     """
     Read a boolean decorator flag from:
@@ -75,6 +77,7 @@ def _has_flag(obj, flag_name: str) -> bool:
     if own is not None and getattr(own, flag_name, False):
         return True
     return False
+
 
 def _get_meta(obj, meta_name: str):
     """
@@ -98,6 +101,7 @@ def _get_meta(obj, meta_name: str):
             return val
     return None
 
+
 def _on_missing_meta(target):
     """
     Normalize @on_missing metadata.
@@ -111,16 +115,19 @@ def _on_missing_meta(target):
     prio = int(meta.get("priority", 0))
     return (selector, prio)
 
+
 def _is_class_key(key: Any) -> bool:
     return inspect.isclass(key)
 
+
 def _conditional_active(target, *, profiles: List[str]) -> bool:
     """
-    Returns True if the target is active given profiles/env.
-    Activation logic:
-      - If profiles list is present on target: active if any requested profile matches.
-      - Else if require_env is present: active if all specified env vars are non-empty.
-      - Else: active by default.
+    Returns True if the target is active given profiles/env/predicate.
+    Activation logic (conjunctive across what's provided):
+      - If `profiles` present on target → at least one must match requested profiles.
+      - If `require_env` present → all listed env vars must be non-empty.
+      - If `predicate` present → must return True; exceptions → inactive (fail-closed).
+      - If none provided → active by default.
     """
     meta = _get_meta(target, CONDITIONAL_META)
     if not meta:
@@ -128,26 +135,39 @@ def _conditional_active(target, *, profiles: List[str]) -> bool:
 
     profs = tuple(meta.get("profiles", ())) or ()
     req_env = tuple(meta.get("require_env", ())) or ()
+    pred = meta.get("predicate", None)
 
+    # 1) profiles (if declared)
     if profs:
-        if not profiles:
+        if not profiles or not any(p in profs for p in profiles):
             return False
-        return any(p in profs for p in profiles)
 
+    # 2) require_env (if declared)
     if req_env:
-        return all(os.getenv(k) not in (None, "") for k in req_env)
+        if not all(os.getenv(k) not in (None, "") for k in req_env):
+            return False
 
+    # 3) predicate (if declared)
+    if callable(pred):
+        try:
+            if not bool(pred()):
+                return False
+        except Exception:
+            return False
+
+    # default: active
     return True
 
 # ---------------- public API ----------------
 
-def apply_core_policy(container, *, profiles: Optional[List[str]] = None) -> None:
+def apply_policy(container, *, profiles: Optional[List[str]] = None) -> None:
     profiles = list(profiles or [])
 
     _filter_inactive_factory_candidates(container, profiles=profiles)
     _collapse_identical_keys_preferring_primary(container)
     _create_active_component_base_aliases(container, profiles=profiles)
     apply_defaults(container)
+
 
 def apply_defaults(container) -> None:
     """
@@ -202,7 +222,7 @@ def apply_defaults(container) -> None:
 
 def _filter_inactive_factory_candidates(container, *, profiles: List[str]) -> None:
     """
-    Remove factory-provided candidates whose target is inactive under the given profiles/env.
+    Remove factory-provided candidates whose target is inactive under the given profiles/env/predicate.
     This trims the candidate set early so later selection/aliasing runs on active options only.
     """
     to_delete = []
@@ -217,6 +237,7 @@ def _filter_inactive_factory_candidates(container, *, profiles: List[str]) -> No
             to_delete.append(prov_key)
     for k in to_delete:
         container._providers.pop(k, None)  # type: ignore[attr-defined]
+
 
 def _collapse_identical_keys_preferring_primary(container) -> None:
     """
@@ -265,6 +286,7 @@ def _collapse_identical_keys_preferring_primary(container) -> None:
         else:
             # multiple, no @primary -> leave for defaults
             pass
+
 
 def _create_active_component_base_aliases(container, *, profiles: List[str]) -> None:
     """

@@ -16,21 +16,53 @@ It helps you build loosely-coupled, testable apps without manual wiring. Inspire
 
 ---
 
-## ✨ Features
+## ⚖️ Principles
 
-- **Zero dependencies** — pure Python, framework-agnostic.
-- **Decorator API** — `@component`, `@factory_component`, `@provides`, `@plugin`.
-- **Fail-fast bootstrap** — eager by default; missing deps surface at startup.
-- **Opt-in lazy** — `lazy=True` wraps with `ComponentProxy`.
-- **Smart resolution order** — parameter name → type annotation → MRO → string.
-- **Qualifiers & collections** — `list[Annotated[T, Q]]` filters by qualifier.
-- **Scoped subgraphs** — `scope(...)` lets you load only part of the graph for tests or tools.
-- **Overrides for testing** — inject mocks/fakes directly via `init(overrides={...})`.
-- **Interceptors API** — observe/modify resolution, instantiation, invocation, errors.
-- **Conditional providers** — activate components by env vars or predicates.
-- **Plugins** — lifecycle hooks (`before_scan`, `after_ready`).
-- **Public API helper** — auto-export decorated symbols in `__init__.py`.
-- **Thread/async safe** — isolation via `ContextVar`.
+* **Focus & Simplicity**: A minimal core for one job: managing dependencies. It avoids accidental complexity by doing one thing well.
+* **Predictable & Explicit**: No magic. Behavior is deterministic, relying on explicit decorators and a clear resolution order.
+* **Fail-Fast Bootstrap**: Catches dependency graph errors at startup, not in production. If the application runs, it's wired correctly.
+* **Testability First**: Features like `scope()` and `overrides` are first-class citizens, enabling fast and isolated testing.
+* **Extensible by Design**: Lifecycle hooks and AOP are available through a clean Plugin and Interceptor API without altering the core.
+* **Framework Agnostic**: Zero hard dependencies. It works with any Python application, from simple scripts to complex web servers.
+
+---
+
+## ✨ Why Pico-IoC?
+
+`pico-ioc` exists to solve a common problem that arises as Python applications grow: managing how objects are created and connected becomes complex and brittle. This manual wiring, where a change deep in the application can cause a cascade of updates, makes the code hard to test and maintain. `pico-ioc` introduces the principle of Inversion of Control (IoC) in a simple, Pythonic way. Instead of you creating and connecting every object, you declare your components with a simple `@component` decorator, and the container automatically wires them together based on their type hints. It brings the architectural robustness and testability of mature frameworks like Spring to the Python ecosystem, but without the heavy boilerplate, allowing you to build complex, loosely-coupled applications that remain simple to manage.
+
+
+| Feature             | Manual Wiring                                     | With Pico-IoC                   |
+| :------------------ | :------------------------------------------------ | :------------------------------ |
+| **Object Creation** | `service = Service(Repo(Config()))`               | `svc = container.get(Service)`  |
+| **Testing**         | Manual replacement or monkey-patching             | `overrides={Repo: FakeRepo()}`  |
+| **Coupling**        | High (code knows about constructors)              | Low (code just asks for a type) |
+| **Maintenance**     | Brittle (changing a constructor breaks consumers) | Robust (changes are isolated)   |
+| **Learning Curve**  | Ad-hoc, implicit patterns                         | Uniform, explicit, documented   |
+
+
+---
+
+## 🧩 Features
+
+### Core
+
+* **Zero dependencies** — pure Python, framework-agnostic.
+* **Decorator API** — `@component`, `@factory_component`, `@provides`, `@plugin`.
+* **Fail-fast bootstrap** — eager by default; missing deps surface at startup.
+* **Opt-in lazy** — `lazy=True` wraps with `ComponentProxy`.
+* **Smart resolution order** — parameter name → type annotation → MRO → string.
+* **Overrides for testing** — inject mocks/fakes directly via `init(overrides={...})`.
+* **Public API helper** — auto-export decorated symbols in `__init__.py`.
+* **Thread/async safe** — isolation via `ContextVar`.
+
+### Advanced
+
+* **Qualifiers & collections** — `list[Annotated[T, Q]]` filters by qualifier.
+* **Scoped subgraphs** — `scope(...)` loads only part of the graph for tests/tools.
+* **Interceptors API** — observe/modify resolution, instantiation, invocation, errors.
+* **Conditional providers** — activate components by env vars or predicates.
+* **Plugins** — lifecycle hooks (`before_scan`, `after_ready`).
 
 ---
 
@@ -120,10 +152,17 @@ This way you don’t need to bootstrap your entire app (`controllers`, `http`, �
 ---
 ## 📖 Documentation
 
-* [Overview](.llm/OVERVIEW.md) — mission & concepts
-* [Guide](.llm/GUIDE.md) — practical usage & recipes
-* [Architecture](.llm/ARCHITECTURE.md) — internals & design rationale
+  * **🚀 New to pico-ioc? Start with the User Guide.**
+      * [**GUIDE.md**](.llm/GUIDE.md) — Learn with practical examples: testing, configuration, collection injection, and web framework integration.
 
+  * **🏗️ Want to understand the internals? See the Architecture.**
+      * [**ARCHITECTURE.md**](.llm/ARCHITECTURE.md) — A deep dive into the algorithms, lifecycle, and internal diagrams. Perfect for contributors.
+
+  * **🤔 Want to know *why* it's designed this way? Read the Decisions.**
+      * [**DECISIONS.md**](.llm/DECISIONS.md) — The history and rationale behind key technical decisions.
+
+  * **💡 Just need a quick summary?**
+      * [**OVERVIEW.md**](.llm/OVERVIEW.md) — What pico-ioc is and why you should use it.
 ---
 
 ## 🧪 Development
