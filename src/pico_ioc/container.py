@@ -37,8 +37,6 @@ class PicoContainer:
         self._singletons: Dict[Any, Any] = {}
         self._method_interceptors_raw: tuple[_InterceptorLike, ...] = tuple(method_interceptors)
         self._method_interceptors: tuple[MethodInterceptor, ...] = ()
-        if self._method_interceptors_raw:
-            self._build_interceptors()
         self._container_interceptors: tuple[ContainerInterceptor, ...] = tuple(container_interceptors)
         if self._method_interceptors_raw:
             self._build_interceptors()
