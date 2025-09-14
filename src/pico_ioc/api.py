@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from typing import Callable, Optional, Tuple, Any, Dict, Iterable, Sequence
 from .interceptors import MethodInterceptor, ContainerInterceptor
 from .container import PicoContainer, Binder
-from .policy import apply_policy, apply_defaults
+from .policy import apply_policy
 from .plugins import PicoPlugin
 from .scanner import scan_and_configure, _run_plugin_hook
 from . import _state
@@ -70,7 +70,6 @@ def init(
 
     apply_policy(container, profiles=requested_profiles)
     container._active_profiles = tuple(requested_profiles)
-    apply_defaults(container)
 
     container.eager_instantiate_all()
 
@@ -127,7 +126,6 @@ def scope(
     requested_profiles = profiles or [p.strip() for p in os.getenv("PICO_PROFILE", "").split(",") if p.strip()]
     apply_policy(c, profiles=requested_profiles)
     c._active_profiles = tuple(requested_profiles)
-    apply_defaults(c)
 
     if not lazy:
         from .proxy import ComponentProxy
