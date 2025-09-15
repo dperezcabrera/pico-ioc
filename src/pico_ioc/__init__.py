@@ -8,7 +8,7 @@ from .container import PicoContainer, Binder
 from .decorators import (
     component, factory_component, provides, plugin,
     Qualifier, qualifier,
-    on_missing, primary, conditional,
+    on_missing, primary, conditional, interceptor,
 )
 from .plugins import PicoPlugin
 from .resolver import Resolver
@@ -38,6 +38,7 @@ __all__ = [
     "on_missing",
     "primary",
     "conditional",
+    "interceptor",
     "Resolver",
 ]
 

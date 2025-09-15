@@ -27,39 +27,26 @@ class Binder:
 
 
 class PicoContainer:
-    def __init__(
-        self,
-        *,
-        method_interceptors: Sequence[_InterceptorLike] = (),
-        container_interceptors: Sequence[ContainerInterceptor] = (),
-    ):
+    def __init__(self):
         self._providers: Dict[Any, Dict[str, Any]] = {}
         self._singletons: Dict[Any, Any] = {}
-        self._method_interceptors_raw: tuple[_InterceptorLike, ...] = tuple(method_interceptors)
         self._method_interceptors: tuple[MethodInterceptor, ...] = ()
-        self._container_interceptors: tuple[ContainerInterceptor, ...] = tuple(container_interceptors)
-        if self._method_interceptors_raw:
-            self._build_interceptors()
+        self._container_interceptors: tuple[ContainerInterceptor, ...] = ()
+        self._seen_interceptor_types: set[type] = set()
 
-    def set_container_interceptors(self, interceptors: Sequence[ContainerInterceptor]) -> None:
-        self._container_interceptors = tuple(interceptors)
-        
-    def set_method_interceptors(self, interceptors: Sequence[_InterceptorLike]) -> None:
-        self._method_interceptors_raw = tuple(interceptors)
-        self._build_interceptors()
+    def add_method_interceptor(self, it: MethodInterceptor) -> None:
+        t = type(it)
+        if t in self._seen_interceptor_types:
+            return
+        self._seen_interceptor_types.add(t)
+        self._method_interceptors = self._method_interceptors + (it,)
 
-    def _build_interceptors(self) -> None:
-        built: list[MethodInterceptor] = []
-        for it in self._method_interceptors_raw:
-            if isinstance(it, type):
-                try:
-                    built.append(it(self))
-                except TypeError:
-                    built.append(it())      # fallback to no-arg ctor
-            else:
-                built.append(it)            # already callable
-        self._method_interceptors = tuple(built)
-
+    def add_container_interceptor(self, it: ContainerInterceptor) -> None:
+        t = type(it)
+        if t in self._seen_interceptor_types:
+            return
+        self._seen_interceptor_types.add(t)
+        self._container_interceptors = self._container_interceptors + (it,)
 
     def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
         self._singletons.pop(key, None)
@@ -84,7 +71,6 @@ class PicoContainer:
         if key in self._singletons:
             return self._singletons[key]
 
-        # on_before_create
         for ci in self._container_interceptors:
             try: ci.on_before_create(key)
             except Exception: pass
@@ -104,7 +90,6 @@ class PicoContainer:
         if self._method_interceptors and not isinstance(instance, IoCProxy):
             instance = IoCProxy(instance, self._method_interceptors)
 
-        # on_after_create (permite reemplazar)
         for ci in self._container_interceptors:
             try:
                 maybe = ci.on_after_create(key, instance)
@@ -115,7 +100,6 @@ class PicoContainer:
 
         self._singletons[key] = instance
         return instance
-
 
     def eager_instantiate_all(self):
         for key, prov in list(self._providers.items()):
@@ -169,17 +153,13 @@ def _is_compatible(cls, base) -> bool:
 
 
 def _requires_collection_of_base(cls, base) -> bool:
-    """
-    Return True if `cls.__init__` has any parameter annotated as a collection
-    (list/tuple, including Annotated variants) of `base`. Avoids recursion.
-    """
     try:
         sig = inspect.signature(cls.__init__)
     except Exception:
         return False
 
     try:
-        from .resolver import _get_hints  # deferred import
+        from .resolver import _get_hints
         hints = _get_hints(cls.__init__, owner_cls=cls)
     except Exception:
         hints = {}

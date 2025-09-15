@@ -1,13 +1,14 @@
 # tests/test_interceptors_smoke.py
-import pico_ioc
-from pico_ioc import component
 import asyncio
+import pico_ioc
+from pico_ioc import component, interceptor
 
 events = []
 
 class CollectLogger:
     def __call__(self, msg): events.append(msg)
 
+@interceptor
 class LoggingInterceptor:
     def __init__(self, container):
         self._logger = CollectLogger()
@@ -24,12 +25,12 @@ class Svc:
     async def aping(self, y): return y + 2
 
 def test_sync_and_async():
-    c = pico_ioc.PicoContainer(method_interceptors=(LoggingInterceptor,))
+    events.clear()
+    c = pico_ioc.PicoContainer()
+    c.add_method_interceptor(LoggingInterceptor(c))
+
     binder = pico_ioc.Binder(c)
     binder.bind(Svc, lambda: Svc(), lazy=False)
-
-    # Build interceptors explicitly for this bare container
-    c._build_interceptors()
 
     s = c.get(Svc)
     assert s.ping(41) == 42

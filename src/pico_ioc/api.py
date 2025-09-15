@@ -1,24 +1,22 @@
 # pico_ioc/api.py
-
 from __future__ import annotations
 
 import inspect
 import logging
 import os
-from contextlib import contextmanager
 from typing import Callable, Optional, Tuple, Any, Dict, Iterable, Sequence
-from .interceptors import MethodInterceptor, ContainerInterceptor
 from .container import PicoContainer, Binder
-from .policy import apply_policy
+from .policy import apply_policy, _conditional_active
 from .plugins import PicoPlugin, run_plugin_hook
 from .scanner import scan_and_configure
+from .resolver import Resolver
 from . import _state
 
 def reset() -> None:
     _state._container = None
     _state._root_name = None
 
-# ---------------- shared helpers ----------------
+# ---------------- helpers ----------------
 
 def _resolve_profiles(profiles: Optional[list[str]]) -> list[str]:
     if profiles is not None:
@@ -28,24 +26,16 @@ def _resolve_profiles(profiles: Optional[list[str]]) -> list[str]:
 
 
 def _as_provider(val):
-    """
-    Normalize override values into a (provider_callable, lazy_bool) tuple.
-    Accepts:
-      - (callable, bool) → explicit (provider, lazy)
-      - callable        → (provider, False)
-      - any value       → (lambda: value, False)
-    """
     if isinstance(val, tuple) and len(val) == 2 and callable(val[0]) and isinstance(val[1], bool):
         return val[0], val[1]
     if callable(val):
         return val, False
     return (lambda v=val: v), False
-    
+
 def _apply_overrides(container: PicoContainer, overrides: Dict[Any, Any]) -> None:
     for key, val in overrides.items():
         provider, lazy = _as_provider(val)
         container.bind(key, provider, lazy=lazy)
-
 
 def _filter_by_tags(container: PicoContainer, include_tags: Optional[set[str]], exclude_tags: Optional[set[str]]) -> None:
     if not include_tags and not exclude_tags:
@@ -59,206 +49,11 @@ def _filter_by_tags(container: PicoContainer, include_tags: Optional[set[str]], 
         return True
     container._providers = {k: v for k, v in container._providers.items() if _tag_ok(v)}  # type: ignore[attr-defined]
 
-
-def _restrict_to_subgraph(container: PicoContainer, roots: Iterable[type], overrides: Optional[Dict[Any, Any]]) -> None:
-    allowed = _compute_allowed_subgraph(container, roots)
-    keep_keys: set[Any] = set(allowed) | (set(overrides.keys()) if overrides else set())
-    container._providers = {k: v for k, v in container._providers.items() if k in keep_keys}  # type: ignore[attr-defined]
-
-
-def _bootstrap(
-    *,
-    container: PicoContainer,
-    to_scan: Iterable[Any],
-    plugins: Tuple[PicoPlugin, ...],
-    overrides: Optional[Dict[Any, Any]],
-    profiles: Optional[list[str]],
-    after_scan_filter: Optional[Callable[[PicoContainer], None]] = None,
-) -> list[str]:
-    """Common bootstrap: scan → overrides → plugin hooks → policy."""
-    binder = Binder(container)
-    logging.info("Initializing pico-ioc...")
-
-    with _state.scanning_flag():
-        for pkg in to_scan:
-            scan_and_configure(pkg, container, exclude=None, plugins=plugins)
-
-    if after_scan_filter:
-        after_scan_filter(container)
-
-    if overrides:
-        _apply_overrides(container, overrides)
-
-    run_plugin_hook(plugins, "after_bind", container, binder)
-    run_plugin_hook(plugins, "before_eager", container, binder)
-
-    requested_profiles = _resolve_profiles(profiles)
-    apply_policy(container, profiles=requested_profiles)
-    container._active_profiles = tuple(requested_profiles)
-
-    run_plugin_hook(plugins, "after_ready", container, binder)
-    logging.info("Container configured and ready.")
-    return requested_profiles
-
-
-def _maybe_reuse_existing(root_name: Optional[str], requested_profiles: list[str], overrides: Optional[Dict[Any, Any]], reuse: bool) -> Optional[PicoContainer]:
-    if not reuse:
-        return None
-    live = _state._container
-    if not (live and _state._root_name == root_name):
-        return None
-    live_profiles = getattr(live, "_active_profiles", None)
-    if requested_profiles and live_profiles is not None and live_profiles != tuple(requested_profiles):
-        return None
-    if overrides:
-        _apply_overrides(live, overrides)
-    return live
-
-
-def _build_exclude(
-    exclude: Optional[Callable[[str], bool]],
-    auto_exclude_caller: bool,
-    *,
-    root_name: Optional[str] = None,
-) -> Optional[Callable[[str], bool]]:
-    if not auto_exclude_caller:
-        return exclude
-
-    caller = _get_caller_module_name()
-    if not caller:
-        return exclude
-
-    def _under_root(mod: str) -> bool:
-        return bool(root_name) and (mod == root_name or mod.startswith(root_name + "."))
-
-    if exclude is None:
-        return lambda mod, _caller=caller: (mod == _caller) and not _under_root(mod)
-
-    prev = exclude
-    return lambda mod, _caller=caller, _prev=prev: (((mod == _caller) and not _under_root(mod)) or _prev(mod))
-
-
-def _get_caller_module_name() -> Optional[str]:
-    try:
-        f = inspect.currentframe()
-        if f and f.f_back and f.f_back and f.f_back.f_back:
-            mod = inspect.getmodule(f.f_back.f_back.f_back)
-            return getattr(mod, "__name__", None)
-    except Exception:
-        pass
-    return None
-
-
-# ---------------- public API (thin wrappers) ----------------
-
-def init(
-    root_package,
-    *,
-    profiles: Optional[list[str]] = None,
-    exclude: Optional[Callable[[str], bool]] = None,
-    auto_exclude_caller: bool = True,
-    plugins: Tuple[PicoPlugin, ...] = (),
-    reuse: bool = True,
-    overrides: Optional[Dict[Any, Any]] = None,
-    method_interceptors: Sequence[MethodInterceptor | type] = (),
-    interceptors: Sequence[ContainerInterceptor] = (),
-) -> PicoContainer:
-
-    root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
-    requested_profiles = _resolve_profiles(profiles)
-
-    # Reuse?
-    reused = _maybe_reuse_existing(root_name, requested_profiles, overrides, reuse)
-    if reused is not None:
-        return reused
-
-    combined_exclude = _build_exclude(exclude, auto_exclude_caller, root_name=root_name)
-
-    container = PicoContainer(
-        method_interceptors=method_interceptors,
-        container_interceptors=interceptors,
-    )
-
-    # Scan with module-level exclusion (only for init)
-    with _state.scanning_flag():
-        scan_and_configure(root_package, container, exclude=combined_exclude, plugins=plugins)
-
-    # Finish bootstrap (overrides, policy, hooks)
-    _bootstrap(
-        container=container,
-        to_scan=(),  # already scanned above to honor combined_exclude
-        plugins=plugins,
-        overrides=overrides,
-        profiles=profiles,
-    )
-
-    # Eager instantiate after policy/aliasing
-    container.eager_instantiate_all()
-
-    _state._container = container
-    _state._root_name = root_name
-    return container
-
-
-def scope(
-    *,
-    modules: Iterable[Any] = (),
-    roots: Iterable[type] = (),
-    profiles: Optional[list[str]] = None,
-    overrides: Optional[Dict[Any, Any]] = None,
-    base: Optional[PicoContainer] = None,
-    include_tags: Optional[set[str]] = None,
-    exclude_tags: Optional[set[str]] = None,
-    strict: bool = True,
-    lazy: bool = True,
-    method_interceptors: Sequence[MethodInterceptor | type] = (),
-    interceptors: Sequence[ContainerInterceptor] = (),
-) -> PicoContainer:
-    c = _ScopedContainer(
-        base=base,
-        strict=strict,
-        method_interceptors=method_interceptors,
-        container_interceptors=interceptors,
-    )
-
-    # Bootstrap (scan all modules; tag-filter + subgraph restriction right after)
-    def _after_scan_filter(cont: PicoContainer):
-        _filter_by_tags(cont, include_tags, exclude_tags)
-        if roots:
-            _restrict_to_subgraph(cont, roots, overrides)
-
-    _bootstrap(
-        container=c,
-        to_scan=modules,
-        plugins=(),
-        overrides=overrides,
-        profiles=profiles,
-        after_scan_filter=_after_scan_filter,
-    )
-
-    # Optional “eager” just for the requested roots if lazy=False
-    if not lazy:
-        from .proxy import ComponentProxy
-        for rk in roots or ():
-            try:
-                obj = c.get(rk)
-                if isinstance(obj, ComponentProxy):
-                    _ = obj._get_real_object()
-            except NameError:
-                if strict:
-                    raise
-                continue
-
-    logging.info("Scope container ready.")
-    return c
-
-
-# ---------------- subgraph + scoped container ----------------
-
 def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -> set:
     from .resolver import _get_hints
     from .container import _is_compatible
     from typing import get_origin, get_args, Annotated
+    import inspect as _insp
 
     allowed: set[Any] = set()
     stack = list(roots or ())
@@ -287,7 +82,7 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
             continue
 
         try:
-            sig = inspect.signature(cls.__init__)
+            sig = _insp.signature(cls.__init__)
         except Exception:
             continue
 
@@ -314,22 +109,231 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
 
     return allowed
 
+def _restrict_to_subgraph(container: PicoContainer, roots: Iterable[type], overrides: Optional[Dict[Any, Any]]) -> None:
+    allowed = _compute_allowed_subgraph(container, roots)
+    keep_keys: set[Any] = set(allowed) | (set(overrides.keys()) if overrides else set())
+    container._providers = {k: v for k, v in container._providers.items() if k in keep_keys}  # type: ignore[attr-defined]
+
+def _combine_excludes(a: Optional[Callable[[str], bool]], b: Optional[Callable[[str], bool]]):
+    if not a and not b: return None
+    if a and not b: return a
+    if b and not a: return b
+    return lambda mod, _a=a, _b=b: _a(mod) or _b(mod)
+
+# ---------------- interceptor bootstrap ----------------
+
+def _activate_and_build_interceptors(
+    *,
+    container: PicoContainer,
+    interceptor_decls: list[tuple[Any, dict]],
+    profiles: list[str],
+) -> None:
+    resolver = Resolver(container)
+    active: list[tuple[int, str, str, Any]] = []  # (order, qualname, kind, instance)
+
+    for obj, meta in interceptor_decls:
+        if not _conditional_active(obj, profiles=profiles):
+            continue
+        kind = meta.get("kind", "method")
+        order = int(meta.get("order", 0))
+        try:
+            if isinstance(obj, type):
+                inst = resolver.create_instance(obj)
+            else:
+                kwargs = resolver.kwargs_for_callable(obj, owner_cls=None)
+                inst = obj(**kwargs)
+        except Exception:
+            logging.exception("Failed to construct interceptor %r", obj)
+            continue
+
+        qn = getattr(obj, "__qualname__", repr(obj))
+        active.append((order, qn, kind, inst))
+
+    active.sort(key=lambda t: (t[0], t[1]))
+    for _order, _qn, kind, inst in active:
+        if kind == "container":
+            container.add_container_interceptor(inst)
+        else:
+            container.add_method_interceptor(inst)
+
+# ---------------- bootstrap core ----------------
+
+def _bootstrap(
+    *,
+    container: PicoContainer,
+    scan_plan: Iterable[tuple[Any, Optional[Callable[[str], bool]], Tuple[PicoPlugin, ...]]],
+    overrides: Optional[Dict[Any, Any]],
+    profiles: Optional[list[str]],
+    plugins: Tuple[PicoPlugin, ...],
+) -> list[str]:
+    requested_profiles = _resolve_profiles(profiles)
+    interceptor_decls: list[tuple[Any, dict]] = []
+
+    for pkg, exclude, scan_plugins in scan_plan:
+        with _state.scanning_flag():
+            c, f, decls = scan_and_configure(pkg, container, exclude=exclude, plugins=scan_plugins)
+            logging.info("Scanned '%s' (components: %d, factories: %d)", getattr(pkg, "__name__", pkg), c, f)
+            interceptor_decls.extend(decls)
+
+    _activate_and_build_interceptors(container=container, interceptor_decls=interceptor_decls, profiles=requested_profiles)
+
+    if overrides:
+        _apply_overrides(container, overrides)
+
+    binder = Binder(container)
+    run_plugin_hook(plugins, "after_bind", container, binder)
+    run_plugin_hook(plugins, "before_eager", container, binder)
+
+    apply_policy(container, profiles=requested_profiles)
+    container._active_profiles = tuple(requested_profiles)
+
+    run_plugin_hook(plugins, "after_ready", container, binder)
+    logging.info("Container configured and ready.")
+    return requested_profiles
+
+
+def _maybe_reuse_existing(root_name: Optional[str], requested_profiles: list[str], overrides: Optional[Dict[Any, Any]], reuse: bool) -> Optional[PicoContainer]:
+    if not reuse:
+        return None
+    live = _state._container
+    if not (live and _state._root_name == root_name):
+        return None
+    live_profiles = getattr(live, "_active_profiles", None)
+    if requested_profiles and live_profiles is not None and live_profiles != tuple(requested_profiles):
+        return None
+    if overrides:
+        _apply_overrides(live, overrides)
+    return live
+
+def _build_exclude(
+    exclude: Optional[Callable[[str], bool]],
+    auto_exclude_caller: bool,
+    *,
+    root_name: Optional[str] = None,
+) -> Optional[Callable[[str], bool]]:
+    if not auto_exclude_caller:
+        return exclude
+    caller = _get_caller_module_name()
+    if not caller:
+        return exclude
+    def _under_root(mod: str) -> bool:
+        return bool(root_name) and (mod == root_name or mod.startswith(root_name + "."))
+    if exclude is None:
+        return lambda mod, _caller=caller: (mod == _caller) and not _under_root(mod)
+    prev = exclude
+    return lambda mod, _caller=caller, _prev=prev: (((mod == _caller) and not _under_root(mod)) or _prev(mod))
+
+def _get_caller_module_name() -> Optional[str]:
+    try:
+        f = inspect.currentframe()
+        if f and f.f_back and f.f_back and f.f_back.f_back:
+            mod = inspect.getmodule(f.f_back.f_back.f_back)
+            return getattr(mod, "__name__", None)
+    except Exception:
+        pass
+    return None
+
+# ---------------- public API ----------------
+
+def init(
+    root_package,
+    *,
+    profiles: Optional[list[str]] = None,
+    exclude: Optional[Callable[[str], bool]] = None,
+    auto_exclude_caller: bool = True,
+    plugins: Tuple[PicoPlugin, ...] = (),
+    reuse: bool = True,
+    overrides: Optional[Dict[Any, Any]] = None,
+    auto_scan: Sequence[str] = (),
+    auto_scan_exclude: Optional[Callable[[str], bool]] = None,
+) -> PicoContainer:
+    root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
+    requested_profiles = _resolve_profiles(profiles)
+
+    reused = _maybe_reuse_existing(root_name, requested_profiles, overrides, reuse)
+    if reused is not None:
+        return reused
+
+    container = PicoContainer()
+
+    combined_exclude = _build_exclude(exclude, auto_exclude_caller, root_name=root_name)
+
+    scan_plan: list[tuple[Any, Optional[Callable[[str], bool]], Tuple[PicoPlugin, ...]]] = []
+    scan_plan.append((root_package, combined_exclude, plugins))
+    if auto_scan:
+        for pkg in auto_scan:
+            scan_plan.append((pkg, _combine_excludes(exclude, auto_scan_exclude), plugins))
+
+    _bootstrap(
+        container=container,
+        scan_plan=scan_plan,
+        overrides=overrides,
+        profiles=profiles,
+        plugins=plugins,
+    )
+
+    container.eager_instantiate_all()
+
+    _state._container = container
+    _state._root_name = root_name
+    return container
+
+
+def scope(
+    *,
+    modules: Iterable[Any] = (),
+    roots: Iterable[type] = (),
+    profiles: Optional[list[str]] = None,
+    overrides: Optional[Dict[Any, Any]] = None,
+    base: Optional[PicoContainer] = None,
+    include_tags: Optional[set[str]] = None,
+    exclude_tags: Optional[set[str]] = None,
+    strict: bool = True,
+    lazy: bool = True,
+) -> PicoContainer:
+    c = _ScopedContainer(base=base, strict=strict)
+
+    def _after_scan_filter(cont: PicoContainer):
+        _filter_by_tags(cont, include_tags, exclude_tags)
+        if roots:
+            _restrict_to_subgraph(cont, roots, overrides)
+
+    scan_plan = [(m, None, ()) for m in modules]
+    _bootstrap(
+        container=c,
+        scan_plan=scan_plan,
+        overrides=overrides,
+        profiles=profiles,
+        plugins=(),
+    )
+
+    if not lazy:
+        from .proxy import ComponentProxy
+        for rk in roots or ():
+            try:
+                obj = c.get(rk)
+                if isinstance(obj, ComponentProxy):
+                    _ = obj._get_real_object()
+            except NameError:
+                if strict:
+                    raise
+                continue
+
+    _after_scan_filter(c)
+    logging.info("Scope container ready.")
+    return c
+
 
 class _ScopedContainer(PicoContainer):
-    def __init__(
-        self,
-        base: Optional[PicoContainer],
-        strict: bool,
-        *,
-        method_interceptors: Sequence[MethodInterceptor | type] = (),
-        container_interceptors: Sequence[ContainerInterceptor] = (),
-    ):
-        super().__init__(
-            method_interceptors=method_interceptors,
-            container_interceptors=container_interceptors,
-        )
+    def __init__(self, base: Optional[PicoContainer], strict: bool):
+        super().__init__()
         self._base = base
         self._strict = strict
+        if base is not None:
+            for it in getattr(base, "_method_interceptors", ()):
+                self.add_method_interceptor(it)
+            for it in getattr(base, "_container_interceptors", ()):
+                self.add_container_interceptor(it)
 
     def __enter__(self):
         return self
