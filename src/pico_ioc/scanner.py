@@ -16,6 +16,7 @@ from .decorators import (
     PROVIDES_LAZY,
     COMPONENT_TAGS, 
     PROVIDES_TAGS,
+    INTERCEPTOR_META,
 )
 from .proxy import ComponentProxy
 from .resolver import Resolver
@@ -29,15 +30,10 @@ def scan_and_configure(
     *,
     exclude: Optional[Callable[[str], bool]] = None,
     plugins: Tuple[PicoPlugin, ...] = (),
-) -> None:
+) -> tuple[int, int, list[tuple[Any, dict]]]:
     """
-    Scan a package, discover component classes/factories, and bind them into the container.
-
-    Args:
-        package_or_name: Package module or importable package name (str).
-        container: Target PicoContainer to receive bindings.
-        exclude: Optional predicate that receives a module name and returns True to skip it.
-        plugins: Optional lifecycle plugins that receive scan/bind events.
+    Scan a package, bind components/factories, and collect interceptor declarations.
+    Returns: (component_count, factory_count, interceptor_decls)
     """
     package = _as_module(package_or_name)
     logging.info("Scanning in '%s'...", getattr(package, "__name__", repr(package)))
@@ -47,7 +43,7 @@ def scan_and_configure(
 
     run_plugin_hook(plugins, "before_scan", package, binder)
 
-    comp_classes, factory_classes = _collect_decorated_classes(
+    comp_classes, factory_classes, interceptor_decls = _collect_decorated(
         package=package,
         exclude=exclude,
         plugins=plugins,
@@ -56,23 +52,15 @@ def scan_and_configure(
 
     run_plugin_hook(plugins, "after_scan", package, binder)
 
-    _register_component_classes(
-        classes=comp_classes,
-        container=container,
-        resolver=resolver,
-    )
+    _register_component_classes(classes=comp_classes, container=container, resolver=resolver)
+    _register_factory_classes(factory_classes=factory_classes, container=container, resolver=resolver)
 
-    _register_factory_classes(
-        factory_classes=factory_classes,
-        container=container,
-        resolver=resolver,
-    )
+    return len(comp_classes), len(factory_classes), interceptor_decls
 
 
-# -------------------- Helpers (private) --------------------
+# -------------------- Helpers --------------------
 
 def _as_module(package_or_name: Any) -> ModuleType:
-    """Return a module from either a module object or an importable string name."""
     if isinstance(package_or_name, str):
         return importlib.import_module(package_or_name)
     if hasattr(package_or_name, "__spec__"):
@@ -80,91 +68,91 @@ def _as_module(package_or_name: Any) -> ModuleType:
     raise TypeError("package_or_name must be a module or importable package name (str).")
 
 
-def _iter_package_modules(
-    package: ModuleType,
-) -> Iterable[str]:
-    """
-    Yield fully qualified module names under the given package.
-
-    Requires the package to have a __path__ (i.e., be a package, not a single module).
-    """
+def _iter_package_modules(package: ModuleType) -> Iterable[str]:
     try:
         pkg_path = package.__path__  # type: ignore[attr-defined]
     except Exception:
-        return  # not a package; nothing to iterate
-
+        return
     prefix = package.__name__ + "."
     for _finder, name, _is_pkg in pkgutil.walk_packages(pkg_path, prefix):
         yield name
 
 
-def _collect_decorated_classes(
+def _collect_decorated(
     *,
     package: ModuleType,
     exclude: Optional[Callable[[str], bool]],
     plugins: Tuple[PicoPlugin, ...],
     binder: Binder,
-) -> Tuple[List[type], List[type]]:
-    """
-    Import modules under `package`, visit classes, and collect those marked with
-    @component or @factory_component decorators.
-    """
-    comp_classes: List[type] = []
-    factory_classes: List[type] = []
+) -> Tuple[List[type], List[type], List[tuple[Any, dict]]]:
+    comps: List[type] = []
+    facts: List[type] = []
+    interceptors: List[tuple[Any, dict]] = []
+
+    def _collect_from_class(cls: type):
+        if getattr(cls, COMPONENT_FLAG, False):
+            comps.append(cls)
+        elif getattr(cls, FACTORY_FLAG, False):
+            facts.append(cls)
+        meta = getattr(cls, INTERCEPTOR_META, None)
+        if meta:
+            interceptors.append((cls, dict(meta)))
+        for _nm, fn in inspect.getmembers(cls, predicate=inspect.isfunction):
+            meta_m = getattr(fn, INTERCEPTOR_META, None)
+            if meta_m:
+                interceptors.append((fn, dict(meta_m)))
 
     def _visit_module(module: ModuleType):
         for _name, obj in inspect.getmembers(module, inspect.isclass):
-            # Allow plugins to inspect/transform/record classes
             run_plugin_hook(plugins, "visit_class", module, obj, binder)
-
-            # Collect decorated classes
-            if getattr(obj, COMPONENT_FLAG, False):
-                comp_classes.append(obj)
-            elif getattr(obj, FACTORY_FLAG, False):
-                factory_classes.append(obj)
+            _collect_from_class(obj)
+        # module-level functions
+        for _name, fn in inspect.getmembers(module, predicate=inspect.isfunction):
+            meta = getattr(fn, INTERCEPTOR_META, None)
+            if meta:
+                interceptors.append((fn, dict(meta)))
 
     for mod_name in _iter_package_modules(package):
         if exclude and exclude(mod_name):
             logging.info("Skipping module %s (excluded)", mod_name)
             continue
-
         try:
             module = importlib.import_module(mod_name)
         except Exception as e:
             logging.warning("Module %s not processed: %s", mod_name, e)
             continue
-
         _visit_module(module)
 
     if not hasattr(package, "__path__"):
         _visit_module(package)
 
-    return comp_classes, factory_classes
+    return comps, facts, interceptors
 
 
+def _provider_from_class(cls: type, *, resolver, lazy: bool):
+    def _new():
+        return resolver.create_instance(cls)
+    return (lambda: ComponentProxy(_new)) if lazy else _new
+
+def _provider_from_callable(fn, *, owner_cls, resolver, lazy: bool):
+    def _invoke():
+        kwargs = resolver.kwargs_for_callable(fn, owner_cls=owner_cls)
+        return fn(**kwargs)
+    return (lambda: ComponentProxy(_invoke)) if lazy else _invoke
+    
 def _register_component_classes(
     *,
     classes: List[type],
     container: PicoContainer,
     resolver: Resolver,
 ) -> None:
-    """
-    Register @component classes into the container.
-
-    Binding key:
-        - If the class has COMPONENT_KEY, use it; otherwise, bind by the class itself.
-    Laziness:
-        - If COMPONENT_LAZY is True, provide a proxy that defers instantiation.
-    """
     for cls in classes:
         key = getattr(cls, COMPONENT_KEY, cls)
         is_lazy = bool(getattr(cls, COMPONENT_LAZY, False))
         tags = tuple(getattr(cls, COMPONENT_TAGS, ()))
-        def _provider_factory(c=cls, lazy=is_lazy):
-            def _factory():
-                return ComponentProxy(lambda: resolver.create_instance(c)) if lazy else resolver.create_instance(c)
-            return _factory
-        container.bind(key, _provider_factory(), lazy=is_lazy, tags=tags)
+        provider = _provider_from_class(cls, resolver=resolver, lazy=is_lazy)
+        container.bind(key, provider, lazy=is_lazy, tags=tags)
+
 
 def _register_factory_classes(
     *,
@@ -172,17 +160,6 @@ def _register_factory_classes(
     container: PicoContainer,
     resolver: Resolver,
 ) -> None:
-    """
-    Register products of @factory_component classes.
-
-    Method with @provides:
-      - If `provided_key` is a class/type -> bind under a unique composite key
-        ( (base_type, "Factory.method") ), mark provider with `._pico_alias_for = base_type`.
-        The core policy will later alias the base to the chosen composite.
-      - If `provided_key` is NOT a type (e.g., a string name) -> bind directly
-        with that key (keeps backwards compatibility with tests expecting names
-        like "svc_sync").
-    """
     for fcls in factory_classes:
         try:
             tok_res = _state._resolving.set(True)
@@ -202,17 +179,9 @@ def _register_factory_classes(
             tags = tuple(getattr(func, PROVIDES_TAGS, ()))
             bound = getattr(finst, attr_name, func.__get__(finst, fcls))
 
-            def _make_provider(m=bound, owner=fcls, lazy=is_lazy):
-                def _factory():
-                    kwargs = resolver.kwargs_for_callable(m, owner_cls=owner)
-                    def _call(): return m(**kwargs)
-                    return ComponentProxy(lambda: _call()) if lazy else _call()
-                return _factory
-
-            prov = _make_provider()
+            prov = _provider_from_callable(bound, owner_cls=fcls, resolver=resolver, lazy=is_lazy)
 
             if isinstance(provided_key, type):
-                # type-key → composite binding to avoid collisions
                 try:
                     setattr(prov, "_pico_alias_for", provided_key)
                 except Exception:
@@ -220,6 +189,5 @@ def _register_factory_classes(
                 unique_key = (provided_key, f"{fcls.__name__}.{attr_name}")
                 container.bind(unique_key, prov, lazy=is_lazy, tags=tags)
             else:
-                # non-type key → preserve direct name binding (e.g. "svc_sync")
                 container.bind(provided_key, prov, lazy=is_lazy, tags=tags)
 

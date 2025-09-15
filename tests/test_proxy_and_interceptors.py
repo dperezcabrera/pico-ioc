@@ -1,20 +1,21 @@
 # tests/test_proxy_and_interceptors.py
 import pytest
 import asyncio
+import types
 
-from pico_ioc import init, component
+from pico_ioc import init, component, interceptor
 from pico_ioc.interceptors import MethodInterceptor
 
 
 async def async_proceed():
-    # A helper that simulates an async operation.
     await asyncio.sleep(0)
     return "async_result"
 
 
+@interceptor
 class AsyncOnlyInterceptor(MethodInterceptor):
     def __call__(self, inv, proceed):
-        # This interceptor incorrectly returns an awaitable.
+        # Always returns an awaitable even for sync methods
         return async_proceed()
 
 
@@ -24,19 +25,16 @@ class MySyncService:
         return "sync_result"
 
 
-# Add a marker to ignore the expected warning for this specific test.
 @pytest.mark.filterwarnings("ignore:coroutine .* was never awaited")
 def test_iocproxy_raises_error_on_async_interceptor_with_sync_method():
-    # Verifies a RuntimeError is raised for async/sync mismatch in interceptors.
-    import types
-
+    # Package to scan must contain both the component and the interceptor
     pkg = types.ModuleType("pkg_proxy_err")
     pkg.MySyncService = MySyncService
+    pkg.AsyncOnlyInterceptor = AsyncOnlyInterceptor
 
-    # Use init() to ensure the full container setup is tested.
-    container = init(pkg, method_interceptors=[AsyncOnlyInterceptor()])
+    container = init(pkg)
+    svc = container.get(MySyncService)
 
-    service_instance = container.get(MySyncService)
+    with pytest.raises(RuntimeError, match=r"Async interceptor on sync method: do_work"):
+        svc.do_work()
 
-    with pytest.raises(RuntimeError, match="Async interceptor on sync method: do_work"):
-        service_instance.do_work()

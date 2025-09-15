@@ -3,11 +3,12 @@ import types
 
 def test_container_lifecycle_interceptors():
     import pico_ioc
-    from pico_ioc import component
+    from pico_ioc import component, interceptor
     from pico_ioc.interceptors import ContainerInterceptor
 
     events = []
 
+    @interceptor(kind="container")
     class T(ContainerInterceptor):
         def on_resolve(self, k, a, q): events.append(("res", k))
         def on_before_create(self, k): events.append(("before", k))
@@ -27,17 +28,18 @@ def test_container_lifecycle_interceptors():
 
     pkg.Dep = Dep
     pkg.Service = Service
+    pkg.T = T  # make interceptor discoverable by scanner
 
-    c = pico_ioc.init(pkg, interceptors=[T()])
+    c = pico_ioc.init(pkg)
 
-    _ = c.get(Service)  # fuerza la creación
+    _ = c.get(Service)  # force creation
 
     assert ("before", Service) in events
     assert ("after", Service) in events
     assert any(e[0] == "res" for e in events)
 
 
-def test_container_accepts_interceptors_kwarg():
+def test_container_accepts_interceptors_via_add_method():
     from pico_ioc.container import PicoContainer
     from pico_ioc.interceptors import ContainerInterceptor
 
@@ -47,5 +49,6 @@ def test_container_accepts_interceptors_kwarg():
         def on_after_create(self, *a, **k): return None
         def on_exception(self, *a, **k): pass
 
-    _ = PicoContainer(container_interceptors=[CI()])
+    c = PicoContainer()
+    c.add_container_interceptor(CI())
 

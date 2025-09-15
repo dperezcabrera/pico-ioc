@@ -1,7 +1,7 @@
 # pico_ioc/decorators.py
 from __future__ import annotations
 import functools
-from typing import Any, Iterable, Optional, Callable
+from typing import Any, Iterable, Optional, Callable, Tuple, Literal
 
 COMPONENT_FLAG = "_is_component"
 COMPONENT_KEY = "_component_key"
@@ -17,10 +17,11 @@ QUALIFIERS_KEY = "_pico_qualifiers"
 COMPONENT_TAGS = "_pico_tags"
 PROVIDES_TAGS = "_pico_tags"
 
-# New: selection policy / defaults
 ON_MISSING_META = "_pico_on_missing"
 PRIMARY_FLAG = "_pico_primary"
 CONDITIONAL_META = "_pico_conditional"
+
+INTERCEPTOR_META = "__pico_interceptor__"
 
 
 def factory_component(cls):
@@ -56,7 +57,7 @@ def plugin(cls):
 
 
 class Qualifier(str):
-    __slots__ = ()  # tiny memory win; immutable like str
+    __slots__ = ()
 
 
 def qualifier(*qs: Qualifier):
@@ -74,12 +75,6 @@ def qualifier(*qs: Qualifier):
 
 
 def on_missing(selector: object, *, priority: int = 0):
-    """
-    Mark this provider as a default for `selector`, used ONLY if no binding exists for `selector`.
-
-    NOTE: We store metadata as {"selector": selector, "priority": int}.
-    The policy reader (`_on_missing_meta`) MUST read the same keys.
-    """
     def dec(obj):
         setattr(obj, ON_MISSING_META, {"selector": selector, "priority": int(priority)})
         return obj
@@ -87,7 +82,6 @@ def on_missing(selector: object, *, priority: int = 0):
 
 
 def primary(obj):
-    """Mark this provider as primary among multiple bindings for the same key."""
     setattr(obj, PRIMARY_FLAG, True)
     return obj
 
@@ -98,14 +92,6 @@ def conditional(
     require_env: tuple[str, ...] = (),
     predicate: Optional[Callable[[], bool]] = None,
 ):
-    """
-    Attach activation conditions. Activated when:
-      - (if provided) any requested profile is in `profiles`, AND
-      - (if provided) all env vars in `require_env` are non-empty, AND
-      - (if provided) `predicate()` returns True (errors → inactive).
-
-    Conditions are evaluated during policy application at bootstrap.
-    """
     def dec(obj):
         setattr(obj, CONDITIONAL_META, {
             "profiles": tuple(profiles),
@@ -116,17 +102,33 @@ def conditional(
     return dec
 
 
+def interceptor(
+    _obj=None,
+    *,
+    kind: Literal["method", "container"] = "method",
+    order: int = 0,
+    profiles: Tuple[str, ...] = (),
+    require_env: Tuple[str, ...] = (),
+    predicate: Callable[[], bool] | None = None,
+):
+    def dec(obj):
+        setattr(obj, INTERCEPTOR_META, {
+            "kind": kind,
+            "order": int(order),
+            "profiles": tuple(profiles),
+            "require_env": tuple(require_env),
+            "predicate": predicate,
+        })
+        return obj
+    return dec if _obj is None else dec(_obj)
+
 __all__ = [
-    # decorators
-    "component", "factory_component", "provides", "plugin", "qualifier",
-    # qualifier type
-    "Qualifier",
-    # metadata keys (exported for advanced use/testing)
+    "component", "factory_component", "provides", "plugin", "qualifier", "Qualifier",
     "COMPONENT_FLAG", "COMPONENT_KEY", "COMPONENT_LAZY",
     "FACTORY_FLAG", "PROVIDES_KEY", "PROVIDES_LAZY",
     "PLUGIN_FLAG", "QUALIFIERS_KEY", "COMPONENT_TAGS", "PROVIDES_TAGS",
-    # selection/defaults API
     "on_missing", "primary", "conditional",
     "ON_MISSING_META", "PRIMARY_FLAG", "CONDITIONAL_META",
+    "interceptor", "INTERCEPTOR_META",
 ]
 
