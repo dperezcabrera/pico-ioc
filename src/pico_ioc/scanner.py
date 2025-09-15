@@ -23,6 +23,7 @@ from .proxy import ComponentProxy
 from .resolver import Resolver
 from .plugins import PicoPlugin
 from . import _state
+from .utils import _provider_from_class, _provider_from_callable
 
 
 def scan_and_configure(
@@ -144,20 +145,6 @@ def _collect_decorated(
         _visit_module(package)
 
     return comps, facts, interceptors
-
-
-def _provider_from_class(cls: type, *, resolver, lazy: bool):
-    def _new():
-        return resolver.create_instance(cls)
-    return (lambda: ComponentProxy(_new)) if lazy else _new
-
-
-def _provider_from_callable(fn, *, owner_cls, resolver, lazy: bool):
-    def _invoke():
-        kwargs = resolver.kwargs_for_callable(fn, owner_cls=owner_cls)
-        return fn(**kwargs)
-    return (lambda: ComponentProxy(_invoke)) if lazy else _invoke
-
 
 def _register_component_classes(
     *,

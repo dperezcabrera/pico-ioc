@@ -5,7 +5,7 @@ import inspect
 import os
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Tuple, Optional
-
+from .utils import create_alias_provider
 from .decorators import (
     CONDITIONAL_META,
     PRIMARY_FLAG,
@@ -147,12 +147,6 @@ def _conditional_active(target, *, profiles: List[str]) -> bool:
     # default: active
     return True
 
-def _create_delegating_factory(container, target_key: Any) -> Callable:
-    """Creates a factory that delegates the get() call to the container."""
-    def _factory():
-        return container.get(target_key)
-    return _factory
-
 # ---------------- public API ----------------
 
 def apply_policy(container, *, profiles: Optional[List[str]] = None) -> None:
@@ -254,7 +248,7 @@ def _collapse_identical_keys_preferring_primary(container) -> None:
         if len(entries) == 1:
             keep_key, _ = entries[0]
             if (not container.has(base)) or (base != keep_key):
-                factory = _create_delegating_factory(container, keep_key)
+                factory = create_alias_provider(container, keep_key)
                 container.bind(base, factory, lazy=True)
             continue
 
@@ -267,7 +261,7 @@ def _collapse_identical_keys_preferring_primary(container) -> None:
         if primaries:
             keep_key, _ = primaries[0]
             if (not container.has(base)) or (base != keep_key):
-                factory = _create_delegating_factory(container, keep_key)
+                factory = create_alias_provider(container, keep_key)
                 container.bind(base, factory, lazy=True)
             for (kk, _mm) in entries:
                 if kk != keep_key and kk != base:
@@ -333,6 +327,6 @@ def _create_active_component_base_aliases(container, *, profiles: List[str]) -> 
         if chosen_key is None:
             continue
 
-        factory = _create_delegating_factory(container, chosen_key)
+        factory = create_alias_provider(container, chosen_key)
         container.bind(base, factory, lazy=True)
 
