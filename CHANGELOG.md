@@ -73,27 +73,20 @@ These were evaluated and **rejected** to keep pico-ioc simple, deterministic, an
 
 ## [1.3.0] — 2025-09-14
 
+### 💥 Breaking Changes
+- **Interceptor API Rework**: The interceptor registration mechanism has been completely changed. The `interceptors` and `method_interceptors` parameters have been **removed** from `pico_ioc.init()` and `pico_ioc.scope()`. Interceptors are now discovered and registered automatically.
+
 ### ✨ New
+- **`@interceptor` Decorator**: Interceptors are now declared in-place using the `@interceptor` decorator on a class or a provider method. The scanner discovers and activates them automatically based on their metadata (`kind`, `order`, `profiles`, etc.). This simplifies the bootstrap process and co-locates cross-cutting concerns with their implementation.
+
 - **Conditional providers**
   - `@conditional(require_env=("VAR",))` activates a component only if env vars are present.
   - `@conditional(predicate=callable)` enables fine-grained activation rules.
   - Useful for switching between implementations (e.g., Redis/Memcached) depending on environment.
 
-- **Interceptor API**
-  - Introduced a lightweight **interceptors** mechanism for provider lifecycle and resolution hooks.
-  - Interceptors can observe/alter:
-    - **Resolution**: `on_resolve(key, annotation, qualifiers)`
-    - **Instantiation**: `on_before_create(key)`, `on_after_create(key, instance)`
-    - **Invocation** (for factory providers): `on_invoke(callable, args, kwargs)`
-    - **Errors**: `on_exception(key, exc)`
-  - Ordering via `order: int` to compose multiple interceptors deterministically.
-  - Filterable by **type**, **qualifiers**, and **tags** of providers.
-  - Registration through `init(..., interceptors=[...])` or programmatic API `container.add_interceptor(...)`.
-  - Typical uses: structured logging, metrics, tracing, guards/policies, audit trails.
-
 ### 📚 Docs
-- Added **GUIDE.md / Interceptors** section with examples (logging, timing, and policy checks).
-- Updated **DECISIONS.md** to record design constraints (pure-Python, zero deps, deterministic ordering).
+- Added **GUIDE_CREATING_PLUGINS_AND_INTERCEPTORS.md** with examples for the new auto-registration system.
+- Updated **ARCHITECTURE.md** to reflect the new bootstrap sequence.
 
 ---
 
