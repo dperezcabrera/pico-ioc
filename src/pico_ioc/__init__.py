@@ -12,7 +12,7 @@ from .decorators import (
 )
 from .plugins import PicoPlugin
 from .resolver import Resolver
-from .api import init, reset, scope
+from .api import init, reset, scope, container_fingerprint
 from .proxy import ComponentProxy, IoCProxy
 from .interceptors import Invocation, MethodInterceptor, ContainerInterceptor
 
@@ -29,6 +29,7 @@ __all__ = [
     "init",
     "scope",
     "reset",
+    "container_fingerprint",
     "component",
     "factory_component",
     "provides",

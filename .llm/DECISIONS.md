@@ -87,19 +87,25 @@ Each entry includes a rationale and implications. If a decision is later changed
 
 ---
 
-### 11) **Interceptors API** (lifecycle hooks)
-**Decision**: Introduce **interceptors** to observe/modify wiring.  
-**Hooks**: `on_resolve`, `on_before_create`, `on_after_create` (may wrap/replace), `on_invoke`, `on_exception`.  
-**Rationale**: Structured logging, metrics/timing, tracing, audit trails, guards/policies, safe wrappers (retry/circuit breaker) without full AOP complexity.  
+### 11) **Interceptors API** (AOP & Lifecycle Hooks)
+**Decision**: Introduce two types of interceptors, auto-discovered via `@interceptor`, to observe or modify container and component behavior.
+**Kinds & Hooks**:
+- **`MethodInterceptor`**: Implements `__call__(self, inv: Invocation, proceed)`. Wraps method calls on components for Aspect-Oriented Programming (AOP) use cases like logging, tracing, or caching.
+- **`ContainerInterceptor`**: Implements container lifecycle hooks:
+    - `on_resolve(key, annotation, qualifiers)`
+    - `on_before_create(key)`
+    - `on_after_create(key, instance)` (may wrap/replace the instance)
+    - `on_exception(key, exc)`
+**Rationale**: Provides structured extension points for both cross-cutting concerns (AOP) and container lifecycle events without the complexity of full aspect weavers.
 **Implications**:
-- Deterministic ordering via `order` (lower runs first).  
-- Register at bootstrap (`init(..., interceptors=[...])`) or programmatically (`container.add_interceptor(...)`).  
-- `on_exception` must re-raise if you don’t intend to mask errors.
+- Deterministic ordering via `order` (lower runs first).
+- Auto-registered via `@interceptor(...)` on classes or provider methods.
+- `on_exception` must re-raise if the error is not meant to be suppressed.
 
 ---
 
-### 12) **Conditional providers** (profiles)
-**Decision**: `@conditional(require_env=(...), predicate=callable)` activates providers based on environment vars or logic.  
+### 12) **Conditional providers** (profiles, env, predicate)
+**Decision**: `@conditional(profiles=(...), require_env=(...), predicate=callable)` activates providers based on environment vars or logic.  
 **Rationale**: Profile-driven wiring (`PROFILE=test/prod/ci`), optional integrations (Redis/S3) without code changes.  
 **Implications**:
 - If no active provider satisfies a required type → **bootstrap error** (or at resolution if lazy).  
@@ -108,10 +114,13 @@ Each entry includes a rationale and implications. If a decision is later changed
 
 ---
 
-### 13) Deterministic registration: **last-wins**
-**Decision**: For a given key, the **last** registered provider is the active one.  
-**Rationale**: Predictable overrides by module ordering; simple mental model.  
-**Implications**: Document ordering in tests; use `init([app, test_overrides])` to replace prod bindings.
+### 13) Deterministic Provider Selection: **Policy-driven, preferring @primary**
+**Decision**: When multiple providers implement the same base type, the selection is not a simple "last-wins". Instead, a policy is applied:
+1.  If one or more candidates are decorated with `@primary`, the first one found will be chosen.
+2.  If no candidates are marked as primary, the selection may fall back to providers decorated with `@on_missing`, or other aliasing logic.
+A true "last-wins" only occurs when binding the *exact same key* multiple times, which overwrites the previous provider entry.
+**Rationale**: This provides more explicit control over which implementation is the default, making the dependency graph more predictable than relying solely on scan order.
+**Implications**: To select a default implementation for an interface, use `@primary`. Module ordering is a less reliable mechanism for this purpose.
 
 ---
 
@@ -156,7 +165,7 @@ _No entries currently._
 - **2025-08**: Minimum Python 3.10; name-first resolution; fail-fast clarified; typed keys preferred.  
 - **2025-09-08**: Introduced `init(..., overrides)` with defined precedence and laziness semantics.  
 - **2025-09-13**: Added `scope(...)` for bounded containers with tag pruning and strict mode.  
-- **2025-09-14**: Added **Interceptors API** and **Conditional providers (profiles)** as first-class features; documented last-wins registration and concurrency stance.
+- **2025-09-14**: Added **Interceptors API** and **Conditional providers** as first-class features; documented last-wins registration and concurrency stance.
 
 ---
 

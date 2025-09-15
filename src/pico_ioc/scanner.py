@@ -5,6 +5,7 @@ import logging
 import pkgutil
 from types import ModuleType
 from typing import Any, Callable, Optional, Tuple, List, Iterable
+
 from .plugins import run_plugin_hook
 from .container import PicoContainer, Binder
 from .decorators import (
@@ -14,7 +15,7 @@ from .decorators import (
     FACTORY_FLAG,
     PROVIDES_KEY,
     PROVIDES_LAZY,
-    COMPONENT_TAGS, 
+    COMPONENT_TAGS,
     PROVIDES_TAGS,
     INTERCEPTOR_META,
 )
@@ -34,6 +35,11 @@ def scan_and_configure(
     """
     Scan a package, bind components/factories, and collect interceptor declarations.
     Returns: (component_count, factory_count, interceptor_decls)
+
+    interceptor_decls contains entries of the form:
+      - (cls, meta)                       for class-level @interceptor on a class
+      - (fn, meta)                        for module-level function with @interceptor
+      - ((owner_cls, fn), meta)           for methods on a class decorated with @interceptor
     """
     package = _as_module(package_or_name)
     logging.info("Scanning in '%s'...", getattr(package, "__name__", repr(package)))
@@ -69,6 +75,7 @@ def _as_module(package_or_name: Any) -> ModuleType:
 
 
 def _iter_package_modules(package: ModuleType) -> Iterable[str]:
+    """Yield fully-qualified module names under a package (recursive)."""
     try:
         pkg_path = package.__path__  # type: ignore[attr-defined]
     except Exception:
@@ -90,28 +97,37 @@ def _collect_decorated(
     interceptors: List[tuple[Any, dict]] = []
 
     def _collect_from_class(cls: type):
+        # Class decorators
         if getattr(cls, COMPONENT_FLAG, False):
             comps.append(cls)
         elif getattr(cls, FACTORY_FLAG, False):
             facts.append(cls)
-        meta = getattr(cls, INTERCEPTOR_META, None)
-        if meta:
-            interceptors.append((cls, dict(meta)))
+
+        # Class-level interceptor (decorated class itself)
+        meta_class = getattr(cls, INTERCEPTOR_META, None)
+        if meta_class:
+            interceptors.append((cls, dict(meta_class)))
+
+        # Method-level interceptors
         for _nm, fn in inspect.getmembers(cls, predicate=inspect.isfunction):
             meta_m = getattr(fn, INTERCEPTOR_META, None)
             if meta_m:
-                interceptors.append((fn, dict(meta_m)))
+                # Preserve the owner to allow proper binding (self) later
+                interceptors.append(((cls, fn), dict(meta_m)))
 
     def _visit_module(module: ModuleType):
+        # Classes
         for _name, obj in inspect.getmembers(module, inspect.isclass):
             run_plugin_hook(plugins, "visit_class", module, obj, binder)
             _collect_from_class(obj)
-        # module-level functions
+
+        # Module-level functions that declare interceptors
         for _name, fn in inspect.getmembers(module, predicate=inspect.isfunction):
             meta = getattr(fn, INTERCEPTOR_META, None)
             if meta:
                 interceptors.append((fn, dict(meta)))
 
+    # Walk submodules
     for mod_name in _iter_package_modules(package):
         if exclude and exclude(mod_name):
             logging.info("Skipping module %s (excluded)", mod_name)
@@ -123,6 +139,7 @@ def _collect_decorated(
             continue
         _visit_module(module)
 
+    # Also visit the root module itself (in case it's a single-file module)
     if not hasattr(package, "__path__"):
         _visit_module(package)
 
@@ -134,12 +151,14 @@ def _provider_from_class(cls: type, *, resolver, lazy: bool):
         return resolver.create_instance(cls)
     return (lambda: ComponentProxy(_new)) if lazy else _new
 
+
 def _provider_from_callable(fn, *, owner_cls, resolver, lazy: bool):
     def _invoke():
         kwargs = resolver.kwargs_for_callable(fn, owner_cls=owner_cls)
         return fn(**kwargs)
     return (lambda: ComponentProxy(_invoke)) if lazy else _invoke
-    
+
+
 def _register_component_classes(
     *,
     classes: List[type],
@@ -162,6 +181,7 @@ def _register_factory_classes(
 ) -> None:
     for fcls in factory_classes:
         try:
+            # Prevent accidental container access recursion while constructing factories
             tok_res = _state._resolving.set(True)
             try:
                 finst = resolver.create_instance(fcls)
@@ -175,13 +195,16 @@ def _register_factory_classes(
             provided_key = getattr(func, PROVIDES_KEY, None)
             if provided_key is None:
                 continue
+
             is_lazy = bool(getattr(func, PROVIDES_LAZY, False))
             tags = tuple(getattr(func, PROVIDES_TAGS, ()))
-            bound = getattr(finst, attr_name, func.__get__(finst, fcls))
 
+            # bind the method to the concrete factory instance
+            bound = getattr(finst, attr_name, func.__get__(finst, fcls))
             prov = _provider_from_callable(bound, owner_cls=fcls, resolver=resolver, lazy=is_lazy)
 
             if isinstance(provided_key, type):
+                # Mark for aliasing policy pipeline and ensure uniqueness of the provider key
                 try:
                     setattr(prov, "_pico_alias_for", provided_key)
                 except Exception:
