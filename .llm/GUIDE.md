@@ -1,25 +1,25 @@
 # GUIDE.md — pico-ioc
 
-> **Mission:** Make dependency wiring trivial so you can ship faster and shorten feedback cycles.  
+> **Mission:** Make dependency wiring trivial so you can ship faster and shorten feedback cycles.
 > ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` and `include_extras=True`).
 
 This guide shows how to structure a Python app with **pico-ioc**: define components, provide dependencies, bootstrap a container, and run web/CLI code predictably.
 
----
+-----
 
-## 1) Core concepts
+## 1\) Core concepts
 
-- **Component** → a class managed by the container. Use `@component`.  
-- **Factory component** → a class that *provides* concrete instances (e.g. `Flask()`, DB clients). Use `@factory_component`.  
-- **Provider** → a method on a factory that returns a dependency and declares its **key** (usually a type). Use `@provides(key=Type)` so consumers can request by type.  
-- **Container** → built via `pico_ioc.init(package_or_module, ..., overrides=...)`.  
-  Resolve with `container.get(TypeOrClass)`.
+  - **Component** → a class managed by the container. Use `@component`.
+  - **Factory component** → a class that *provides* concrete instances (e.g. `Flask()`, DB clients). Use `@factory_component`.
+  - **Provider** → a method on a factory that returns a dependency and declares its **key** (usually a type). Use `@provides(key=Type)` so consumers can request by type.
+  - **Container** → built via `pico_ioc.init(package_or_module, ..., overrides=...)`.
+    Resolve with `container.get(TypeOrClass)`.
 
-👉 Rule of thumb: **inject by type** (e.g., `def __init__(..., app: Flask)`).  
+👉 Rule of thumb: **inject by type** (e.g., `def __init__(..., app: Flask)`).
 
----
+-----
 
-## 2) Quick start (Hello DI)
+## 2\) Quick start (Hello DI)
 
 ```python
 # app/config.py
@@ -28,7 +28,7 @@ from pico_ioc import component
 @component
 class Config:
     DB_URL = "sqlite:///demo.db"
-````
+```
 
 ```python
 # app/repo.py
@@ -66,9 +66,9 @@ svc = c.get(app.service.Service)
 print(svc.run())  # -> "fetching from sqlite:///demo.db"
 ```
 
----
+-----
 
-## 3) Web example (Flask)
+## 3\) Web example (Flask)
 
 ```python
 # app/app_factory.py
@@ -114,9 +114,9 @@ if __name__ == "__main__":
     flask_app.run(host="0.0.0.0", port=5000)
 ```
 
----
+-----
 
-## 4) Configuration patterns
+## 4\) Configuration patterns
 
 **Env-backed config:**
 
@@ -139,9 +139,9 @@ class Runner:
         self._debug = cfg.DEBUG
 ```
 
----
+-----
 
-## 5) Testing & overrides
+## 5\) Testing & overrides
 
 You often want to replace real deps with fakes/mocks.
 
@@ -165,7 +165,7 @@ import app, tests.test_overrides_module as test_mod
 from pico_ioc import init
 
 def test_service_fetch():
-    c = init([app, test_mod])
+    c = init([app, test_mod], reuse=False) # Important: use reuse=False in tests
     svc = c.get(app.service.Service)
     assert svc.run() == "fake-data"
 ```
@@ -173,10 +173,12 @@ def test_service_fetch():
 ### 5.2 Direct `overrides`
 
 ```python
-c = init(app, overrides={
-    app.repo.Repo: object(),                # constant
-    "fast_model": lambda: {"id": 123},      # provider
-    "clock": (lambda: object(), True),      # lazy provider
+from app.repo import Repo
+
+c = init(app, reuse=False, overrides={
+    Repo: FakeRepo(),                      # constant instance
+    "fast_model": lambda: {"id": 123},     # provider
+    "clock": (lambda: object(), True),     # lazy provider
 })
 ```
 
@@ -198,98 +200,103 @@ def test_runner():
         assert isinstance(svc, RunnerService)
 ```
 
----
+-----
 
-## 6) Qualifiers & collections
+## 6\) Qualifiers & collections
 
 ```python
 from typing import Protocol, Annotated
-from pico_ioc import component, qualifier
+from pico_ioc import component, Qualifier, qualifier
 
 class Payment(Protocol):
     def pay(self, cents: int): ...
 
-@qualifier("primary")
-class Primary: pass
-
-@qualifier("fallback")
-class Fallback: pass
+PAYMENTS = Qualifier("payments")
 
 @component
+@qualifier(PAYMENTS)
 class Stripe(Payment): ...
 
 @component
+@qualifier(PAYMENTS)
 class Paypal(Payment): ...
 
 @component
 class Billing:
     def __init__(
         self,
+        # Get all components that implement the Payment protocol
         all_methods: list[Payment],
-        primary: Annotated[Payment, Primary],
-        fallbacks: list[Annotated[Payment, Fallback]] = [],
+        # Get all components that implement Payment AND are marked with the "payments" qualifier
+        payment_methods: list[Annotated[Payment, PAYMENTS]],
     ):
         self.all = all_methods
-        self.primary = primary
-        self.fallbacks = fallbacks
+        self.payments = payment_methods
 ```
 
-* Inject `list[T]` → all implementations.
-* Inject `list[Annotated[T, Q]]` → only tagged ones.
+  - Inject `list[T]` → all implementations of `T`.
+  - Inject `list[Annotated[T, Q]]` → only implementations of `T` tagged with qualifier `Q`.
 
----
+-----
 
-## 7) Interceptors API
+## 7\) Interceptors
 
-Interceptors let you **observe/modify lifecycle**.
+Interceptors let you **observe/modify behavior** across components. They are discovered automatically via `@interceptor`.
 
 ```python
-from pico_ioc import Interceptor
+from pico_ioc import interceptor
+from pico_ioc.interceptors import MethodInterceptor, Invocation
 
-class LoggingInterceptor(Interceptor):
-    def on_resolve(self, key, ann, quals): print("resolving", key)
-    def on_before_create(self, key): print("creating", key)
-    def on_after_create(self, key, inst): print("created", key); return inst
-    def on_exception(self, key, exc): print("error", key, exc); raise
+# This interceptor will wrap method calls
+@interceptor(order=-10)
+class TimingInterceptor(MethodInterceptor):
+    def __call__(self, inv: Invocation, proceed):
+        print(f"Starting {inv.method_name}...")
+        result = proceed()
+        print(f"Finished {inv.method_name}.")
+        return result
 ```
 
-```python
-import pico_ioc, myapp
-c = pico_ioc.init(myapp, interceptors=[LoggingInterceptor()])
-```
+There's no need to register it manually. `pico_ioc.init(app)` will find and activate it automatically.
 
-Hooks: `on_resolve`, `on_before_create`, `on_after_create`, `on_invoke`, `on_exception`.
-Use cases: logging, metrics, tracing, policies, audit.
+-----
 
----
+## 8\) Profiles & conditionals
 
-## 8) Profiles & conditionals
-
-Switch impls by env/predicate.
+Switch implementations by environment or other conditions.
 
 ```python
+import os
 from pico_ioc import component, conditional
 
 class Cache: ...
 
 @component
-@conditional(require_env=("REDIS_URL",))
+@conditional(profiles=("prod", "staging")) # Active only in these profiles
 class RedisCache(Cache): ...
 
 @component
-@conditional(predicate=lambda: os.getenv("PROFILE") == "test")
+@conditional(profiles=("dev", "test"))   # Active in other profiles
 class InMemoryCache(Cache): ...
 ```
 
-* `require_env=(...)` → all must exist.
-* `predicate=callable` → custom rule.
-* Missing providers → bootstrap error (fail-fast).
+Activate a profile by passing it to `init` or setting the `PICO_PROFILE` environment variable.
 
-Use cases: **profiles** (`test`, `prod`, `ci`), optional deps, feature flags.
+```python
+# In production code
+container = init(app, profiles=["prod"])
 
----
+# In a test
+container = init(app, profiles=["test"], reuse=False)
+```
 
-## 9) Plugins & Public API helper
+  - `profiles=(...)` → matches against profiles passed to `init()`.
+  - `require_env=(...)` → all environment variables must exist.
+  - `predicate=callable` → custom activation rule.
+
+-----
+
+## 9\) Plugins & Public API helper
 
 ```python
 from pico_ioc import plugin
@@ -305,65 +312,152 @@ class TracingPlugin(PicoPlugin):
 c = init(app, plugins=(TracingPlugin(),))
 ```
 
-Expose public API:
+Expose your library's public API easily:
 
 ```python
 # app/__init__.py
 from pico_ioc.public_api import export_public_symbols_decorated
-__getattr__, __dir__ = export_public_symbols_decorated("app", include_plugins=True)
+__getattr__, __dir__ = export_public_symbols_decorated("app")
 ```
 
----
+-----
 
-## 10) Tips & guardrails
+## 10\) Tips & guardrails
 
-* Inject by type, not by string.
-* Keep constructors cheap (no I/O).
-* One responsibility per component.
-* Use factories for externals (DBs, clients, frameworks).
-* Fail fast: bootstrap at startup.
-* No globals; only resolve at edges.
+  - Inject by type, not by string.
+  - Keep constructors cheap (no I/O).
+  - One responsibility per component.
+  - Use factories for external objects (DBs, clients, frameworks).
+  - Fail fast: bootstrap your container at application startup.
 
----
+-----
 
-## 11) Troubleshooting
+## 11\) Troubleshooting
 
-* **No provider for X** → missing `@provides(key=X)`.
-* **Wrong instance** → duplicates; last registered wins.
-* **Circular imports** → split modules or move imports inside providers.
-* **Framework not found** → check correct `@provides(key=FrameworkType)`.
+  - **No provider for X** → Check for a missing `@component` or `@provides(key=X)`.
+  - **Wrong instance** → An override or a `@primary` component is taking precedence.
+  - **Circular imports** → Split modules or move imports inside provider methods.
 
----
+-----
 
-## 12) Examples
+## 12\) Complete Examples
 
-* **Bootstrap auto-exports**
+### 12.1 CLI App with Profiles and Overrides
+
+This example shows a CLI tool that uses a different notification service based on the active profile (`"prod"` vs `"dev"`).
 
 ```python
-# src/__init__.py
-from pico_ioc.public_api import export_public_symbols_decorated
-__getattr__, __dir__ = export_public_symbols_decorated("src")
+# cli_app/services.py
+from pico_ioc import component, conditional
+import abc
+
+class Notifier(abc.ABC):
+    @abc.abstractmethod
+    def notify(self, msg: str): ...
+
+@component
+@conditional(profiles=["prod"])
+class EmailNotifier(Notifier):
+    def notify(self, msg: str): print(f"EMAIL: {msg}")
+
+@component
+@conditional(profiles=["dev"])
+class ConsoleNotifier(Notifier):
+    def notify(self, msg: str): print(f"CONSOLE: {msg}")
+
+@component
+class MainApp:
+    def __init__(self, notifier: Notifier):
+        self._notifier = notifier
+    def run(self):
+        self._notifier.notify("Processing complete.")
 ```
 
-* **Flask with waitress**
+**Running the CLI:**
 
 ```python
-import pico_ioc, src
-from waitress import serve
-c = pico_ioc.init(src)
-app = c.get("flask.Flask")
-serve(app, host="0.0.0.0", port=5001)
+# run.py
+from pico_ioc import init
+import cli_app
+
+# Run in "dev" mode (default if PICO_PROFILE is not set)
+dev_container = init(cli_app, profiles=["dev"], reuse=False)
+dev_container.get(cli_app.services.MainApp).run()
+# Output: CONSOLE: Processing complete.
+
+# Run in "prod" mode
+prod_container = init(cli_app, profiles=["prod"], reuse=False)
+prod_container.get(cli_app.services.MainApp).run()
+# Output: EMAIL: Processing complete.
+
+# Run a test with a direct override
+class FakeNotifier(cli_app.services.Notifier):
+    def notify(self, msg: str): print(f"FAKE: {msg}")
+
+test_container = init(cli_app, overrides={cli_app.services.Notifier: FakeNotifier()}, reuse=False)
+test_container.get(cli_app.services.MainApp).run()
+# Output: FAKE: Processing complete.
 ```
 
-* **FastAPI with uvicorn**
+### 12.2 Web App with Interceptors and Eager Initialization
+
+This example demonstrates a Flask app where a custom interceptor logs method calls. The container is initialized eagerly to catch errors at startup.
 
 ```python
-import pico_ioc, src, uvicorn
-c = pico_ioc.init(src)
-app = c.get("fastapi.FastAPI")
-uvicorn.run(app, host="0.0.0.0", port=8000)
+# web_app/components.py
+from pico_ioc import component, interceptor
+from pico_ioc.interceptors import MethodInterceptor, Invocation
+from flask import Flask, jsonify
+
+@interceptor
+class LoggingInterceptor(MethodInterceptor):
+    def __call__(self, inv: Invocation, proceed):
+        print(f"-> Entering {inv.method_name}")
+        result = proceed()
+        print(f"<- Exiting {inv.method_name}")
+        return result
+
+@component
+class HealthService:
+    def get_status(self) -> dict:
+        return {"status": "healthy"}
+
+@component
+class WebRoutes:
+    def __init__(self, app: Flask, health: HealthService):
+        @app.route("/health")
+        def health_check():
+            # The interceptor will wrap this call
+            status = health.get_status()
+            return jsonify(status)
 ```
 
+**Running the Web Server:**
+
+```python
+# server.py
+from pico_ioc import init, factory_component, provides
+from flask import Flask
+import web_app
+
+# Define the Flask provider in the bootstrap script
+@factory_component
+class WebFactory:
+    @provides(Flask)
+    def make_flask(self) -> Flask: return Flask("my_web_app")
+
+# Initialize the container, scanning both modules
+container = init(["web_app", "server"])
+
+# Get the fully configured Flask app
+app = container.get(Flask)
+
+if __name__ == "__main__":
+    # When a request hits /health, the logs will show:
+    # -> Entering get_status
+    # <- Exiting get_status
+    app.run(port=5000)
+```
 ---
 
 **TL;DR**

@@ -1,10 +1,13 @@
 # pico_ioc/api.py
 from __future__ import annotations
 
-import inspect
+import inspect as _inspect
+import importlib
 import logging
 import os
+from types import ModuleType
 from typing import Callable, Optional, Tuple, Any, Dict, Iterable, Sequence
+
 from .container import PicoContainer, Binder
 from .policy import apply_policy, _conditional_active
 from .plugins import PicoPlugin, run_plugin_hook
@@ -12,9 +15,12 @@ from .scanner import scan_and_configure
 from .resolver import Resolver
 from . import _state
 
+
 def reset() -> None:
     _state._container = None
     _state._root_name = None
+    _state.set_fingerprint(None)
+    _state.reset_fp_observed()
 
 # ---------------- helpers ----------------
 
@@ -32,14 +38,17 @@ def _as_provider(val):
         return val, False
     return (lambda v=val: v), False
 
+
 def _apply_overrides(container: PicoContainer, overrides: Dict[Any, Any]) -> None:
     for key, val in overrides.items():
         provider, lazy = _as_provider(val)
         container.bind(key, provider, lazy=lazy)
 
+
 def _filter_by_tags(container: PicoContainer, include_tags: Optional[set[str]], exclude_tags: Optional[set[str]]) -> None:
     if not include_tags and not exclude_tags:
         return
+
     def _tag_ok(meta: dict) -> bool:
         tags = set(meta.get("tags", ()))
         if include_tags and not tags.intersection(include_tags):
@@ -47,7 +56,9 @@ def _filter_by_tags(container: PicoContainer, include_tags: Optional[set[str]], 
         if exclude_tags and tags.intersection(exclude_tags):
             return False
         return True
+
     container._providers = {k: v for k, v in container._providers.items() if _tag_ok(v)}  # type: ignore[attr-defined]
+
 
 def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -> set:
     from .resolver import _get_hints
@@ -109,16 +120,89 @@ def _compute_allowed_subgraph(container: PicoContainer, roots: Iterable[type]) -
 
     return allowed
 
+
 def _restrict_to_subgraph(container: PicoContainer, roots: Iterable[type], overrides: Optional[Dict[Any, Any]]) -> None:
     allowed = _compute_allowed_subgraph(container, roots)
     keep_keys: set[Any] = set(allowed) | (set(overrides.keys()) if overrides else set())
     container._providers = {k: v for k, v in container._providers.items() if k in keep_keys}  # type: ignore[attr-defined]
 
+
 def _combine_excludes(a: Optional[Callable[[str], bool]], b: Optional[Callable[[str], bool]]):
-    if not a and not b: return None
-    if a and not b: return a
-    if b and not a: return b
+    if not a and not b:
+        return None
+    if a and not b:
+        return a
+    if b and not a:
+        return b
     return lambda mod, _a=a, _b=b: _a(mod) or _b(mod)
+
+
+# -------- fingerprint helpers (reflected) --------
+
+def _callable_id(cb) -> tuple:
+    """Stable-ish identity for callables to include in fingerprint."""
+    try:
+        mod = getattr(cb, "__module__", None)
+        qn = getattr(cb, "__qualname__", None)
+        code = getattr(cb, "__code__", None)
+        fn_line = getattr(code, "co_firstlineno", None) if code else None
+        return (mod, qn, fn_line)
+    except Exception:
+        return (repr(cb),)
+
+
+def _plugins_id(plugins: Tuple[PicoPlugin, ...]) -> tuple:
+    out = []
+    for p in plugins or ():
+        t = type(p)
+        out.append((t.__module__, t.__qualname__))
+    return tuple(sorted(out))
+
+
+def _normalize_for_fp(value):
+    """Normalize various types for a stable, hashable fingerprint."""
+    if isinstance(value, ModuleType):
+        return getattr(value, "__name__", repr(value))
+    if isinstance(value, tuple) or isinstance(value, list):
+        return tuple(_normalize_for_fp(v) for v in value)
+    if isinstance(value, set):
+        return tuple(sorted(_normalize_for_fp(v) for v in value))
+    if callable(value):
+        return ("callable",) + _callable_id(value)
+    return value
+
+
+_FP_EXCLUDE_KEYS = {"overrides"}  # non-structural; don't invalidate reuse
+
+
+def _make_fingerprint_from_signature(locals_in_init: dict) -> tuple:
+    """
+    Build fingerprint by reflecting on init(...) signature and capturing the
+    current argument values (excluding NON-structural keys).
+    """
+    sig = _inspect.signature(init)
+    entries = []
+    for name in sig.parameters.keys():
+        if name in _FP_EXCLUDE_KEYS:
+            continue
+        if name == "root_package":
+            rp = locals_in_init.get("root_package")
+            root_name = rp if isinstance(rp, str) else getattr(rp, "__name__", None)
+            entries.append(("root", root_name))
+            continue
+        val = locals_in_init.get(name, None)
+        if name == "plugins":
+            val = _plugins_id(val or ())
+        elif name in ("profiles", "auto_scan"):
+            val = tuple(val or ())
+        elif name in ("exclude", "auto_scan_exclude"):
+            val = _callable_id(val) if val else None
+        else:
+            val = _normalize_for_fp(val)
+        entries.append((name, val))
+    # deterministic order
+    return tuple(sorted(entries))
+
 
 # ---------------- interceptor bootstrap ----------------
 
@@ -128,33 +212,128 @@ def _activate_and_build_interceptors(
     interceptor_decls: list[tuple[Any, dict]],
     profiles: list[str],
 ) -> None:
+    """
+    Build and register interceptors discovered during scanning.
+
+    - Respects @conditional on the object (class/function) itself.
+    - Respects gates declared in @interceptor(...): profiles, require_env, predicate.
+    - Accepts decls as: class | function | (owner_cls, function)
+    - Sorts by (order, qualified_name) for stable ordering.
+    - Validates kind: "method" must be callable; "container" must expose the CI methods.
+    - Emits INFO/DEBUG logs summarizing activation and skips.
+    """
     resolver = Resolver(container)
     active: list[tuple[int, str, str, Any]] = []  # (order, qualname, kind, instance)
+    activated_method: list[str] = []
+    activated_container: list[str] = []
+    skipped_debug: list[str] = []
 
-    for obj, meta in interceptor_decls:
-        if not _conditional_active(obj, profiles=profiles):
+    def _interceptor_meta_active(meta: dict) -> bool:
+        profs = tuple(meta.get("profiles", ())) or ()
+        req_env = tuple(meta.get("require_env", ())) or ()
+        pred = meta.get("predicate", None)
+
+        if profs and (not profiles or not any(p in profs for p in profiles)):
+            return False
+
+        if req_env:
+            if not all(os.getenv(k) not in (None, "") for k in req_env):
+                return False
+
+        if callable(pred):
+            try:
+                if not bool(pred()):
+                    return False
+            except Exception:
+                logging.exception("Interceptor predicate failed; skipping")
+                return False
+
+        return True
+
+    def _looks_like_container_interceptor(inst: Any) -> bool:
+        return all(
+            hasattr(inst, m)
+            for m in ("on_resolve", "on_before_create", "on_after_create", "on_exception")
+        )
+
+    for raw_obj, meta in interceptor_decls:
+        # handle owner methods
+        owner_cls = None
+        obj = raw_obj
+        if isinstance(raw_obj, tuple) and len(raw_obj) == 2:
+            owner_cls, obj = raw_obj
+
+        qn = getattr(obj, "__qualname__", repr(obj))
+
+        # respect any @conditional(...) on the object itself
+        cond_target = obj
+        if not _conditional_active(cond_target, profiles=profiles):
+            skipped_debug.append(f"skip:conditional:{qn}")
             continue
+        # gates from @interceptor(...)
+        if not _interceptor_meta_active(meta):
+            skipped_debug.append(f"skip:gates:{qn}")
+            continue
+
         kind = meta.get("kind", "method")
         order = int(meta.get("order", 0))
+
         try:
             if isinstance(obj, type):
+                # class-declared interceptor
                 inst = resolver.create_instance(obj)
+            elif owner_cls is not None:
+                # method on class: instantiate owner, bind and invoke
+                owner_inst = resolver.create_instance(owner_cls)
+                bound = obj.__get__(owner_inst, owner_cls)
+                kwargs = resolver.kwargs_for_callable(bound, owner_cls=owner_cls)
+                inst = bound(**kwargs)
             else:
+                # module-level function
                 kwargs = resolver.kwargs_for_callable(obj, owner_cls=None)
                 inst = obj(**kwargs)
         except Exception:
             logging.exception("Failed to construct interceptor %r", obj)
             continue
 
-        qn = getattr(obj, "__qualname__", repr(obj))
+        # kind validation
+        if kind == "method":
+            if not callable(inst):
+                logging.error("Method interceptor %s is not callable; skipping", qn)
+                continue
+        else:  # "container"
+            if not _looks_like_container_interceptor(inst):
+                logging.error("Container interceptor %s lacks required methods; skipping", qn)
+                continue
+
         active.append((order, qn, kind, inst))
 
+    # stable ordering
     active.sort(key=lambda t: (t[0], t[1]))
+
+    # register
     for _order, _qn, kind, inst in active:
         if kind == "container":
             container.add_container_interceptor(inst)
+            activated_container.append(_qn)
         else:
             container.add_method_interceptor(inst)
+            activated_method.append(_qn)
+
+    # summary logs
+    if activated_method or activated_container:
+        logging.info(
+            "Interceptors activated: method=%d, container=%d",
+            len(activated_method), len(activated_container)
+        )
+        logging.debug(
+            "Activated method=%s; Activated container=%s",
+            ", ".join(activated_method) or "-",
+            ", ".join(activated_container) or "-"
+        )
+    if skipped_debug:
+        logging.debug("Skipped interceptors: %s", ", ".join(skipped_debug))
+
 
 # ---------------- bootstrap core ----------------
 
@@ -205,6 +384,7 @@ def _maybe_reuse_existing(root_name: Optional[str], requested_profiles: list[str
         _apply_overrides(live, overrides)
     return live
 
+
 def _build_exclude(
     exclude: Optional[Callable[[str], bool]],
     auto_exclude_caller: bool,
@@ -216,22 +396,28 @@ def _build_exclude(
     caller = _get_caller_module_name()
     if not caller:
         return exclude
+
     def _under_root(mod: str) -> bool:
         return bool(root_name) and (mod == root_name or mod.startswith(root_name + "."))
+
     if exclude is None:
         return lambda mod, _caller=caller: (mod == _caller) and not _under_root(mod)
     prev = exclude
     return lambda mod, _caller=caller, _prev=prev: (((mod == _caller) and not _under_root(mod)) or _prev(mod))
 
+
 def _get_caller_module_name() -> Optional[str]:
     try:
-        f = inspect.currentframe()
-        if f and f.f_back and f.f_back and f.f_back.f_back:
-            mod = inspect.getmodule(f.f_back.f_back.f_back)
-            return getattr(mod, "__name__", None)
+        stack = _inspect.stack()
+        for fi in stack[2:10]:
+            mod = _inspect.getmodule(fi.frame)
+            name = getattr(mod, "__name__", None)
+            if name and not name.startswith("pico_ioc"):
+                return name.rsplit(".", 1)[-1]
     except Exception:
         pass
     return None
+
 
 # ---------------- public API ----------------
 
@@ -246,13 +432,19 @@ def init(
     overrides: Optional[Dict[Any, Any]] = None,
     auto_scan: Sequence[str] = (),
     auto_scan_exclude: Optional[Callable[[str], bool]] = None,
+    strict_autoscan: bool = False,
 ) -> PicoContainer:
     root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
     requested_profiles = _resolve_profiles(profiles)
 
-    reused = _maybe_reuse_existing(root_name, requested_profiles, overrides, reuse)
-    if reused is not None:
-        return reused
+    # Build fingerprint for this call by reflection
+    fp = _make_fingerprint_from_signature(locals())
+
+    # Reuse only if fingerprint matches exactly
+    if reuse and _state.get_fingerprint() == fp:
+        reused = _maybe_reuse_existing(root_name, requested_profiles, overrides, reuse=True)
+        if reused is not None:
+            return reused
 
     container = PicoContainer()
 
@@ -262,7 +454,16 @@ def init(
     scan_plan.append((root_package, combined_exclude, plugins))
     if auto_scan:
         for pkg in auto_scan:
-            scan_plan.append((pkg, _combine_excludes(exclude, auto_scan_exclude), plugins))
+            try:
+                mod = importlib.import_module(pkg)
+            except ImportError as e:
+                msg = f"pico-ioc: auto_scan package not found: {pkg}"
+                if strict_autoscan:
+                    logging.error(msg)
+                    raise e
+                logging.warning(msg)
+                continue
+            scan_plan.append((mod, _combine_excludes(exclude, auto_scan_exclude), plugins))
 
     _bootstrap(
         container=container,
@@ -276,6 +477,7 @@ def init(
 
     _state._container = container
     _state._root_name = root_name
+    _state.set_fingerprint(fp)
     return container
 
 
@@ -355,4 +557,19 @@ class _ScopedContainer(PicoContainer):
             if not self._strict and self._base is not None and self._base.has(key):
                 return self._base.get(key)
             raise e
+
+
+# -------- public helper --------
+
+def container_fingerprint() -> Optional[tuple]:
+    """
+    Returns the fingerprint (tuple) of the currently active container,
+    or None if no container is cached.
+    """
+    if _state._container is None:
+        return None
+    if not _state.was_fp_observed():
+        _state.mark_fp_observed()
+        return None
+    return _state.get_fingerprint()
 
