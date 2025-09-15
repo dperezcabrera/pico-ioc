@@ -1,13 +1,10 @@
-# pico_ioc/container.py
+# src/pico_ioc/container.py (Refactorizado)
 from __future__ import annotations
 import inspect
 from typing import Any, Dict, get_origin, get_args, Annotated, Sequence, Optional, Callable, Union, Tuple
 import typing as _t
 from .proxy import IoCProxy
 from .interceptors import MethodInterceptor, ContainerInterceptor
-
-_InterceptorLike = Union[MethodInterceptor, type]
-
 from .decorators import QUALIFIERS_KEY
 from . import _state
 
@@ -27,11 +24,12 @@ class Binder:
 
 
 class PicoContainer:
-    def __init__(self):
-        self._providers: Dict[Any, Dict[str, Any]] = {}
+    def __init__(self, providers: Dict[Any, Dict[str, Any]]):
+        self._providers = providers
         self._singletons: Dict[Any, Any] = {}
         self._method_interceptors: tuple[MethodInterceptor, ...] = ()
         self._container_interceptors: tuple[ContainerInterceptor, ...] = ()
+        self._active_profiles: tuple[str, ...] = ()
         self._seen_interceptor_types: set[type] = set()
 
     def add_method_interceptor(self, it: MethodInterceptor) -> None:
@@ -47,6 +45,10 @@ class PicoContainer:
             return
         self._seen_interceptor_types.add(t)
         self._container_interceptors = self._container_interceptors + (it,)
+        
+    def binder(self) -> Binder:
+        """Returns a binder for this container."""
+        return Binder(self)
 
     def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
         self._singletons.pop(key, None)
@@ -126,6 +128,9 @@ class PicoContainer:
                     inst = self.get(provider_key)
                     matches.append(inst)
         return matches
+
+    def get_providers(self) -> Dict[Any, Dict]:
+        return self._providers.copy()
 
 
 def _is_protocol(t) -> bool:
