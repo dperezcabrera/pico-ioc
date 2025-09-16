@@ -5,6 +5,7 @@ except Exception:
     __version__ = "0.0.0"
 
 from .container import PicoContainer, Binder
+from .scope import ScopedContainer
 from .decorators import (
     component, factory_component, provides, plugin,
     Qualifier, qualifier,
@@ -41,5 +42,6 @@ __all__ = [
     "conditional",
     "interceptor",
     "Resolver",
+    "ScopedContainer",
 ]
 
