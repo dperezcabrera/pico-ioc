@@ -73,11 +73,8 @@ These were evaluated and **rejected** to keep pico-ioc simple, deterministic, an
 
 ## [1.3.0] — 2025-09-14
 
-### 💥 Breaking Changes
-- **Interceptor API Rework**: The interceptor registration mechanism has been completely changed. The `interceptors` and `method_interceptors` parameters have been **removed** from `pico_ioc.init()` and `pico_ioc.scope()`. Interceptors are now discovered and registered automatically.
-
 ### ✨ New
-- **`@interceptor` Decorator**: Interceptors are now declared in-place using the `@interceptor` decorator on a class or a provider method. The scanner discovers and activates them automatically based on their metadata (`kind`, `order`, `profiles`, etc.). This simplifies the bootstrap process and co-locates cross-cutting concerns with their implementation.
+- **`@interceptor` Decorator**: Interceptors are declared in-place using the `@interceptor` decorator on a class or a provider method. The scanner discovers and activates them automatically based on their metadata (`kind`, `order`, `profiles`, etc.). This simplifies the bootstrap process and co-locates cross-cutting concerns with their implementation.
 
 - **Conditional providers**
   - `@conditional(require_env=("VAR",))` activates a component only if env vars are present.
@@ -87,6 +84,25 @@ These were evaluated and **rejected** to keep pico-ioc simple, deterministic, an
 ### 📚 Docs
 - Added **GUIDE_CREATING_PLUGINS_AND_INTERCEPTORS.md** with examples for the new auto-registration system.
 - Updated **ARCHITECTURE.md** to reflect the new bootstrap sequence.
+
+---
+
+## [1.4.0] — 2025-09-16
+
+### ✨ New
+- **Configuration Injection**
+  - Added `@config_component` for strongly typed settings classes.
+  - Supports environment variables and property files (YAML, JSON, INI, dotenv).
+  - Automatic field autowiring by name, with manual overrides (`Env`, `File`, `Path`, `Value`).
+  - Precedence: `overrides` > declared config sources > field defaults.
+  - Strict mode: missing required fields (no default and not resolvable) raise `NameError`.
+
+### 🧪 Testing
+- Added tests for precedence (env > file > default), dotted-path resolution, lazy instantiation, and required-field validation.
+
+
+### 📚 Docs
+- Added **GUIDE-CONFIGURATION-INJECTION.md** with examples for the new configuration injection system.
 
 ---
 
