@@ -16,6 +16,10 @@ from .resolver import Resolver
 from .api import init, reset, scope, container_fingerprint
 from .proxy import ComponentProxy, IoCProxy
 from .interceptors import Invocation, MethodInterceptor, ContainerInterceptor
+from .config import (
+    config_component, EnvSource, FileSource,
+    Env, File, Path, Value,
+)
 
 __all__ = [
     "__version__",
@@ -43,5 +47,12 @@ __all__ = [
     "interceptor",
     "Resolver",
     "ScopedContainer",
+    "config_component", 
+    "EnvSource", 
+    "FileSource", 
+    "Env", 
+    "File", 
+    "Path", 
+    "Value",
 ]
 

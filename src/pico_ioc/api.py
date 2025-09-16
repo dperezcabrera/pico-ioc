@@ -11,6 +11,7 @@ from .plugins import PicoPlugin
 from . import _state
 from .builder import PicoContainerBuilder
 from .scope import ScopedContainer
+from .config import ConfigRegistry, ConfigSource
 
 
 def reset() -> None:
@@ -79,6 +80,20 @@ def _make_fingerprint_from_signature(locals_in_init: dict) -> tuple:
             val = _callable_id(val) if val else None
         elif name == "overrides":
             val = _normalize_overrides_for_fp(val)
+        elif name == "config":
+            cfg = locals_in_init.get("config") or ()
+            norm = []
+            for s in cfg:
+                try:
+                    if type(s).__name__ == "EnvSource":
+                        norm.append(("env", getattr(s, "prefix", "")))
+                    elif type(s).__name__ == "FileSource":
+                        norm.append(("file", str(getattr(s, "path", ""))))
+                    else:
+                        norm.append((type(s).__module__, type(s).__qualname__))
+                except Exception:
+                    norm.append(repr(s))
+            val = tuple(norm)
         else:
             val = _normalize_for_fp(val)
         entries.append((name, val))
@@ -120,6 +135,7 @@ def init(
     auto_exclude_caller: bool = True, plugins: Tuple[PicoPlugin, ...] = (), reuse: bool = True,
     overrides: Optional[Dict[Any, Any]] = None, auto_scan: Sequence[str] = (),
     auto_scan_exclude: Optional[Callable[[str], bool]] = None, strict_autoscan: bool = False,
+    config: Sequence[ConfigSource] = (),
 ) -> PicoContainer:
     root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
     fp = _make_fingerprint_from_signature(locals())
@@ -129,7 +145,11 @@ def init(
         if reused is not None:
             return reused
 
-    builder = PicoContainerBuilder().with_plugins(plugins).with_profiles(profiles).with_overrides(overrides)
+    builder = (PicoContainerBuilder()
+               .with_plugins(plugins)
+               .with_profiles(profiles)
+               .with_overrides(overrides)
+               .with_config(ConfigRegistry(config or ()))) 
 
     combined_exclude = _build_exclude(exclude, auto_exclude_caller, root_name=root_name)
     builder.add_scan_package(root_package, exclude=combined_exclude)
