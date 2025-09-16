@@ -1,12 +1,17 @@
 # tests/test_fingerprint_public.py
-import types
 import pytest
-from pico_ioc import init, reset, component, container_fingerprint
+from pico_ioc import init, reset, container_fingerprint
+
+@pytest.fixture(autouse=True)
+def clean_state():
+    reset()
+    yield
+    reset()
 
 def test_fingerprint_exposed_and_changes_on_params(monkeypatch):
-    # FIX: Patch the function in the builder.
     monkeypatch.setattr("pico_ioc.builder.scan_and_configure", lambda *a, **k: (0, 0, []))
 
+    reset()
     fp1 = container_fingerprint()
     assert fp1 is None
 
@@ -19,7 +24,6 @@ def test_fingerprint_exposed_and_changes_on_params(monkeypatch):
     assert fp_after_second != fp_after_first
 
 def test_fingerprint_resets_on_reset(monkeypatch):
-    # FIX: Patch the function in the builder.
     monkeypatch.setattr("pico_ioc.builder.scan_and_configure", lambda *a, **k: (0, 0, []))
     _ = init("pkgZ")
     assert container_fingerprint() is not None
