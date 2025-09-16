@@ -25,6 +25,7 @@ from .proxy import ComponentProxy
 from .resolver import Resolver
 from . import _state
 from .utils import _provider_from_class, _provider_from_callable
+from .config import is_config_component, build_component_instance, ConfigRegistry
 
 
 def scan_and_configure(
@@ -150,7 +151,15 @@ def _register_component_classes(
         key = getattr(cls, COMPONENT_KEY, cls)
         is_lazy = bool(getattr(cls, COMPONENT_LAZY, False))
         tags = tuple(getattr(cls, COMPONENT_TAGS, ()))
-        provider = _provider_from_class(cls, resolver=resolver, lazy=is_lazy)
+        if is_config_component(cls):
+            registry: ConfigRegistry | None = getattr(container, "_config_registry", None)
+            def _prov(_c=cls, _reg=registry):
+                if _reg is None:
+                    raise RuntimeError(f"No config registry found to build {_c.__name__}")
+                return build_component_instance(_c, _reg)
+            provider = (lambda p=_prov: ComponentProxy(p)) if is_lazy else _prov
+        else:
+            provider = _provider_from_class(cls, resolver=resolver, lazy=is_lazy)
         container.bind(key, provider, lazy=is_lazy, tags=tags)
 
 

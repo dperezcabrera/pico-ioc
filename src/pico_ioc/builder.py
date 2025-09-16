@@ -14,7 +14,7 @@ from .plugins import PicoPlugin, run_plugin_hook
 from .scanner import scan_and_configure
 from .resolver import Resolver, _get_hints
 from . import _state
-
+from .config import ConfigRegistry
 
 class PicoContainerBuilder:
     """Configures and builds a PicoContainer. Does not touch global context."""
@@ -30,8 +30,13 @@ class PicoContainerBuilder:
         self._providers: Dict[Any, Dict] = {}
         self._interceptor_decls: List[Tuple[Any, dict]] = []
         self._eager: bool = True
+        self._config_registry: ConfigRegistry | None = None
 
     # -------- fluent config --------
+
+    def with_config(self, registry: ConfigRegistry) -> "PicoContainerBuilder":
+        self._config_registry = registry
+        return self
 
     def with_plugins(self, plugins: Tuple[PicoPlugin, ...]) -> "PicoContainerBuilder":
         self._plugins = plugins or ()
@@ -70,7 +75,8 @@ class PicoContainerBuilder:
 
         container = PicoContainer(providers=self._providers)
         container._active_profiles = tuple(requested_profiles)
-
+        setattr(container, "_config_registry", self._config_registry)
+        
         for pkg, exclude, scan_plugins in self._scan_plan:
             with _state.scanning_flag():
                 c, f, decls = scan_and_configure(pkg, container, exclude=exclude, plugins=scan_plugins)
