@@ -131,6 +131,17 @@ A true "last-wins" only occurs when binding the *exact same key* multiple times,
 
 ---
 
+### 15) Configuration Injection
+**Decision**: Provide `@config_component` for strongly typed configuration classes, populated from ordered `ConfigSource`s (`EnvSource`, `FileSource`, etc.).  
+**Rationale**: Type-safe configuration with minimal boilerplate, supporting both automatic autowiring by field name and manual overrides (`Env`, `File`, `Path`, `Value`).  
+**Implications**:
+- Precedence is explicit: `overrides` > sources (in order) > field defaults.
+- Missing required fields (no default and not resolvable) raise `NameError`.
+- Supported formats: env vars, JSON, INI, dotenv, YAML (if available).
+- Encourages using `dataclass(frozen=True)` for immutable, validated settings.
+
+---
+
 ## ❌ Won’t-Do Decisions
 
 ### A) Alternative scopes (request/session)
