@@ -116,9 +116,12 @@ if __name__ == "__main__":
 
 -----
 
-## 4\) Configuration patterns
+## 4) Configuration patterns
 
-**Env-backed config:**
+You can either hardcode config with `os.getenv` **or** use the new
+**configuration injection system** for type-safe settings.
+
+### 4.1 Env-backed config (manual)
 
 ```python
 import os
@@ -130,15 +133,42 @@ class Config:
     DEBUG: bool = os.getenv("DEBUG", "0") == "1"
 ```
 
+### 4.2 Config injection (recommended)
+
+```python
+from dataclasses import dataclass
+from pico_ioc import config_component
+from pico_ioc.config import EnvSource, FileSource
+
+@config_component(prefix="APP_")
+@dataclass(frozen=True)
+class Settings:
+    db_url: str
+    timeout: int = 10
+    debug: bool = False
+
+# main.py
+from pico_ioc import init
+container = init(
+    __name__,
+    config=(EnvSource(prefix="APP_"), FileSource("config.json")),
+)
+settings = container.get(Settings)
+```
+
+* Supports **Env**, **File** (YAML/JSON/INI/dotenv), dotted `Path.file[...]`,
+  and per-field overrides.
+* Precedence: `overrides` > sources (in order) > class defaults.
+* Missing required fields raise `NameError`.
+
 **Inject into consumers:**
 
 ```python
 @component
 class Runner:
-    def __init__(self, cfg: Config):
-        self._debug = cfg.DEBUG
+    def __init__(self, s: Settings):
+        self._debug = s.debug
 ```
-
 -----
 
 ## 5\) Testing & overrides

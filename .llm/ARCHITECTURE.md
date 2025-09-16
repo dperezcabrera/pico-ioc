@@ -5,7 +5,7 @@
 >
 > ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` with `include_extras=True`).
 
------
+---
 
 ## 1\) Design goals & non-goals
 
@@ -23,11 +23,12 @@
   - Hot reload or runtime graph mutation beyond explicit overrides.
   - Magical filesystem-wide auto-imports.
 
------
+---
 
 ## 2\) High-level model
 
   - **Component** → class marked with `@component`. Instantiated by the container.
+  - **Config Component** → class marked with `@config_component`. Instantiated and populated from external sources like files or environment variables.
   - **Factory component** → class marked with `@factory_component`; owns provider methods via `@provides(key=TypeOrToken)`. Providers return *externals* (e.g., `Flask`, DB clients).
   - **Interceptor** → class or function marked with `@interceptor`. Discovered automatically to apply cross-cutting logic.
   - **Container** → built by `pico_ioc.init(mod_or_list, ...)`; resolve with `container.get(KeyOrType)`.
@@ -38,8 +39,9 @@
 sequenceDiagram
     participant App as Your package(s)
     participant IOC as pico-ioc Container
-    App->>IOC: init(packages, ...)
-    IOC->>App: scan decorators (@component, @factory_component, @interceptor)
+    App->>IOC: init(packages, config, ...)
+    IOC->>IOC: Create ConfigRegistry from sources
+    IOC->>App: scan decorators (@component, @config_component, @interceptor)
     IOC->>IOC: register providers and collect interceptor declarations
     IOC->>IOC: build and activate interceptors
     IOC->>IOC: apply policy (e.g., @primary, @on_missing aliases)
@@ -50,13 +52,14 @@ sequenceDiagram
     IOC-->>App: instance(Service)
 ```
 
------
+---
 
 ## 3\) Discovery & registration
 
 1.  **Scan inputs** passed to `init(...)`: module or list of modules/packages.
 2.  **Collect**:
       * `@component` classes → registered by a **key** (defaults to the class type).
+      * `@config_component` classes → registered as special components whose instances are built from external configuration sources.
       * `@factory_component` classes → introspected for `@provides(key=...)` methods.
       * `@interceptor` classes/functions → collected for activation.
       * `@plugin` classes → if explicitly passed via `init(..., plugins=(...))`.
@@ -65,7 +68,7 @@ sequenceDiagram
 
 **Precedence:** If multiple providers are active for the same key (e.g., one with `@primary`, another regular), a deterministic policy is applied to choose the winner. Direct overrides are applied last, having the final say.
 
------
+---
 
 ## 4\) Resolution algorithm (deterministic)
 
@@ -94,7 +97,7 @@ If the constructor requests `list[T]` or `list[Annotated[T, Q]]`:
   * Registration order is preserved; no implicit sorting.
   * Returns an empty list if no matches.
 
------
+---
 
 ## 5\) Lifecycles & scopes
 
@@ -103,7 +106,7 @@ If the constructor requests `list[T]` or `list[Annotated[T, Q]]`:
 
 **Rationale:** Most Python app composition (config, clients, web apps) fits singleton-per-container; it’s simple and fast.
 
------
+---
 
 ## 6\) Factories & providers
 
@@ -127,7 +130,7 @@ Guidelines:
   * Providers should be **pure constructors** (no long-running work).
   * Prefer **typed keys** (e.g., `Flask`) over strings.
 
------
+---
 
 ## 7\) Concurrency model
 
@@ -135,7 +138,7 @@ Guidelines:
   * Caches & resolution are **thread/async safe** (internal isolation; no global singletons).
   * Instances you create **must** be safe for your usage patterns; the container cannot fix non-thread-safe libraries.
 
------
+---
 
 ## 8\) Error handling & diagnostics
 
@@ -147,22 +150,60 @@ Guidelines:
 
 **Tip:** Keep constructors **cheap**; push I/O to explicit start/serve methods.
 
------
+---
 
 ## 9\) Configuration
 
-Treat config as a **component**:
+Configuration is treated as a first-class, type-safe component using a dedicated injection system.
 
-```python
-@component
-class Config:
-    WORKERS: int = int(os.getenv("WORKERS", "4"))
-    DEBUG: bool = os.getenv("DEBUG", "0") == "1"
-```
+1.  **Define a Config Class**: Create a class (preferably a `dataclass`) and mark it with `@config_component`. An optional `prefix` can be used for environment variables.
 
-Inject `Config` where needed; avoid scattered `os.getenv` calls.
+    ```python
+    from pico_ioc import config_component
+    from dataclasses import dataclass
 
------
+    @config_component(prefix="APP_")
+    @dataclass(frozen=True)
+    class Settings:
+        db_url: str
+        timeout: int = 30
+    ```
+
+2.  **Provide Sources**: At bootstrap, pass an ordered tuple of `ConfigSource` objects to the `config` parameter of `init()`. The order defines precedence (first source wins).
+
+    ```python
+    from pico_ioc import init
+    from pico_ioc.config import EnvSource, FileSource
+
+    container = init(
+        "my_app",
+        config=(
+            EnvSource(prefix="APP_"), # Highest priority
+            FileSource("config.prod.yml", optional=True),
+            FileSource("config.yml"), # Lowest priority
+        ),
+    )
+    ```
+
+3.  **Inject and Use**: Inject the config class into other components just like any other dependency.
+
+    ```python
+    from pico_ioc import component
+
+    @component
+    class Database:
+        def __init__(self, settings: Settings):
+            self.connection = connect(settings.db_url)
+    ```
+
+### Resolution Logic
+
+  - **Automatic Binding**: By default, `pico-ioc` binds fields automatically. For a field like `db_url`, it checks for keys like `APP_DB_URL` (in `EnvSource`), `DB_URL`, or `db_url` (in `FileSource`).
+  - **Manual Overrides**: For more complex cases where keys don't align, you can use field-level helpers like `Env["CUSTOM_VAR"]`, `File["key.in.file"]`, or `Path.file["nested.key"]` to specify the exact key to use.
+
+This system ensures that configuration is **type-safe**, **externalized**, and **testable**, while remaining simple for the common cases.
+
+---
 
 ## 10\) Overrides & composition
 
@@ -176,9 +217,9 @@ The policy engine respects definition order. While not a strict "last-wins", pro
 
 ```python
 c = init(app, overrides={
-    Repo: FakeRepo(),                         # constant instance
-    "fast_model": lambda: {"mock": True},     # provider
-    "expensive": (lambda: object(), True),    # provider with lazy=True
+    Repo: FakeRepo(),                      # constant instance
+    "fast_model": lambda: {"mock": True},  # provider
+    "expensive": (lambda: object(), True), # provider with lazy=True
 })
 ```
 
@@ -191,7 +232,7 @@ c = init(app, overrides={
       * `key: (callable, lazy_bool)`
   * With `reuse=True`, re-calling `init(..., overrides=...)` applies new overrides to the cached container.
 
------
+---
 
 ## 11\) Interceptors (AOP & Lifecycle Hooks)
 
@@ -229,7 +270,7 @@ These implement the `ContainerInterceptor` protocol and hook into the container'
 
 **Registration:** Interceptors are discovered by the scanner during `init()` or `scope()`. There is no need to pass them manually. Their activation can be controlled with the same `@conditional` decorator and gates (`profiles`, `require_env`) used for other components.
 
------
+---
 
 ## 12\) Profiles & conditional providers
 
@@ -260,7 +301,7 @@ class InMemoryCache(Cache): ...
   * `predicate=callable` → must return a truthy value to activate.
   * If no active provider satisfies a required type and something depends on it → **bootstrap error** (fail fast).
 
------
+---
 
 ## 13\) Qualifiers & collection injection
 
@@ -271,7 +312,7 @@ Attach qualifiers to group/select implementations using `@qualifier`.
 
 This preserves registration order and returns a stable list.
 
------
+---
 
 ## 14\) Plugins
 
@@ -285,7 +326,7 @@ This preserves registration order and returns a stable list.
 
 Plugins are passed **explicitly** via `init(..., plugins=(MyPlugin(),))`. Prefer **interceptors** for fine-grained wiring events; use **plugins** for coarse lifecycle integration.
 
------
+---
 
 ## 15\) Scoped subgraphs (`scope`)
 
@@ -320,7 +361,7 @@ Providers may carry `tags` (via `@component(tags=...)` or `@provides(..., tags=.
 
 **Use cases:** fast unit tests, integration-lite, CLI tools, microbenchmarks.
 
------
+---
 
 ## 16\) Diagnostics & diagrams
 
@@ -371,7 +412,7 @@ flowchart TD
     G --> Z
 ```
 
------
+---
 
 ## 17\) Rationale & trade-offs
 
@@ -381,7 +422,7 @@ flowchart TD
   * **Fail fast**: configuration and graph issues surface at startup, not mid-request.
   * **Interceptors over AOP**: precise, opt-in hooks without full-blown aspect weavers.
 
------
+---
 
 **TL;DR**
-`pico-ioc` builds a **deterministic, typed dependency graph** from decorated components, factories, and interceptors. It resolves by **type** (with qualifiers and collections), memoizes **singletons**, supports **overrides**, **plugins**, **conditionals/profiles**, and **scoped subgraphs**—keeping wiring **predictable, testable, and framework-agnostic**.
+`pico-ioc` builds a **deterministic, typed dependency graph** from decorated components, factories, and interceptors. It resolves by **type** (with qualifiers and collections), memoizes **singletons**, supports **type-safe configuration injection**, **overrides**, **plugins**, **conditionals/profiles**, and **scoped subgraphs**—keeping wiring **predictable, testable, and framework-agnostic**.
