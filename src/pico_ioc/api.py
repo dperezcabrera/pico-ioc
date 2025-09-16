@@ -1,10 +1,8 @@
-# src/pico_ioc/api.py
 from __future__ import annotations
 
 import inspect as _inspect
 import importlib
 import logging
-import os
 from types import ModuleType
 from typing import Callable, Optional, Tuple, Any, Dict, Iterable, Sequence
 
@@ -12,12 +10,11 @@ from .container import PicoContainer
 from .plugins import PicoPlugin
 from . import _state
 from .builder import PicoContainerBuilder
+from .scope import ScopedContainer
 
-# The only helpers left are those directly related to the public API signature or fingerprinting
+
 def reset() -> None:
-    _state._container = None
-    _state._root_name = None
-    _state.set_fingerprint(None)
+    _state.set_context(None)
 
 def _combine_excludes(a: Optional[Callable[[str], bool]], b: Optional[Callable[[str], bool]]):
     if not a and not b: return None
@@ -89,8 +86,9 @@ def _make_fingerprint_from_signature(locals_in_init: dict) -> tuple:
 
 # -------- container reuse and caller exclusion helpers --------
 def _maybe_reuse_existing(fp: tuple, overrides: Optional[Dict[Any, Any]]) -> Optional[PicoContainer]:
-    if _state.get_fingerprint() == fp:
-        return _state._container
+    ctx = _state.get_context()
+    if ctx and ctx.fingerprint == fp:
+        return ctx.container
     return None
 
 def _build_exclude(
@@ -151,9 +149,9 @@ def init(
 
     container = builder.build()
 
-    _state._container = container
-    _state._root_name = root_name
-    _state.set_fingerprint(fp)
+    # Activate new context atomically
+    new_ctx = _state.ContainerContext(container=container, fingerprint=fp, root_name=root_name)
+    _state.set_context(new_ctx)
     return container
 
 def scope(
@@ -178,9 +176,9 @@ def scope(
     for m in modules:
         builder.add_scan_package(m)
 
-    built_container = builder.build()
+    built_container = builder.with_eager(not lazy).build()
 
-    scoped_container = _ScopedContainer(base=base, strict=strict, built_container=built_container)
+    scoped_container = ScopedContainer(base=base, strict=strict, built_container=built_container)
 
     if not lazy:
         from .proxy import ComponentProxy
@@ -195,46 +193,9 @@ def scope(
     logging.info("Scope container ready.")
     return scoped_container
 
-class _ScopedContainer(PicoContainer):
-    def __init__(self, built_container: PicoContainer, base: Optional[PicoContainer], strict: bool):
-        super().__init__(providers=getattr(built_container, "_providers", {}).copy())
-        
-        self._active_profiles = getattr(built_container, "_active_profiles", ())
-        
-        base_method_its = getattr(base, "_method_interceptors", ()) if base else ()
-        base_container_its = getattr(base, "_container_interceptors", ()) if base else ()
-        
-        self._method_interceptors = base_method_its
-        self._container_interceptors = base_container_its
-        self._seen_interceptor_types = {type(it) for it in (base_method_its + base_container_its)}
 
-        for it in getattr(built_container, "_method_interceptors", ()):
-            self.add_method_interceptor(it)
-        for it in getattr(built_container, "_container_interceptors", ()):
-            self.add_container_interceptor(it)
-
-        self._base = base
-        self._strict = strict
-
-        if base:
-            self._singletons.update(getattr(base, "_singletons", {}))
-
-    def __enter__(self): return self
-    def __exit__(self, exc_type, exc, tb): return False
-
-    def has(self, key: Any) -> bool:
-        if super().has(key): return True
-        if not self._strict and self._base is not None:
-            return self._base.has(key)
-        return False
-
-    def get(self, key: Any):
-        try:
-            return super().get(key)
-        except NameError as e:
-            if not self._strict and self._base is not None and self._base.has(key):
-                return self._base.get(key)
-            raise e
 
 def container_fingerprint() -> Optional[tuple]:
-    return _state.get_fingerprint()
+    ctx = _state.get_context()
+    return ctx.fingerprint if ctx else None
+
