@@ -1,4 +1,3 @@
-# src/pico_ioc/container.py
 from __future__ import annotations
 
 import inspect
@@ -6,10 +5,9 @@ from typing import Any, Dict, get_origin, get_args, Annotated
 import typing as _t
 
 from .proxy import IoCProxy
-from .interceptors import MethodInterceptor, ContainerInterceptor
+from .interceptors import MethodInterceptor, ContainerInterceptor, MethodCtx, ResolveCtx, CreateCtx, run_resolve_chain, run_create_chain
 from .decorators import QUALIFIERS_KEY
 from . import _state
-
 
 class Binder:
     def __init__(self, container: PicoContainer):
@@ -24,7 +22,6 @@ class Binder:
     def get(self, key: Any):
         return self._c.get(key)
 
-
 class PicoContainer:
     def __init__(self, providers: Dict[Any, Dict[str, Any]] | None = None):
         self._providers = providers or {}
@@ -33,14 +30,9 @@ class PicoContainer:
         self._container_interceptors: tuple[ContainerInterceptor, ...] = ()
         self._active_profiles: tuple[str, ...] = ()
         self._seen_interceptor_types: set[type] = set()
-
-    # --- interceptors ---
+        self._method_cap: int | None = None
 
     def add_method_interceptor(self, it: MethodInterceptor) -> None:
-        t = type(it)
-        if t in self._seen_interceptor_types:
-            return
-        self._seen_interceptor_types.add(t)
         self._method_interceptors = self._method_interceptors + (it,)
 
     def add_container_interceptor(self, it: ContainerInterceptor) -> None:
@@ -50,7 +42,8 @@ class PicoContainer:
         self._seen_interceptor_types.add(t)
         self._container_interceptors = self._container_interceptors + (it,)
 
-    # --- binding ---
+    def set_method_cap(self, n: int | None) -> None:
+        self._method_cap = (int(n) if n is not None else None)
 
     def binder(self) -> Binder:
         return Binder(self)
@@ -66,64 +59,43 @@ class PicoContainer:
         meta["tags"] = tuple(tags) if tags else ()
         self._providers[key] = meta
 
-    # --- resolution ---
-
     def has(self, key: Any) -> bool:
         return key in self._providers
+
+    def _notify_resolve(self, key: Any, ann: Any, quals: tuple[str, ...] | tuple()):
+        ctx = ResolveCtx(key=key, qualifiers={q: True for q in quals or ()}, requested_by=None, profiles=self._active_profiles)
+        run_resolve_chain(self._container_interceptors, ctx)
 
     def get(self, key: Any):
         if _state._scanning.get() and not _state._resolving.get():
             raise RuntimeError("re-entrant container access during scan")
-
         prov = self._providers.get(key)
         if prov is None:
             raise NameError(f"No provider found for key {key!r}")
-
         if key in self._singletons:
             return self._singletons[key]
-
-        for ci in self._container_interceptors:
-            try:
-                ci.on_before_create(key)
-            except Exception:
-                pass
-
+        def base_provider():
+            return prov["factory"]()
+        cls = key if isinstance(key, type) else None
+        ctx = CreateCtx(key=key, component=cls, provider=base_provider, profiles=self._active_profiles)
         tok = _state._resolving.set(True)
         try:
-            try:
-                instance = prov["factory"]()
-            except BaseException as exc:
-                for ci in self._container_interceptors:
-                    try:
-                        ci.on_exception(key, exc)
-                    except Exception:
-                        pass
-                raise
+            instance = run_create_chain(self._container_interceptors, ctx)
         finally:
             _state._resolving.reset(tok)
-
         if self._method_interceptors and not isinstance(instance, IoCProxy):
-            instance = IoCProxy(instance, self._method_interceptors)
-
-        for ci in self._container_interceptors:
-            try:
-                maybe = ci.on_after_create(key, instance)
-                if maybe is not None:
-                    instance = maybe
-            except Exception:
-                pass
-
+            chain = self._method_interceptors
+            cap = getattr(self, "_method_cap", None)
+            if isinstance(cap, int) and cap >= 0:
+                chain = chain[:cap]
+            instance = IoCProxy(instance, chain, container=self, request_key=key)
         self._singletons[key] = instance
         return instance
-
-    # --- lifecycle ---
 
     def eager_instantiate_all(self):
         for key, prov in list(self._providers.items()):
             if not prov["lazy"]:
                 self.get(key)
-
-    # --- helpers for multiples ---
 
     def get_all(self, base_type: Any):
         return tuple(self._resolve_all_for_base(base_type, qualifiers=()))
@@ -149,12 +121,8 @@ class PicoContainer:
     def get_providers(self) -> Dict[Any, Dict]:
         return self._providers.copy()
 
-
-# --- compatibility helpers ---
-
 def _is_protocol(t) -> bool:
     return getattr(t, "_is_protocol", False) is True
-
 
 def _is_compatible(cls, base) -> bool:
     try:
@@ -162,7 +130,6 @@ def _is_compatible(cls, base) -> bool:
             return True
     except TypeError:
         pass
-
     if _is_protocol(base):
         names = set(getattr(base, "__annotations__", {}).keys())
         names.update(n for n in getattr(base, "__dict__", {}).keys() if not n.startswith("_"))
@@ -172,22 +139,18 @@ def _is_compatible(cls, base) -> bool:
             if not hasattr(cls, n):
                 return False
         return True
-
     return False
-
 
 def _requires_collection_of_base(cls, base) -> bool:
     try:
         sig = inspect.signature(cls.__init__)
     except Exception:
         return False
-
     try:
         from .resolver import _get_hints
         hints = _get_hints(cls.__init__, owner_cls=cls)
     except Exception:
         hints = {}
-
     for name, param in sig.parameters.items():
         if name == "self":
             continue

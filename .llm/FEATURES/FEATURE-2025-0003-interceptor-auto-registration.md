@@ -1,9 +1,9 @@
 # FEATURE-2025-0002: Interceptor Auto-Registration and Conditional Providers
 
   - **Date:** 2025-09-14
-  - **Status:** Shipped
+  - **Status:** Removed
   - **Priority:** high
-  - **Related:** [ADR-0006: Declarative Cross-Cutting Concerns]
+  - **Related:** [ADR-0006: Declarative Cross-Cutting Concerns],[FEATURE-2025-0006]
 
 -----
 

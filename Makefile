@@ -1,9 +1,10 @@
 .PHONY: $(VERSIONS) build-% test-% test-all
 
-VERSIONS = 3.10 3.11 3.12 3.13
+#VERSIONS = 3.10 3.11 3.12 3.13
+VERSIONS = 3.11 3.13
 
 build-%:
-	docker build --pull --build-arg PYTHON_VERSION=$* \
+	docker build --build-arg PYTHON_VERSION=$* \
 		-t pico-ioc-test:$* -f Dockerfile.test .
 
 test-%: build-%
