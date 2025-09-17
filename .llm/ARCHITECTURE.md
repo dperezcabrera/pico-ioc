@@ -7,7 +7,7 @@
 
 ---
 
-## 1\) Design goals & non-goals
+## 1) Design goals & non-goals
 
 ### Goals
 
@@ -25,12 +25,12 @@
 
 ---
 
-## 2\) High-level model
+## 2) High-level model
 
   - **Component** → class marked with `@component`. Instantiated by the container.
   - **Config Component** → class marked with `@config_component`. Instantiated and populated from external sources like files or environment variables.
   - **Factory component** → class marked with `@factory_component`; owns provider methods via `@provides(key=TypeOrToken)`. Providers return *externals* (e.g., `Flask`, DB clients).
-  - **Interceptor** → class or function marked with `@interceptor`. Discovered automatically to apply cross-cutting logic.
+  - **Infrastructure** → class marked with `@infrastructure`. Discovered automatically to apply cross-cutting logic, such as registering interceptors.
   - **Container** → built by `pico_ioc.init(mod_or_list, ...)`; resolve with `container.get(KeyOrType)`.
 
 ### Bootstrap sequence
@@ -41,9 +41,9 @@ sequenceDiagram
     participant IOC as pico-ioc Container
     App->>IOC: init(packages, config, ...)
     IOC->>IOC: Create ConfigRegistry from sources
-    IOC->>App: scan decorators (@component, @config_component, @interceptor)
-    IOC->>IOC: register providers and collect interceptor declarations
-    IOC->>IOC: build and activate interceptors
+    IOC->>App: scan decorators (@component, @config_component, @infrastructure)
+    IOC->>IOC: register providers and collect infrastructure declarations
+    IOC->>IOC: build and activate infrastructure (which registers interceptors)
     IOC->>IOC: apply policy (e.g., @primary, @on_missing aliases)
     IOC->>IOC: apply overrides (replace providers/constants)
     IOC->>IOC: instantiate eager components
@@ -61,7 +61,7 @@ sequenceDiagram
       * `@component` classes → registered by a **key** (defaults to the class type).
       * `@config_component` classes → registered as special components whose instances are built from external configuration sources.
       * `@factory_component` classes → introspected for `@provides(key=...)` methods.
-      * `@interceptor` classes/functions → collected for activation.
+      * `@infrastructure` classes → collected for activation.
       * `@plugin` classes → if explicitly passed via `init(..., plugins=(...))`.
 3.  **Registry** (frozen after bootstrap):
       * Map **key → provider**. Keys are typically **types**; string tokens are also supported.
@@ -217,8 +217,8 @@ The policy engine respects definition order. While not a strict "last-wins", pro
 
 ```python
 c = init(app, overrides={
-    Repo: FakeRepo(),                      # constant instance
-    "fast_model": lambda: {"mock": True},  # provider
+    Repo: FakeRepo(),                  # constant instance
+    "fast_model": lambda: {"mock": True}, # provider
     "expensive": (lambda: object(), True), # provider with lazy=True
 })
 ```
@@ -230,31 +230,44 @@ c = init(app, overrides={
       * `key: instance`
       * `key: callable`
       * `key: (callable, lazy_bool)`
-  * With `reuse=True`, re-calling `init(..., overrides=...)` applies new overrides to the cached container.
+  * With `reuse=True`, re-calling `init()` with different `overrides` will create a new container, not mutate a cached one, as the configuration fingerprint changes.
 
 ---
 
 ## 11\) Interceptors (AOP & Lifecycle Hooks)
 
-Interceptors are components that apply cross-cutting logic like logging, metrics, or policy enforcement. They are discovered automatically via the `@interceptor` decorator.
+Interceptors apply cross-cutting logic like logging, metrics, or policy enforcement. They are **not discovered automatically**. Instead, they must be registered by an `@infrastructure` component during the container's bootstrap phase.
 
-`pico-ioc` supports two kinds of interceptors:
+This is a two-step process:
+
+1.  **Define the Interceptor**: Create a class that implements the `MethodInterceptor` or `ContainerInterceptor` protocol.
+2.  **Register it via an Infrastructure Component**: Create a class decorated with `@infrastructure` and use the `infra.intercept.add()` method inside its `configure` function to activate the interceptor and define which components it applies to.
 
 ### Method Interceptors
 
 These implement the `MethodInterceptor` protocol and wrap method calls on any component, enabling Aspect-Oriented Programming (AOP). They are ideal for tracing, timing, caching, or feature toggles.
 
 ```python
-from pico_ioc import interceptor
-from pico_ioc.interceptors import MethodInterceptor, Invocation
+from pico_ioc import infrastructure
+from pico_ioc.infra import Infra, Select
+from pico_ioc.interceptors import MethodInterceptor, MethodCtx
 
-@interceptor(order=-10) # lower order runs first
+# 1. Define the Interceptor
 class LoggingInterceptor(MethodInterceptor):
-    def __call__(self, inv: Invocation, proceed):
-        print(f"Calling {inv.method_name}...")
-        result = proceed()
-        print(f"Finished {inv.method_name}.")
+    def invoke(self, ctx: MethodCtx, call_next):
+        print(f"Calling {ctx.name}...")
+        result = call_next(ctx)
+        print(f"Finished {ctx.name}.")
         return result
+
+# 2. Register it
+@infrastructure
+class MyInfra:
+    def configure(self, infra: Infra):
+        infra.intercept.add(
+            interceptor=LoggingInterceptor(),
+            where=Select().class_name(".*") # Apply to all components
+        )
 ```
 
 ### Container Interceptors
@@ -263,12 +276,8 @@ These implement the `ContainerInterceptor` protocol and hook into the container'
 
 **Hook points**:
 
-  * `on_resolve(key, annotation, qualifiers)`
-  * `on_before_create(key)`
-  * `on_after_create(key, instance)` → may return a **wrapped/replaced** instance.
-  * `on_exception(key, exc)`
-
-**Registration:** Interceptors are discovered by the scanner during `init()` or `scope()`. There is no need to pass them manually. Their activation can be controlled with the same `@conditional` decorator and gates (`profiles`, `require_env`) used for other components.
+  * `around_resolve(self, ctx: ResolveCtx, call_next)`: Wraps the dependency resolution process for a specific key.
+  * `around_create(self, ctx: CreateCtx, call_next)`: Wraps the instantiation of a component. It can modify the provider or even return a completely different instance.
 
 ---
 
@@ -324,7 +333,7 @@ This preserves registration order and returns a stable list.
   * `before_eager(container, binder)`
   * `after_ready(container, binder)`
 
-Plugins are passed **explicitly** via `init(..., plugins=(MyPlugin(),))`. Prefer **interceptors** for fine-grained wiring events; use **plugins** for coarse lifecycle integration.
+Plugins are passed **explicitly** via `init(..., plugins=(MyPlugin(),))`. Prefer **infrastructure** for fine-grained wiring events; use **plugins** for coarse lifecycle integration.
 
 ---
 
@@ -384,13 +393,11 @@ classDiagram
       + qualifiers: tuple
     }
     class MethodInterceptor {
-      +__call__(inv, proceed)
+      +invoke(ctx, call_next)
     }
     class ContainerInterceptor {
-      +on_resolve()
-      +on_before_create()
-      +on_after_create()
-      +on_exception()
+      +around_resolve(ctx, call_next)
+      +around_create(ctx, call_next)
     }
     PicoContainer "1" o-- "*" MethodInterceptor
     PicoContainer "1" o-- "*" ContainerInterceptor
@@ -403,11 +410,11 @@ flowchart TD
     A[get(Type T)] --> B{Cached?}
     B -- yes --> Z[Return cached instance]
     B -- no --> D[Resolve dependencies for T (recurse)]
-    D --> I_BEFORE[ContainerInterceptors: on_before_create]
+    D --> I_BEFORE[ContainerInterceptors: around_create]
     I_BEFORE --> F[Instantiate T]
-    F -- exception --> I_EXC[ContainerInterceptors: on_exception]
+    F -- exception --> I_EXC[Error bubbles up]
     F -- success --> H[Wrap with MethodInterceptors if needed]
-    H --> I_AFTER[ContainerInterceptors: on_after_create]
+    H --> I_AFTER[around_create returns instance]
     I_AFTER --> G[Cache instance]
     G --> Z
 ```
@@ -420,9 +427,11 @@ flowchart TD
   * **Singleton-per-container**: matches typical Python app composition; simpler mental model.
   * **Explicit decorators**: determinism and debuggability over magical auto-wiring.
   * **Fail fast**: configuration and graph issues surface at startup, not mid-request.
-  * **Interceptors over AOP**: precise, opt-in hooks without full-blown aspect weavers.
+  * **Interceptors via Infrastructure**: precise, opt-in hooks without the complexity of auto-discovery.
 
 ---
 
 **TL;DR**
-`pico-ioc` builds a **deterministic, typed dependency graph** from decorated components, factories, and interceptors. It resolves by **type** (with qualifiers and collections), memoizes **singletons**, supports **type-safe configuration injection**, **overrides**, **plugins**, **conditionals/profiles**, and **scoped subgraphs**—keeping wiring **predictable, testable, and framework-agnostic**.
+`pico-ioc` builds a **deterministic, typed dependency graph** from decorated components, factories, and infrastructure. It resolves by **type** (with qualifiers and collections), memoizes **singletons**, supports **type-safe configuration injection**, **overrides**, **plugins**, **conditionals/profiles**, and **scoped subgraphs**—keeping wiring **predictable, testable, and framework-agnostic**.
+
+

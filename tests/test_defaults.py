@@ -1,10 +1,11 @@
-# tests/test_defaults_and_overrides.py
+# tests/test_defaults.py
 from types import ModuleType
 import pytest
 
 from pico_ioc import init, component, on_missing, primary
 
 # --- Test Components ---
+
 class Logger:
     def log(self, message: str): ...
 
@@ -30,16 +31,15 @@ class FileLogger(Logger):
         self.last_message = message
 
 # --- Tests ---
+
 def test_init_uses_default_provider_when_no_override_is_present(capsys):
-    # This test proves `apply_defaults` is necessary.
-    # The scanner will only register `ConsoleLogger`, not its base `Logger`.
-    # `apply_defaults` must run to create the alias for `Logger`.
-    library_module = ModuleType("library_module")
-    library_module.__dict__.update({
+    library_components = {
         "Logger": Logger,
         "ConsoleLogger": ConsoleLogger,
         "LibraryService": LibraryService,
-    })
+    }
+    library_module = ModuleType("library_module")
+    library_module.__dict__.update(library_components)
 
     container = init(root_package=library_module)
     service = container.get(LibraryService)
@@ -51,16 +51,14 @@ def test_init_uses_default_provider_when_no_override_is_present(capsys):
 
 
 def test_init_uses_primary_provider_when_override_is_present():
-    # This test proves that `@primary` components take precedence.
-    # The scanner will register `FileLogger` and also alias it to `Logger`
-    # because it is primary. `apply_defaults` will then do nothing.
-    combined_module = ModuleType("combined_module")
-    combined_module.__dict__.update({
+    combined_components = {
         "Logger": Logger,
         "ConsoleLogger": ConsoleLogger,
         "FileLogger": FileLogger,
         "LibraryService": LibraryService,
-    })
+    }
+    combined_module = ModuleType("combined_module")
+    combined_module.__dict__.update(combined_components)
     
     container = init(root_package=combined_module)
     service = container.get(LibraryService)

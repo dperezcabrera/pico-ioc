@@ -20,7 +20,7 @@ pico-ioc is a **minimal Inversion of Control (IoC) and Dependency Injection (DI)
   - **Scoped subgraphs** → load only what you need with `scope(...)`.
   - **Overrides** → replace providers directly in `init(overrides={...})`.
   - **Qualifiers & collections** → tag/group implementations; inject `list[Annotated[T, Q]]`.
-  - **Interceptors API** → observe/modify resolution, instantiation, invocation, errors.
+  - **Infrastructure & Interceptors** → Extend the container with custom logic for logging, metrics, or AOP via `@infrastructure` components.
   - **Conditional providers** → enable components by env vars or predicates (profiles).
   - **Plugins** → lifecycle hooks (`before_scan`, `after_ready`).
   - **Thread/async safe** → isolation via `ContextVar`.
@@ -68,7 +68,7 @@ print(svc.run())
 fetching from sqlite:///demo.db
 ```
 
----
+-----
 
 ## 🚀 Why pico-ioc?
 
@@ -77,10 +77,10 @@ fetching from sqlite:///demo.db
   * **Test-friendly** — overrides & scoped subgraphs make mocking trivial.
   * **Externalized Configuration** — Manage settings for different environments without code changes.
   * **Universal** — works with Flask, FastAPI, CLIs, or scripts.
-  * **Extensible** — logging, metrics, tracing via interceptors or plugins.
+  * **Extensible** — logging, metrics, tracing via infrastructure and interceptors.
   * **Profiles** — conditionals let you switch implementations by env/config.
 
----
+-----
 
 ## 🧪 Testing patterns
 
@@ -115,7 +115,7 @@ c = scope(
 svc = c.get(RunnerService)
 ```
 
----
+-----
 
 ## 📦 Public API Helper
 
@@ -139,7 +139,7 @@ So you can import cleanly:
 from app import Service, Config, TracingPlugin
 ```
 
----
+-----
 
 ## 📖 Documentation
 
@@ -150,8 +150,8 @@ from app import Service, Config, TracingPlugin
   * **⚙️ Feature & Pattern Guides**
 
       * [**Guide: Configuration Injection**](GUIDE-CONFIGURATION-INJECTION.md) — A deep dive into the type-safe configuration system.
-      * [**Guide: Creating Plugins and Interceptors**](GUIDE_CREATING_PLUGINS_AND_INTERCEPTORS.md) — Learn how to extend pico-ioc with custom logic.
-      * [**Pattern: Implementing a CQRS Command Bus**](GUIDE_CQRS.md) — An example of building clean architectures with pico-ioc.
+      * [**Guide: Creating Plugins and Interceptors**](GUIDE-CREATING-PLUGINS-AND-INTERCEPTORS.md) — Learn how to extend pico-ioc with custom logic.
+      * [**Pattern: Implementing a CQRS Command Bus**](GUIDE-CQRS.md) — An example of building clean architectures with pico-ioc.
 
   * **🏗️ Want to understand the internals? See the Architecture.**
 
@@ -164,4 +164,4 @@ from app import Service, Config, TracingPlugin
   * [Readme](../README.md) — readme.md file.
 
   * [Changelog](../CHANGELOG.md) — release history.
-  
+

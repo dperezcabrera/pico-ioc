@@ -129,7 +129,6 @@ def _get_caller_module_name() -> Optional[str]:
         pass
     return None
 
-# ---------------- public API ----------------
 def init(
     root_package, *, profiles: Optional[list[str]] = None, exclude: Optional[Callable[[str], bool]] = None,
     auto_exclude_caller: bool = True, plugins: Tuple[PicoPlugin, ...] = (), reuse: bool = True,
@@ -137,6 +136,8 @@ def init(
     auto_scan_exclude: Optional[Callable[[str], bool]] = None, strict_autoscan: bool = False,
     config: Sequence[ConfigSource] = (),
 ) -> PicoContainer:
+    if _state._scanning.get():
+        logging.info("re-entrant container access during scan")
     root_name = root_package if isinstance(root_package, str) else getattr(root_package, "__name__", None)
     fp = _make_fingerprint_from_signature(locals())
 
@@ -169,10 +170,10 @@ def init(
 
     container = builder.build()
 
-    # Activate new context atomically
     new_ctx = _state.ContainerContext(container=container, fingerprint=fp, root_name=root_name)
     _state.set_context(new_ctx)
     return container
+
 
 def scope(
     *, modules: Iterable[Any] = (), roots: Iterable[type] = (), profiles: Optional[list[str]] = None,
