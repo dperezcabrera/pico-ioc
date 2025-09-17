@@ -181,7 +181,17 @@ tox
 See [OVERVIEW.md](.llm/OVERVIEW.md) Just need a quick summary?
 
 ---
+---
 
+## 🔔 Important Changes
+
+### vNEXT (2025-09-17)
+- Introduced **`@infrastructure`** classes for bootstrap-time configuration.  
+  → They can query the model, add interceptors, wrap/replace providers, and adjust tags/qualifiers.  
+- Added new **around-style interceptors** (`MethodInterceptor.invoke`, `ContainerInterceptor.around_*`) with deterministic ordering.  
+- **Removed legacy `@interceptor` API** (before/after/error style). All interceptors must be migrated to the new contracts.  
+
+---
 ## 📜 Changelog
 
 See [CHANGELOG.md](./CHANGELOG.md) for version history.

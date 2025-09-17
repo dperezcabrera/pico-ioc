@@ -106,6 +106,35 @@ These were evaluated and **rejected** to keep pico-ioc simple, deterministic, an
 
 ---
 
+## [1.5.0] — 2025-09-17
+
+### 🚨 Breaking
+- **Removed legacy `@interceptor` API**  
+  The old `before/after/error` style is no longer supported.  
+  → Interceptors must be migrated to the new `MethodInterceptor.invoke` / `ContainerInterceptor.around_*` contracts.  
+
+### ✨ New
+- **`@infrastructure` decorator**
+  - Enables bootstrap-time configuration via dedicated infrastructure classes.
+  - Provides a safe façade (`infra.query`, `infra.intercept`, `infra.mutate`) to explore and mutate the model.
+  - Deterministic ordering (`order=`) for infrastructure execution.
+- **Around-style interceptors**
+  - `MethodInterceptor.invoke(ctx, call_next)` for sync/async method interception.
+  - `ContainerInterceptor.around_resolve` and `around_create` for lifecycle interception.
+  - Enforced guardrails: must call `call_next` at most once; default cap of 16 interceptors per method.
+
+### 🧪 Testing
+- Added unit tests for `Select` DSL (tag/profile/class/method filters).
+- Integration tests for interceptor chain order (sync + async).
+- Negative tests for empty `where` and cap-exceeded cases.
+
+### 📚 Docs
+- Updated **GUIDE.md** and added **GUIDE-INFRASTRUCTURE.md** with migration examples.  
+- Updated **DECISIONS.md** to record the removal of legacy interceptor support.  
+- Release notes include a migration guide for existing interceptor users.
+
+---
+
 ## [Unreleased]
 - Upcoming improvements and fixes will be listed here.
 

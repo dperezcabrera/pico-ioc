@@ -72,7 +72,7 @@ Each entry includes a rationale and implications. If a decision is later changed
   - `key: instance` (constant)  
   - `key: callable` (provider, non-lazy)  
   - `key: (callable, lazy_bool)` (provider with explicit laziness)  
-- With `reuse=True`, subsequent `init(..., overrides=...)` mutates cached bindings.
+- If `reuse=True`, calling `init()` with different `overrides` will generate a new fingerprint and build a new container, not mutate the cached one.
 
 ---
 
@@ -87,20 +87,17 @@ Each entry includes a rationale and implications. If a decision is later changed
 
 ---
 
-### 11) **Interceptors API** (AOP & Lifecycle Hooks)
-**Decision**: Introduce two types of interceptors, auto-discovered via `@interceptor`, to observe or modify container and component behavior.
+### 11) **Infrastructure-based Interceptor API**
+**Decision**: Provide an extension mechanism for AOP and lifecycle hooks through **manually registered interceptors**. Instead of auto-discovery, interceptors are activated within `@infrastructure` components, giving developers explicit control over their application and order.
 **Kinds & Hooks**:
-- **`MethodInterceptor`**: Implements `__call__(self, inv: Invocation, proceed)`. Wraps method calls on components for Aspect-Oriented Programming (AOP) use cases like logging, tracing, or caching.
+- **`MethodInterceptor`**: Implements `invoke(self, ctx: MethodCtx, call_next)`. Wraps method calls on components for Aspect-Oriented Programming (AOP).
 - **`ContainerInterceptor`**: Implements container lifecycle hooks:
-    - `on_resolve(key, annotation, qualifiers)`
-    - `on_before_create(key)`
-    - `on_after_create(key, instance)` (may wrap/replace the instance)
-    - `on_exception(key, exc)`
-**Rationale**: Provides structured extension points for both cross-cutting concerns (AOP) and container lifecycle events without the complexity of full aspect weavers.
+    - `around_resolve(self, ctx: ResolveCtx, call_next)`
+    - `around_create(self, ctx: CreateCtx, call_next)`
+**Rationale**: This approach is more explicit and predictable than magic auto-discovery. It makes the wiring process easier to debug and ensures that the order of interceptors is controlled by the developer via the `order` parameter in `@infrastructure`.
 **Implications**:
-- Deterministic ordering via `order` (lower runs first).
-- Auto-registered via `@interceptor(...)` on classes or provider methods.
-- `on_exception` must re-raise if the error is not meant to be suppressed.
+- Interceptors are plain Python classes that implement a protocol; they do not require a decorator.
+- Their activation is tied to the lifecycle of the `@infrastructure` components that register them.
 
 ---
 
@@ -142,6 +139,21 @@ A true "last-wins" only occurs when binding the *exact same key* multiple times,
 
 ---
 
+### 16) Container Diagnostics API (`describe()`)
+
+**Decision**: Add a unified diagnostics method `container.describe(...)` that exports the initialization context, active interceptors, and the fully resolved dependency graph.  
+**Rationale**: Developers need a deterministic way to introspect the container state for debugging, documentation, and architectural analysis. A stable schema with IDs, provenance, and safe redaction makes this reliable and auditable.  
+**Implications**:
+- Public API: `container.describe(include_values=False, include_inactive=False, only_types=None, only_tags=None, redact_patterns=None, format="dict")`.
+- Default output is JSON-serializable with `schema_version`, `generated_at`, `status`, `initialization_context`, `active_interceptors`, and `dependency_graph`.
+- Sensitive values are **redacted by default**; explicit opt-in required via `include_values=True`.
+- Deterministic IDs and ordering allow snapshot diffs across runs.
+- Alternative outputs supported (`mermaid`, `dot`) for visualization.
+- Large graphs can be filtered (`only_types`, `only_tags`) to keep snapshots manageable.
+- Partial snapshots with `status="partial"` are returned if initialization fails, including error metadata.
+
+---
+
 ## ❌ Won’t-Do Decisions
 
 ### A) Alternative scopes (request/session)
@@ -176,10 +188,10 @@ _No entries currently._
 - **2025-08**: Minimum Python 3.10; name-first resolution; fail-fast clarified; typed keys preferred.  
 - **2025-09-08**: Introduced `init(..., overrides)` with defined precedence and laziness semantics.  
 - **2025-09-13**: Added `scope(...)` for bounded containers with tag pruning and strict mode.  
-- **2025-09-14**: Added **Interceptors API** and **Conditional providers** as first-class features; documented last-wins registration and concurrency stance.
+- **2025-09-14**: Replaced auto-discovered interceptors with an infrastructure-based registration model. Added **Conditional providers** as a first-class feature.
 
 ---
 
 **Summary**: pico-ioc remains **simple, deterministic, and fail-fast**.  
-We favor typed wiring, explicit registration, and small, composable primitives (overrides, scope, interceptors, conditionals) instead of heavyweight AOP or multi-scope lifecycles.
+We favor typed wiring, explicit registration, and small, composable primitives (overrides, scope, infrastructure, conditionals) instead of heavyweight AOP or multi-scope lifecycles.
 

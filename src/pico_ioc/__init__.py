@@ -1,4 +1,3 @@
-# pico_ioc/__init__.py
 try:
     from ._version import __version__
 except Exception:
@@ -9,17 +8,24 @@ from .scope import ScopedContainer
 from .decorators import (
     component, factory_component, provides, plugin,
     Qualifier, qualifier,
-    on_missing, primary, conditional, interceptor,
+    on_missing, primary, conditional, infrastructure,
 )
 from .plugins import PicoPlugin
 from .resolver import Resolver
 from .api import init, reset, scope, container_fingerprint
 from .proxy import ComponentProxy, IoCProxy
-from .interceptors import Invocation, MethodInterceptor, ContainerInterceptor
+from .interceptors import (
+    MethodInterceptor,
+    ContainerInterceptor,
+    MethodCtx,
+    ResolveCtx,
+    CreateCtx,
+)
 from .config import (
     config_component, EnvSource, FileSource,
     Env, File, Path, Value,
 )
+from .infra import Infra, Select
 
 __all__ = [
     "__version__",
@@ -28,9 +34,11 @@ __all__ = [
     "PicoPlugin",
     "ComponentProxy",
     "IoCProxy",
-    "Invocation",
     "MethodInterceptor",
     "ContainerInterceptor",
+    "MethodCtx",
+    "ResolveCtx",
+    "CreateCtx",
     "init",
     "scope",
     "reset",
@@ -44,15 +52,17 @@ __all__ = [
     "on_missing",
     "primary",
     "conditional",
-    "interceptor",
+    "infrastructure",
     "Resolver",
     "ScopedContainer",
-    "config_component", 
-    "EnvSource", 
-    "FileSource", 
-    "Env", 
-    "File", 
-    "Path", 
+    "config_component",
+    "EnvSource",
+    "FileSource",
+    "Env",
+    "File",
+    "Path",
     "Value",
+    "Infra",
+    "Select",
 ]
 

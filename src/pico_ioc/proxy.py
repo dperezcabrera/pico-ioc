@@ -1,15 +1,12 @@
-# src/pico_ioc/proxy.py
 from __future__ import annotations
 
 import inspect
 from functools import lru_cache
 from typing import Any, Callable, Sequence
 
-from .interceptors import Invocation, dispatch, MethodInterceptor
-
+from .interceptors import MethodCtx, MethodInterceptor, dispatch_method
 
 class ComponentProxy:
-    """Proxy for lazy components. Creates the real object only when accessed."""
     def __init__(self, object_creator: Callable[[], Any]):
         object.__setattr__(self, "_object_creator", object_creator)
         object.__setattr__(self, "__real_object", None)
@@ -31,8 +28,6 @@ class ComponentProxy:
     def __str__(self): return str(self._get_real_object())
     def __repr__(self): return repr(self._get_real_object())
     def __dir__(self): return dir(self._get_real_object())
-
-    # container-like behavior
     def __len__(self): return len(self._get_real_object())
     def __getitem__(self, key): return self._get_real_object()[key]
     def __setitem__(self, key, value): self._get_real_object()[key] = value
@@ -40,8 +35,6 @@ class ComponentProxy:
     def __iter__(self): return iter(self._get_real_object())
     def __reversed__(self): return reversed(self._get_real_object())
     def __contains__(self, item): return item in self._get_real_object()
-
-    # operators
     def __add__(self, other): return self._get_real_object() + other
     def __sub__(self, other): return self._get_real_object() - other
     def __mul__(self, other): return self._get_real_object() * other
@@ -56,8 +49,6 @@ class ComponentProxy:
     def __and__(self, other): return self._get_real_object() & other
     def __xor__(self, other): return self._get_real_object() ^ other
     def __or__(self, other): return self._get_real_object() | other
-
-    # reflected operators
     def __radd__(self, other): return other + self._get_real_object()
     def __rsub__(self, other): return other - self._get_real_object()
     def __rmul__(self, other): return other * self._get_real_object()
@@ -72,8 +63,6 @@ class ComponentProxy:
     def __rand__(self, other): return other & self._get_real_object()
     def __rxor__(self, other): return other ^ self._get_real_object()
     def __ror__(self, other): return other | self._get_real_object()
-
-    # misc
     def __neg__(self): return -self._get_real_object()
     def __pos__(self): return +self._get_real_object()
     def __abs__(self): return abs(self._get_real_object())
@@ -86,20 +75,18 @@ class ComponentProxy:
     def __ge__(self, other): return self._get_real_object() >= other
     def __hash__(self): return hash(self._get_real_object())
     def __bool__(self): return bool(self._get_real_object())
-
-    # callables & context
     def __call__(self, *args, **kwargs): return self._get_real_object()(*args, **kwargs)
     def __enter__(self): return self._get_real_object().__enter__()
     def __exit__(self, exc_type, exc_val, exc_tb): return self._get_real_object().__exit__(exc_type, exc_val, exc_tb)
 
-
 class IoCProxy:
-    """Proxy that wraps an object and applies MethodInterceptors on method calls."""
-    __slots__ = ("_target", "_interceptors")
+    __slots__ = ("_target", "_interceptors", "_container", "_request_key")
 
-    def __init__(self, target: object, interceptors: Sequence[MethodInterceptor]):
+    def __init__(self, target: object, interceptors: Sequence[MethodInterceptor], container: Any = None, request_key: Any = None):
         self._target = target
         self._interceptors = tuple(interceptors)
+        self._container = container
+        self._request_key = request_key
 
     def __getattr__(self, name: str) -> Any:
         attr = getattr(self._target, name)
@@ -109,18 +96,17 @@ class IoCProxy:
             bound_fn = attr.__get__(self._target, type(self._target))
         else:
             bound_fn = attr
-
         @lru_cache(maxsize=None)
         def _wrap(fn: Callable[..., Any]):
             if inspect.iscoroutinefunction(fn):
                 async def aw(*args, **kwargs):
-                    inv = Invocation(self._target, name, fn, args, kwargs)
-                    return await dispatch(self._interceptors, inv)
+                    ctx = MethodCtx(instance=self._target, cls=type(self._target), method=fn, name=name, args=args, kwargs=kwargs, container=self._container, request_key=self._request_key)
+                    return await dispatch_method(self._interceptors, ctx)
                 return aw
             else:
                 def sw(*args, **kwargs):
-                    inv = Invocation(self._target, name, fn, args, kwargs)
-                    res = dispatch(self._interceptors, inv)
+                    ctx = MethodCtx(instance=self._target, cls=type(self._target), method=fn, name=name, args=args, kwargs=kwargs, container=self._container, request_key=self._request_key)
+                    res = dispatch_method(self._interceptors, ctx)
                     if inspect.isawaitable(res):
                         raise RuntimeError(f"Async interceptor on sync method: {name}")
                     return res

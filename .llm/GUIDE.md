@@ -5,9 +5,9 @@
 
 This guide shows how to structure a Python app with **pico-ioc**: define components, provide dependencies, bootstrap a container, and run web/CLI code predictably.
 
------
+---
 
-## 1\) Core concepts
+## 1) Core concepts
 
   - **Component** → a class managed by the container. Use `@component`.
   - **Factory component** → a class that *provides* concrete instances (e.g. `Flask()`, DB clients). Use `@factory_component`.
@@ -17,9 +17,9 @@ This guide shows how to structure a Python app with **pico-ioc**: define compone
 
 👉 Rule of thumb: **inject by type** (e.g., `def __init__(..., app: Flask)`).
 
------
+---
 
-## 2\) Quick start (Hello DI)
+## 2) Quick start (Hello DI)
 
 ```python
 # app/config.py
@@ -28,7 +28,7 @@ from pico_ioc import component
 @component
 class Config:
     DB_URL = "sqlite:///demo.db"
-```
+````
 
 ```python
 # app/repo.py
@@ -66,7 +66,7 @@ svc = c.get(app.service.Service)
 print(svc.run())  # -> "fetching from sqlite:///demo.db"
 ```
 
------
+---
 
 ## 3\) Web example (Flask)
 
@@ -114,9 +114,9 @@ if __name__ == "__main__":
     flask_app.run(host="0.0.0.0", port=5000)
 ```
 
------
+---
 
-## 4) Configuration patterns
+## 4\) Configuration patterns
 
 You can either hardcode config with `os.getenv` **or** use the new
 **configuration injection system** for type-safe settings.
@@ -156,10 +156,10 @@ container = init(
 settings = container.get(Settings)
 ```
 
-* Supports **Env**, **File** (YAML/JSON/INI/dotenv), dotted `Path.file[...]`,
-  and per-field overrides.
-* Precedence: `overrides` > sources (in order) > class defaults.
-* Missing required fields raise `NameError`.
+  * Supports **Env**, **File** (YAML/JSON/INI/dotenv), dotted `Path.file[...]`,
+    and per-field overrides.
+  * Precedence: `overrides` \> sources (in order) \> class defaults.
+  * Missing required fields raise `NameError`.
 
 **Inject into consumers:**
 
@@ -169,7 +169,8 @@ class Runner:
     def __init__(self, s: Settings):
         self._debug = s.debug
 ```
------
+
+---
 
 ## 5\) Testing & overrides
 
@@ -206,9 +207,9 @@ def test_service_fetch():
 from app.repo import Repo
 
 c = init(app, reuse=False, overrides={
-    Repo: FakeRepo(),                      # constant instance
-    "fast_model": lambda: {"id": 123},     # provider
-    "clock": (lambda: object(), True),     # lazy provider
+    Repo: FakeRepo(),                  # constant instance
+    "fast_model": lambda: {"id": 123},    # provider
+    "clock": (lambda: object(), True),    # lazy provider
 })
 ```
 
@@ -230,7 +231,7 @@ def test_runner():
         assert isinstance(svc, RunnerService)
 ```
 
------
+---
 
 ## 6\) Qualifiers & collections
 
@@ -267,29 +268,49 @@ class Billing:
   - Inject `list[T]` → all implementations of `T`.
   - Inject `list[Annotated[T, Q]]` → only implementations of `T` tagged with qualifier `Q`.
 
------
+---
 
-## 7\) Interceptors
+## 7\) Interceptors and Infrastructure
 
-Interceptors let you **observe/modify behavior** across components. They are discovered automatically via `@interceptor`.
+Interceptors let you **observe or modify behavior** across components (e.g., for logging or metrics). This is an advanced feature that you enable via `@infrastructure` components.
+
+The basic idea is:
+
+1.  Define an interceptor class (a plain Python class).
+2.  Create an `@infrastructure` component to register it.
+
+<!-- end list -->
 
 ```python
-from pico_ioc import interceptor
-from pico_ioc.interceptors import MethodInterceptor, Invocation
+# 1. Define an interceptor
+from pico_ioc.interceptors import MethodInterceptor, MethodCtx
 
-# This interceptor will wrap method calls
-@interceptor(order=-10)
 class TimingInterceptor(MethodInterceptor):
-    def __call__(self, inv: Invocation, proceed):
-        print(f"Starting {inv.method_name}...")
-        result = proceed()
-        print(f"Finished {inv.method_name}.")
+    def invoke(self, ctx: MethodCtx, call_next):
+        print(f"Starting {ctx.name}...")
+        result = call_next(ctx)
+        print(f"Finished {ctx.name}.")
         return result
+
+# 2. Register it using an infrastructure component
+from pico_ioc import infrastructure
+from pico_ioc.infra import Infra, Select
+
+@infrastructure
+class MonitoringInfrastructure:
+    def configure(self, infra: Infra):
+        # This adds the interceptor to all components in the container
+        infra.intercept.add(
+            interceptor=TimingInterceptor(),
+            where=Select().class_name(".*")
+        )
 ```
 
-There's no need to register it manually. `pico_ioc.init(app)` will find and activate it automatically.
+When `pico_ioc.init(app)` runs, it will find `MonitoringInfrastructure`, execute its `configure` method, and activate the `TimingInterceptor` automatically.
 
------
+*For a full walkthrough, see the advanced guide: `GUIDE_CREATING_PLUGINS_AND_INTERCEPTORS.md`.*
+
+---
 
 ## 8\) Profiles & conditionals
 
@@ -324,7 +345,7 @@ container = init(app, profiles=["test"], reuse=False)
   - `require_env=(...)` → all environment variables must exist.
   - `predicate=callable` → custom activation rule.
 
------
+---
 
 ## 9\) Plugins & Public API helper
 
@@ -350,7 +371,7 @@ from pico_ioc.public_api import export_public_symbols_decorated
 __getattr__, __dir__ = export_public_symbols_decorated("app")
 ```
 
------
+---
 
 ## 10\) Tips & guardrails
 
@@ -360,7 +381,7 @@ __getattr__, __dir__ = export_public_symbols_decorated("app")
   - Use factories for external objects (DBs, clients, frameworks).
   - Fail fast: bootstrap your container at application startup.
 
------
+---
 
 ## 11\) Troubleshooting
 
@@ -368,7 +389,7 @@ __getattr__, __dir__ = export_public_symbols_decorated("app")
   - **Wrong instance** → An override or a `@primary` component is taking precedence.
   - **Circular imports** → Split modules or move imports inside provider methods.
 
------
+---
 
 ## 12\) Complete Examples
 
@@ -435,16 +456,21 @@ This example demonstrates a Flask app where a custom interceptor logs method cal
 
 ```python
 # web_app/components.py
-from pico_ioc import component, interceptor
-from pico_ioc.interceptors import MethodInterceptor, Invocation
+from pico_ioc import component, infrastructure
+from pico_ioc.interceptors import MethodInterceptor, MethodCtx
+from pico_ioc.infra import Infra, Select
 from flask import Flask, jsonify
 
-@interceptor
+@infrastructure
+class AppInfra:
+    def configure(self, infra: Infra):
+        infra.intercept.add(interceptor=LoggingInterceptor(), where=Select().class_name(".*"))
+
 class LoggingInterceptor(MethodInterceptor):
-    def __call__(self, inv: Invocation, proceed):
-        print(f"-> Entering {inv.method_name}")
-        result = proceed()
-        print(f"<- Exiting {inv.method_name}")
+    def invoke(self, ctx: MethodCtx, call_next):
+        print(f"-> Entering {ctx.name}")
+        result = call_next(ctx)
+        print(f"<- Exiting {ctx.name}")
         return result
 
 @component
@@ -488,9 +514,9 @@ if __name__ == "__main__":
     # <- Exiting get_status
     app.run(port=5000)
 ```
+
 ---
 
 **TL;DR**
 Decorate components, provide externals by type, `init()` once, and let the container wire everything — so you can run tests, serve web apps, or batch jobs with minimal glue.
-
 

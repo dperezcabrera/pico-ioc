@@ -1,7 +1,7 @@
 # FEATURE-2025-0001: Scoped Subgraphs with scope()
 
   - **Date:** 2025-09-13
-  - **Status:** Shipped
+  - **Status:** Delivered
   - **Priority:** high
   - **Related:** [ADR-0008: Lightweight Test Containers]
 
