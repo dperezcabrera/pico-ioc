@@ -1,4 +1,4 @@
-# 📦 Pico-IoC: A Minimalist IoC Container for Python
+# 📦 Pico-IoC: A Robust, Async-Native IoC Container for Python
 
 [![PyPI](https://img.shields.io/pypi/v/pico-ioc.svg)](https://pypi.org/project/pico-ioc/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dperezcabrera/pico-ioc)
@@ -9,99 +9,105 @@
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-ioc&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-ioc)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-ioc&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-ioc)
 
-**pico-ioc** is a **tiny, zero-dependency, decorator-based IoC container for Python**.  
-It helps you build loosely-coupled, testable apps without manual wiring. Inspired by the Spring ecosystem, but minimal.
+**Pico-IoC** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
+It brings *Inversion of Control* and *dependency injection* to Python in a deterministic, modern, and framework-agnostic way.
 
-> ⚠️ **Requires Python 3.10+** (uses `typing.Annotated` and `include_extras=True`).
-
----
-
-## ⚖️ Principles
-
-* **Focus & Simplicity**: A minimal core for one job: managing dependencies. It avoids accidental complexity by doing one thing well.
-* **Predictable & Explicit**: No magic. Behavior is deterministic, relying on explicit decorators and a clear resolution order.
-* **Unified Composition Root**: The application is assembled from a single entry point (`init`) which defines a clear, predictable boundary. This ensures a stable and understandable bootstrap process.
-* **Fail-Fast Bootstrap**: Catches dependency graph errors at startup, not in production. If the application runs, it's wired correctly.
-* **Testability First**: Features like `scope()` and `overrides` are first-class citizens, enabling fast and isolated testing.
-* **Extensible by Design**: Lifecycle hooks and AOP are available through a clean Plugin and Interceptor API without altering the core.
-* **Framework Agnostic**: Zero hard dependencies. It works with any Python application, from simple scripts to complex web servers.
+> 🐍 Requires **Python 3.10+**
 
 ---
 
-## ✨ Why Pico-IoC?
+## ⚖️ Core Principles
 
-`pico-ioc` exists to solve a common problem that arises as Python applications grow: managing how objects are created and connected becomes complex and brittle. This manual wiring, where a change deep in the application can cause a cascade of updates, makes the code hard to test and maintain. `pico-ioc` introduces the principle of Inversion of Control (IoC) in a simple, Pythonic way. Instead of you creating and connecting every object, you declare your components with a simple `@component` decorator, and the container automatically wires them together based on their type hints. It brings the architectural robustness and testability of mature frameworks like Spring to the Python ecosystem, but without the heavy boilerplate, allowing you to build complex, loosely-coupled applications that remain simple to manage.
-
-
-| Feature             | Manual Wiring                                     | With Pico-IoC                   |
-| :------------------ | :------------------------------------------------ | :------------------------------ |
-| **Object Creation** | `service = Service(Repo(Config()))`               | `svc = container.get(Service)`  |
-| **Testing**         | Manual replacement or monkey-patching             | `overrides={Repo: FakeRepo()}`  |
-| **Coupling**        | High (code knows about constructors)              | Low (code just asks for a type) |
-| **Maintenance**     | Brittle (changing a constructor breaks consumers) | Robust (changes are isolated)   |
-| **Learning Curve**  | Ad-hoc, implicit patterns                         | Uniform, explicit, documented   |
-
+-   **Single Purpose** – Do one thing: dependency management.
+-   **Declarative** – Use simple decorators (`@component`, `@factory`, `@configuration`) instead of config files or YAML magic.
+-   **Deterministic** – No hidden scanning or side-effects; everything flows from an explicit `init()`.
+-   **Async-Native** – Fully supports async providers, async lifecycle hooks, and async interceptors.
+-   **Fail-Fast** – Detects missing bindings and circular dependencies at bootstrap.
+-   **Testable by Design** – Use `overrides` and `profiles` to swap components instantly.
+-   **Zero Core Dependencies** – Built entirely on the Python standard library. Optional features may require external packages (see Installation).
 
 ---
 
-## 🧩 Features
+## 🚀 Why Pico-IoC?
 
-### Core
+As Python systems evolve, wiring dependencies by hand becomes fragile and unmaintainable.
+**Pico-IoC** eliminates that friction by letting you declare how components relate — not how they’re created.
 
-* **Zero dependencies** — pure Python, framework-agnostic.
-* **Single Entry Point (`init`)** — Robustly bootstrap your entire application from a single root package, enforcing a clean "Composition Root" pattern.
-* **Decorator API** — `@component`, `@factory_component`, `@provides`, `@plugin`.
-* **Fail-fast bootstrap** — eager by default; missing deps surface at startup.
-* **Opt-in lazy** — `lazy=True` wraps with `ComponentProxy`.
-* **Smart resolution order** — parameter name → type annotation → MRO → string.
-* **Overrides for testing** — inject mocks/fakes directly via `init(overrides={...})`.
-* **Public API helper** — auto-export decorated symbols in `__init__.py`.
-* **Thread/async safe** — isolation via `ContextVar`.
+| Feature        | Manual Wiring              | With Pico-IoC                   |
+| :------------- | :------------------------- | :------------------------------ |
+| Object creation| `svc = Service(Repo(Config()))` | `svc = container.get(Service)`  |
+| Replacing deps | Monkey-patch               | `overrides={Repo: FakeRepo()}`  |
+| Coupling       | Tight                      | Loose                           |
+| Testing        | Painful                    | Instant                         |
+| Async support  | Manual                     | Built-in                        |
 
-### Advanced
+---
 
-* **Qualifiers & collections** — `list[Annotated[T, Q]]` filters by qualifier.
-* **Flexible Scopes (`scope`)** — Create lightweight, temporary containers from multiple modules, ideal for testing, scripting, or modular tasks.
-* **Interceptors API** — observe/modify resolution, instantiation, invocation, errors.
-* **Conditional providers** — activate components by env vars or predicates.
-* **Plugins** — lifecycle hooks (`before_scan`, `after_ready`).
+## 🧩 Highlights (v2.0.0)
+
+-   **Full redesign:** unified architecture with simpler, more powerful APIs.
+-   **Async-aware AOP system** — method interceptors via `@intercepted_by`.
+-   **Typed configuration** — dataclasses with JSON/YAML/env sources.
+-   **Scoped resolution** — singleton, prototype, request, session, transaction.
+-   **UnifiedComponentProxy** — transparent lazy/AOP proxy supporting serialization.
+-   **Tree-based configuration runtime** with reusable adapters and discriminators.
+-   **Observable container context** with stats, health checks, and async cleanup.
 
 ---
 
 ## 📦 Installation
 
 ```bash
-# Requires Python 3.10+
 pip install pico-ioc
-````
+```
 
----
+For optional features, you can install extras:
 
-## 🚀 Quick start
+  * **YAML Configuration:**
+
+    ```bash
+    pip install pico-ioc[yaml]
+    ```
+
+    (Requires `PyYAML`)
+
+  * **Dependency Graph Export:**
+
+    ```bash
+    pip install pico-ioc[graphviz]
+    ```
+
+    (Requires the `graphviz` Python package and the Graphviz command-line tools)
+
+-----
+
+## ⚙️ Quick Example
 
 ```python
-from pico_ioc import component, init
+from dataclasses import dataclass
+from pico_ioc import component, configuration, init
 
-@component
+@configuration
+@dataclass
 class Config:
-    url = "sqlite:///demo.db"
+    db_url: str = "sqlite:///demo.db"
 
 @component
 class Repo:
     def __init__(self, cfg: Config):
-        self.url = cfg.url
-    def fetch(self): return f"fetching from {self.url}"
+        self.cfg = cfg
+    def fetch(self):
+        return f"fetching from {self.cfg.db_url}"
 
 @component
 class Service:
     def __init__(self, repo: Repo):
         self.repo = repo
-    def run(self): return self.repo.fetch()
+    def run(self):
+        return self.repo.fetch()
 
-# bootstrap
-import myapp
-c = init(myapp)
-svc = c.get(Service)
+container = init(modules=[__name__])
+svc = container.get(Service)
 print(svc.run())
 ```
 
@@ -110,95 +116,78 @@ print(svc.run())
 ```
 fetching from sqlite:///demo.db
 ```
----
 
-### Quick overrides for testing
+-----
 
-```python
-from pico_ioc import init
-import myapp
-
-fake = {"repo": "fake-data"}
-c = init(myapp, overrides={
-    "fast_model": fake,                  # constant instance
-    "user_service": lambda: {"id": 1},   # provider
-})
-assert c.get("fast_model") == {"repo": "fake-data"}
-```
----
-
-### Scoped subgraphs
-
-For unit tests or lightweight integration, you can bootstrap **only a subset of the graph**.
+## 🧪 Testing with Overrides
 
 ```python
-from pico_ioc
-from src.runner_service import RunnerService
-from tests.fakes import FakeDocker
-import src
+class FakeRepo:
+    def fetch(self): return "fake-data"
 
-c = pico_ioc.scope(
-    modules=[src],
-    roots=[RunnerService],  # only RunnerService and its deps
-    overrides={
-        "docker.DockerClient": FakeDocker(),
-    },
-    strict=True,   # fail if something is missing
-    lazy=True,     # instantiate on demand
-)
-svc = c.get(RunnerService)
+container = init(modules=[__name__], overrides={Repo: FakeRepo()})
+svc = container.get(Service)
+assert svc.run() == "fake-data"
 ```
 
-This way you don’t need to bootstrap your entire app (`controllers`, `http`, …) just to test one service.
+-----
 
----
+## 🩺 Lifecycle & AOP
+
+```python
+from pico_ioc import intercepted_by, MethodInterceptor, MethodCtx
+
+class LogInterceptor(MethodInterceptor):
+    def invoke(self, ctx: MethodCtx, call_next):
+        print(f"→ calling {ctx.name}")
+        res = call_next(ctx)
+        print(f"← {ctx.name} done")
+        return res
+
+@component
+class Demo:
+    @intercepted_by(LogInterceptor)
+    def work(self):
+        return "ok"
+
+c = init(modules=[__name__])
+c.get(Demo).work()
+```
+
+-----
+
 ## 📖 Documentation
 
-  * **🚀 New to pico-ioc? Start with the User Guide.**
-      * [**GUIDE.md**](.llm/GUIDE.md) — Learn with practical examples: testing, configuration, collection injection, and web framework integration.
+The full documentation is available within the `docs/` directory of the project repository. Start with `docs/README.md` for navigation.
 
-  * **🏗️ Want to understand the internals? See the Architecture.**
-      * [**ARCHITECTURE.md**](.llm/ARCHITECTURE.md) — A deep dive into the algorithms, lifecycle, and internal diagrams. Perfect for contributors.
+  * **Getting Started:** `docs/getting-started.md`
+  * **User Guide:** `docs/user-guide/README.md`
+  * **Advanced Features:** `docs/advanced-features/README.md`
+  * **Observability:** `docs/observability/README.md`
+  * **Integrations:** `docs/integrations/README.md`
+  * **Cookbook (Patterns):** `docs/cookbook/README.md`
+  * **Architecture:** `docs/architecture/README.md`
+  * **API Reference:** `docs/api-reference/README.md`
+  * **ADR Index:** `docs/adr/README.md`
 
-  * **🤔 Want to know *why* it's designed this way? Read the Decisions.**
-      * [**DECISIONS.md**](.llm/DECISIONS.md) — The history and rationale behind key technical decisions.
+-----
 
-  * **💡 Just need a quick summary?**
-      * [**OVERVIEW.md**](.llm/OVERVIEW.md) — What pico-ioc is and why you should use it.
----
-
-## 🧪 Development
+## 🧩 Development
 
 ```bash
 pip install tox
 tox
 ```
 
----
+-----
 
-## 📜 Overview
+## 🧾 Changelog
 
-See [OVERVIEW.md](.llm/OVERVIEW.md) Just need a quick summary?
----
+See [CHANGELOG.md](./CHANGELOG.md) — *Full redesign for v2.0.0.*
 
-## 🔔 Important Changes
-
-### 1.5.0 (2025-09-17)
-- Introduced **`@infrastructure`** classes for bootstrap-time configuration.  
-  → They can query the model, add interceptors, wrap/replace providers, and adjust tags/qualifiers.  
-- Added new **around-style interceptors** (`MethodInterceptor.invoke`, `ContainerInterceptor.around_*`) with deterministic ordering.  
-- **Removed legacy `@interceptor` API** (before/after/error style). All interceptors must be migrated to the new contracts.  
-
----
-## 📜 Changelog
-
-See [CHANGELOG.md](./CHANGELOG.md) for version history.
-
----
+-----
 
 ## 📜 License
 
-MIT — see [LICENSE](https://opensource.org/licenses/MIT)
-
-
+MIT — [LICENSE](https://opensource.org/licenses/MIT)
 
