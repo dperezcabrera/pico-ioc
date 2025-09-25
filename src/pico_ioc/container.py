@@ -1,168 +1,440 @@
-from __future__ import annotations
-
+# src/pico_ioc/container.py
 import inspect
-from typing import Any, Dict, get_origin, get_args, Annotated
-import typing as _t
+import contextvars
+from typing import Any, Dict, List, Optional, Tuple, overload, Union
+from contextlib import contextmanager
+from .constants import LOGGER, PICO_META
+from .exceptions import CircularDependencyError, ComponentCreationError, ProviderNotFoundError
+from .factory import ComponentFactory
+from .locator import ComponentLocator
+from .scope import ScopedCaches, ScopeManager
+from .aop import UnifiedComponentProxy, ContainerObserver
 
-from .proxy import IoCProxy
-from .interceptors import MethodInterceptor, ContainerInterceptor, MethodCtx, ResolveCtx, CreateCtx, run_resolve_chain, run_create_chain
-from .decorators import QUALIFIERS_KEY
-from . import _state
+KeyT = Union[str, type]
+_resolve_chain: contextvars.ContextVar[Tuple[KeyT, ...]] = contextvars.ContextVar("pico_resolve_chain", default=())
 
-class Binder:
-    def __init__(self, container: PicoContainer):
-        self._c = container
+class _TracerFrame:
+    __slots__ = ("parent_key", "via")
+    def __init__(self, parent_key: KeyT, via: str):
+        self.parent_key = parent_key
+        self.via = via
 
-    def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
-        self._c.bind(key, provider, lazy=lazy, tags=tags)
+class ResolutionTracer:
+    def __init__(self, container: "PicoContainer") -> None:
+        self._container = container
+        self._stack_var: contextvars.ContextVar[List[_TracerFrame]] = contextvars.ContextVar("pico_tracer_stack", default=[])
+        self._edges: Dict[Tuple[KeyT, KeyT], Tuple[str, str]] = {}
 
-    def has(self, key: Any) -> bool:
-        return self._c.has(key)
+    def enter(self, parent_key: KeyT, via: str) -> contextvars.Token:
+        stack = list(self._stack_var.get())
+        stack.append(_TracerFrame(parent_key, via))
+        return self._stack_var.set(stack)
 
-    def get(self, key: Any):
-        return self._c.get(key)
+    def leave(self, token: contextvars.Token) -> None:
+        self._stack_var.reset(token)
+
+    def override_via(self, new_via: str) -> Optional[str]:
+        stack = self._stack_var.get()
+        if not stack:
+            return None
+        prev = stack[-1].via
+        stack[-1].via = new_via
+        return prev
+
+    def restore_via(self, previous: Optional[str]) -> None:
+        if previous is None:
+            return
+        stack = self._stack_var.get()
+        if not stack:
+            return
+        stack[-1].via = previous
+
+    def note_param(self, child_key: KeyT, param_name: str) -> None:
+        stack = self._stack_var.get()
+        if not stack:
+            return
+        parent = stack[-1].parent_key
+        via = stack[-1].via
+        self._edges[(parent, child_key)] = (via, param_name)
+
+    def describe_cycle(self, chain: Tuple[KeyT, ...], current: KeyT, locator: Optional[ComponentLocator]) -> str:
+        def name_of(k: KeyT) -> str:
+            return getattr(k, "__name__", str(k))
+        def scope_of(k: KeyT) -> str:
+            if not locator:
+                return "singleton"
+            md = locator._metadata.get(k)
+            return md.scope if md else "singleton"
+        lines: List[str] = []
+        lines.append("Circular dependency detected.")
+        lines.append("")
+        lines.append("Resolution chain:")
+        full = tuple(chain) + (current,)
+        for idx, k in enumerate(full, 1):
+            mark = "  ❌" if idx == len(full) else ""
+            lines.append(f"  {idx}. {name_of(k)} [scope={scope_of(k)}]{mark}")
+            if idx < len(full):
+                parent = k
+                child = full[idx]
+                via, param = self._edges.get((parent, child), ("provider", "?"))
+                lines.append(f"     └─ via {via} param '{param}' → {name_of(child)}")
+        lines.append("")
+        lines.append("Hint: break the cycle with a @configure setter or use a factory/provider.")
+        return "\n".join(lines)
 
 class PicoContainer:
-    def __init__(self, providers: Dict[Any, Dict[str, Any]] | None = None):
-        self._providers = providers or {}
-        self._singletons: Dict[Any, Any] = {}
-        self._method_interceptors: tuple[MethodInterceptor, ...] = ()
-        self._container_interceptors: tuple[ContainerInterceptor, ...] = ()
-        self._active_profiles: tuple[str, ...] = ()
-        self._seen_interceptor_types: set[type] = set()
-        self._method_cap: int | None = None
+    _container_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("pico_container_id", default=None)
+    _container_registry: Dict[str, "PicoContainer"] = {}
 
-    def add_method_interceptor(self, it: MethodInterceptor) -> None:
-        self._method_interceptors = self._method_interceptors + (it,)
+    class _Ctx:
+        def __init__(self, container_id: str, profiles: Tuple[str, ...], created_at: float) -> None:
+            self.container_id = container_id
+            self.profiles = profiles
+            self.created_at = created_at
+            self.resolve_count = 0
+            self.cache_hit_count = 0
 
-    def add_container_interceptor(self, it: ContainerInterceptor) -> None:
-        t = type(it)
-        if t in self._seen_interceptor_types:
-            return
-        self._seen_interceptor_types.add(t)
-        self._container_interceptors = self._container_interceptors + (it,)
+    def __init__(self, component_factory: ComponentFactory, caches: ScopedCaches, scopes: ScopeManager, observers: Optional[List["ContainerObserver"]] = None, container_id: Optional[str] = None, profiles: Tuple[str, ...] = ()) -> None:
+        self._factory = component_factory
+        self._caches = caches
+        self.scopes = scopes
+        self._locator: Optional[ComponentLocator] = None
+        self._observers = list(observers or [])
+        self.container_id = container_id or self._generate_container_id()
+        import time as _t
+        self.context = PicoContainer._Ctx(container_id=self.container_id, profiles=profiles, created_at=_t.time())
+        PicoContainer._container_registry[self.container_id] = self
+        self._tracer = ResolutionTracer(self)
 
-    def set_method_cap(self, n: int | None) -> None:
-        self._method_cap = (int(n) if n is not None else None)
+    @staticmethod
+    def _generate_container_id() -> str:
+        import time as _t, random as _r
+        return f"c{_t.time_ns():x}{_r.randrange(1<<16):04x}"
 
-    def binder(self) -> Binder:
-        return Binder(self)
+    @classmethod
+    def get_current(cls) -> Optional["PicoContainer"]:
+        cid = cls._container_id_var.get()
+        return cls._container_registry.get(cid) if cid else None
 
-    def bind(self, key: Any, provider, *, lazy: bool, tags: tuple[str, ...] = ()):
-        self._singletons.pop(key, None)
-        meta = {"factory": provider, "lazy": bool(lazy)}
+    @classmethod
+    def get_current_id(cls) -> Optional[str]:
+        return cls._container_id_var.get()
+
+    @classmethod
+    def all_containers(cls) -> Dict[str, "PicoContainer"]:
+        return dict(cls._container_registry)
+
+    def activate(self) -> contextvars.Token:
+        return PicoContainer._container_id_var.set(self.container_id)
+
+    def deactivate(self, token: contextvars.Token) -> None:
+        PicoContainer._container_id_var.reset(token)
+
+    @contextmanager
+    def as_current(self):
+        token = self.activate()
         try:
-            q = getattr(key, QUALIFIERS_KEY, ())
-        except Exception:
-            q = ()
-        meta["qualifiers"] = tuple(q) if q else ()
-        meta["tags"] = tuple(tags) if tags else ()
-        self._providers[key] = meta
-
-    def has(self, key: Any) -> bool:
-        return key in self._providers
-
-    def _notify_resolve(self, key: Any, ann: Any, quals: tuple[str, ...] | tuple()):
-        ctx = ResolveCtx(key=key, qualifiers={q: True for q in quals or ()}, requested_by=None, profiles=self._active_profiles)
-        run_resolve_chain(self._container_interceptors, ctx)
-
-    def get(self, key: Any):
-        if _state._scanning.get() and not _state._resolving.get():
-            raise RuntimeError("re-entrant container access during scan")
-        prov = self._providers.get(key)
-        if prov is None:
-            raise NameError(f"No provider found for key {key!r}")
-        if key in self._singletons:
-            return self._singletons[key]
-        def base_provider():
-            return prov["factory"]()
-        cls = key if isinstance(key, type) else None
-        ctx = CreateCtx(key=key, component=cls, provider=base_provider, profiles=self._active_profiles)
-        tok = _state._resolving.set(True)
-        try:
-            instance = run_create_chain(self._container_interceptors, ctx)
+            yield self
         finally:
-            _state._resolving.reset(tok)
-        if self._method_interceptors and not isinstance(instance, IoCProxy):
-            chain = self._method_interceptors
-            cap = getattr(self, "_method_cap", None)
-            if isinstance(cap, int) and cap >= 0:
-                chain = chain[:cap]
-            instance = IoCProxy(instance, chain, container=self, request_key=key)
-        self._singletons[key] = instance
+            self.deactivate(token)
+
+    def attach_locator(self, locator: ComponentLocator) -> None:
+        self._locator = locator
+
+    def _cache_for(self, key: KeyT):
+        md = self._locator._metadata.get(key) if self._locator else None
+        sc = (md.scope if md else "singleton")
+        return self._caches.for_scope(self.scopes, sc)
+
+    def has(self, key: KeyT) -> bool:
+        cache = self._cache_for(key)
+        return cache.get(key) is not None or self._factory.has(key)
+
+    def _canonical_key(self, key: KeyT) -> KeyT:
+        if self._factory.has(key):
+            return key
+        if isinstance(key, type) and self._locator:
+            cands: List[Tuple[bool, Any]] = []
+            for k, md in self._locator._metadata.items():
+                typ = md.provided_type or md.concrete_class
+                if not isinstance(typ, type):
+                    continue
+                try:
+                    if typ is not key and issubclass(typ, key):
+                        cands.append((md.primary, k))
+                except Exception:
+                    continue
+            if cands:
+                prim = [k for is_p, k in cands if is_p]
+                return prim[0] if prim else cands[0][1]
+        if isinstance(key, str) and self._locator:
+            for k, md in self._locator._metadata.items():
+                if md.pico_name == key:
+                    return k
+        return key
+
+    @overload
+    def get(self, key: type) -> Any: ...
+    @overload
+    def get(self, key: str) -> Any: ...
+    def get(self, key: KeyT) -> Any:
+        key = self._canonical_key(key)
+        cache = self._cache_for(key)
+        cached = cache.get(key)
+        if cached is not None:
+            self.context.cache_hit_count += 1
+            for o in self._observers: o.on_cache_hit(key)
+            return cached
+        import time as _tm
+        t0 = _tm.perf_counter()
+        chain = list(_resolve_chain.get())
+        for k in chain:
+            if k == key:
+                details = self._tracer.describe_cycle(tuple(chain), key, self._locator)
+                raise ComponentCreationError(key, CircularDependencyError(chain, key, details=details))
+        token_chain = _resolve_chain.set(tuple(chain + [key]))
+        token_container = self.activate()
+        token_tracer = self._tracer.enter(key, via="provider")
+        try:
+            provider = self._factory.get(key)
+            try:
+                instance = provider()
+            except ProviderNotFoundError as e:
+                raise
+            except Exception as e:
+                raise ComponentCreationError(key, e) from e
+            instance = self._maybe_wrap_with_aspects(key, instance)
+            cache.put(key, instance)
+            self.context.resolve_count += 1
+            took_ms = (_tm.perf_counter() - t0) * 1000
+            for o in self._observers: o.on_resolve(key, took_ms)
+            return instance
+        finally:
+            self._tracer.leave(token_tracer)
+            _resolve_chain.reset(token_chain)
+            self.deactivate(token_container)
+
+    async def aget(self, key: KeyT) -> Any:
+        key = self._canonical_key(key)
+        cache = self._cache_for(key)
+        cached = cache.get(key)
+        if cached is not None:
+            self.context.cache_hit_count += 1
+            for o in self._observers: o.on_cache_hit(key)
+            return cached
+        import time as _tm
+        t0 = _tm.perf_counter()
+        chain = list(_resolve_chain.get())
+        for k in chain:
+            if k == key:
+                details = self._tracer.describe_cycle(tuple(chain), key, self._locator)
+                raise ComponentCreationError(key, CircularDependencyError(chain, key, details=details))
+        token_chain = _resolve_chain.set(tuple(chain + [key]))
+        token_container = self.activate()
+        token_tracer = self._tracer.enter(key, via="provider")
+        try:
+            provider = self._factory.get(key)
+            try:
+                instance = provider()
+                if inspect.isawaitable(instance):
+                    instance = await instance
+            except ProviderNotFoundError as e:
+                raise
+            except Exception as e:
+                raise ComponentCreationError(key, e) from e
+            instance = self._maybe_wrap_with_aspects(key, instance)
+            cache.put(key, instance)
+            self.context.resolve_count += 1
+            took_ms = (_tm.perf_counter() - t0) * 1000
+            for o in self._observers: o.on_resolve(key, took_ms)
+            return instance
+        finally:
+            self._tracer.leave(token_tracer)
+            _resolve_chain.reset(token_chain)
+            self.deactivate(token_container)
+
+    def _resolve_type_key(self, key: type):
+        if not self._locator:
+            return None
+        cands: List[Tuple[bool, Any]] = []
+        for k, md in self._locator._metadata.items():
+            typ = md.provided_type or md.concrete_class
+            if not isinstance(typ, type):
+                continue
+            try:
+                if typ is not key and issubclass(typ, key):
+                    cands.append((md.primary, k))
+            except Exception:
+                continue
+        if not cands:
+            return None
+        prim = [k for is_p, k in cands if is_p]
+        return prim[0] if prim else cands[0][1]
+
+    def _maybe_wrap_with_aspects(self, key, instance: Any) -> Any:
+        if isinstance(instance, UnifiedComponentProxy):
+            return instance
+        cls = type(instance)
+        for _, fn in inspect.getmembers(cls, predicate=lambda m: inspect.isfunction(m) or inspect.ismethod(m) or inspect.iscoroutinefunction(m)):
+            if getattr(fn, "_pico_interceptors_", None):
+                return UnifiedComponentProxy(container=self, target=instance)
         return instance
 
-    def eager_instantiate_all(self):
-        for key, prov in list(self._providers.items()):
-            if not prov["lazy"]:
-                self.get(key)
+    def cleanup_all(self) -> None:
+        for _, obj in self._caches.all_items():
+            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
+                meta = getattr(m, PICO_META, {})
+                if meta.get("cleanup", False):
+                    from .api import _resolve_args
+                    kwargs = _resolve_args(m, self)
+                    m(**kwargs)
+        if self._locator:
+            seen = set()
+            for md in self._locator._metadata.values():
+                fc = md.factory_class
+                if fc and fc not in seen:
+                    seen.add(fc)
+                    inst = self.get(fc) if self._factory.has(fc) else fc()
+                    for _, m in inspect.getmembers(inst, predicate=inspect.ismethod):
+                        meta = getattr(m, PICO_META, {})
+                        if meta.get("cleanup", False):
+                            from .api import _resolve_args
+                            kwargs = _resolve_args(m, self)
+                            m(**kwargs)
 
-    def get_all(self, base_type: Any):
-        return tuple(self._resolve_all_for_base(base_type, qualifiers=()))
+    def activate_scope(self, name: str, scope_id: Any):
+        return self.scopes.activate(name, scope_id)
 
-    def get_all_qualified(self, base_type: Any, *qualifiers: str):
-        return tuple(self._resolve_all_for_base(base_type, qualifiers=qualifiers))
+    def deactivate_scope(self, name: str, token: Optional[contextvars.Token]) -> None:
+        self.scopes.deactivate(name, token)
 
-    def _resolve_all_for_base(self, base_type: Any, qualifiers=()):
-        matches = []
-        for provider_key, meta in self._providers.items():
-            cls = provider_key if isinstance(provider_key, type) else None
-            if cls is None:
-                continue
-            if _requires_collection_of_base(cls, base_type):
-                continue
-            if _is_compatible(cls, base_type):
-                prov_qs = meta.get("qualifiers", ())
-                if all(q in prov_qs for q in qualifiers):
-                    inst = self.get(provider_key)
-                    matches.append(inst)
-        return matches
+    def info(self, msg: str) -> None:
+        LOGGER.info(f"[{self.container_id[:8]}] {msg}")
 
-    def get_providers(self) -> Dict[Any, Dict]:
-        return self._providers.copy()
+    @contextmanager
+    def scope(self, name: str, scope_id: Any):
+        tok = self.activate_scope(name, scope_id)
+        try:
+            yield self
+        finally:
+            self.deactivate_scope(name, tok)
 
-def _is_protocol(t) -> bool:
-    return getattr(t, "_is_protocol", False) is True
+    def health_check(self) -> Dict[str, bool]:
+        out: Dict[str, bool] = {}
+        for k, obj in self._caches.all_items():
+            for name, m in inspect.getmembers(obj, predicate=callable):
+                if getattr(m, PICO_META, {}).get("health_check", False):
+                    try:
+                        out[f"{getattr(k,'__name__',k)}.{name}"] = bool(m())
+                    except Exception:
+                        out[f"{getattr(k,'__name__',k)}.{name}"] = False
+        return out
 
-def _is_compatible(cls, base) -> bool:
-    try:
-        if isinstance(base, type) and issubclass(cls, base):
-            return True
-    except TypeError:
-        pass
-    if _is_protocol(base):
-        names = set(getattr(base, "__annotations__", {}).keys())
-        names.update(n for n in getattr(base, "__dict__", {}).keys() if not n.startswith("_"))
-        for n in names:
-            if n.startswith("__") and n.endswith("__"):
-                continue
-            if not hasattr(cls, n):
-                return False
-        return True
-    return False
+    async def cleanup_all_async(self) -> None:
+        for _, obj in self._caches.all_items():
+            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
+                meta = getattr(m, PICO_META, {})
+                if meta.get("cleanup", False):
+                    from .api import _resolve_args
+                    res = m(**_resolve_args(m, self))
+                    import inspect as _i
+                    if _i.isawaitable(res):
+                        await res
+        if self._locator:
+            seen = set()
+            for md in self._locator._metadata.values():
+                fc = md.factory_class
+                if fc and fc not in seen:
+                    seen.add(fc)
+                    inst = self.get(fc) if self._factory.has(fc) else fc()
+                    for _, m in inspect.getmembers(inst, predicate=inspect.ismethod):
+                        meta = getattr(m, PICO_META, {})
+                        if meta.get("cleanup", False):
+                            from .api import _resolve_args
+                            res = m(**_resolve_args(m, self))
+                            import inspect as _i
+                            if _i.isawaitable(res):
+                                await res
+        try:
+            from .event_bus import EventBus
+            for _, obj in self._caches.all_items():
+                if isinstance(obj, EventBus):
+                    await obj.aclose()
+        except Exception:
+            pass
 
-def _requires_collection_of_base(cls, base) -> bool:
-    try:
-        sig = inspect.signature(cls.__init__)
-    except Exception:
-        return False
-    try:
-        from .resolver import _get_hints
-        hints = _get_hints(cls.__init__, owner_cls=cls)
-    except Exception:
-        hints = {}
-    for name, param in sig.parameters.items():
-        if name == "self":
-            continue
-        ann = hints.get(name, param.annotation)
-        origin = get_origin(ann) or ann
-        if origin in (list, tuple, _t.List, _t.Tuple):
-            inner = (get_args(ann) or (object,))[0]
-            if get_origin(inner) is Annotated:
-                args = get_args(inner)
-                if args:
-                    inner = args[0]
-            if inner is base:
-                return True
-    return False
+    def stats(self) -> Dict[str, Any]:
+        import time as _t
+        resolves = self.context.resolve_count
+        hits = self.context.cache_hit_count
+        total = resolves + hits
+        return {
+            "container_id": self.container_id,
+            "profiles": self.context.profiles,
+            "uptime_seconds": _t.time() - self.context.created_at,
+            "total_resolves": resolves,
+            "cache_hits": hits,
+            "cache_hit_rate": (hits / total) if total > 0 else 0.0,
+            "registered_components": len(self._locator._metadata) if self._locator else 0,
+        }
+
+    def shutdown(self) -> None:
+        self.cleanup_all()
+        PicoContainer._container_registry.pop(self.container_id, None)
+
+    def export_graph(
+        self,
+        path: str,
+        *,
+        include_scopes: bool = True,
+        include_qualifiers: bool = False,
+        rankdir: str = "LR",
+        title: Optional[str] = None,
+    ) -> None:
+
+        if not self._locator:
+            raise RuntimeError("No locator attached; cannot export dependency graph.")
+
+        from .api import _build_resolution_graph
+
+        md_by_key = self._locator._metadata
+        graph = _build_resolution_graph(self)
+
+        lines: List[str] = []
+        lines.append("digraph Pico {")
+        lines.append(f'  rankdir="{rankdir}";')
+        lines.append("  node [shape=box, fontsize=10];")
+        if title:
+            lines.append(f'  labelloc="t";')
+            lines.append(f'  label="{title}";')
+
+        def _node_id(k: KeyT) -> str:
+            return f'n_{abs(hash(k))}'
+
+        def _node_label(k: KeyT) -> str:
+            name = getattr(k, "__name__", str(k))
+            md = md_by_key.get(k)
+            parts = [name]
+            if md is not None and include_scopes:
+                parts.append(f"[scope={md.scope}]")
+            if md is not None and include_qualifiers and md.qualifiers:
+                q = ",".join(sorted(md.qualifiers))
+                parts.append(f"\\n⟨{q}⟩")
+            return "\\n".join(parts)
+
+        for key in md_by_key.keys():
+            nid = _node_id(key)
+            label = _node_label(key)
+            lines.append(f'  {nid} [label="{label}"];')
+
+        for parent, deps in graph.items():
+            pid = _node_id(parent)
+            for child in deps:
+                cid = _node_id(child)
+                lines.append(f"  {pid} -> {cid};")
+
+        lines.append("}")
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
 
