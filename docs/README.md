@@ -25,14 +25,9 @@ This documentation site guides you from your first component to building complex
 | **6. Cookbook (Patterns)** | Full architectural solutions (Multi-tenant, Hot-reload, CQRS). | [Cookbook Overview](./cookbook/README.md) |
 | **7. Architecture** | Design principles and internal deep-dive. | [Architecture Overview](./architecture/README.md) |
 | **8. API Reference** | Glossary and decorator/method cheatsheets. | [API Reference Overview](./api-reference/README.md) |
-```
 
-### [docs/overview.md]
 
-````markdown
-# Pico IOC: A Python Dependency Injection Framework
-
-## 1. Overview
+## Overview
 
 **Pico IOC** is a Dependency Injection (DI) container for Python that implements advanced enterprise architecture patterns. Its design is inspired by frameworks like Spring (Java) and Guice, adapted for the Python ecosystem.
 
@@ -40,7 +35,7 @@ It provides a robust, type-safe, and testable foundation for complex application
 
 ---
 
-## 2. Core Strengths
+## Core Strengths
 
 The framework is built on specific principles:
 
@@ -50,7 +45,7 @@ The framework is built on specific principles:
 
 ---
 
-## 3. Getting Started: A Simple Example
+## Getting Started: A Simple Example
 
 ```python
 from dataclasses import dataclass
@@ -83,11 +78,11 @@ app = container.get(App)
 app.run()
 
 # Output: Hello!
-````
+```
 
 -----
 
-## 4\. Navigation
+##  Navigation
 
 | [⬅️ Anterior: Inicio](./README.md) | [🏠 Índice Principal](./README.md) | [Siguiente ➡️: Guía de Usuario](./user-guide/README.md) |
 | :--- | :--- | :--- |
