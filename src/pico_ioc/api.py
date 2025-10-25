@@ -147,9 +147,10 @@ def provides(
     on_missing_priority: int = 0,
 ):
     def dec(fn):
-        @functools.wraps(fn)
+        target = fn.__func__ if isinstance(fn, (staticmethod, classmethod)) else fn
+        @functools.wraps(target)
         def w(*a, **k):
-            return fn(*a, **k)
+            return target(*a, **k)
         setattr(w, PICO_INFRA, "provides")
         setattr(w, PICO_NAME, name if name is not None else key)
         setattr(w, PICO_KEY, key)
@@ -536,9 +537,12 @@ class Registrar:
         self._resolver = ConfigResolver(tuple(tree_sources))
         self._adapters = TypeAdapterRegistry()
         self._graph = ObjectGraphBuilder(self._resolver, self._adapters)
+        self._provides_functions: Dict[KeyT, Callable[..., Any]] = {}
         
     def locator(self) -> ComponentLocator:
-        return ComponentLocator(self._metadata, self._indexes)
+        loc = ComponentLocator(self._metadata, self._indexes)
+        setattr(loc, "_provides_functions", dict(self._provides_functions))
+        return loc
 
     def attach_runtime(self, pico, locator: ComponentLocator) -> None:
         for deferred in self._deferred:
@@ -598,19 +602,48 @@ class Registrar:
             return
         for name in dir(cls):
             try:
-                real = getattr(cls, name)
+                raw = inspect.getattr_static(cls, name)
             except Exception:
                 continue
-            if callable(real) and getattr(real, PICO_INFRA, None) == "provides":
-                if not self._enabled_by_condition(real):
-                    continue
-                k = getattr(real, PICO_KEY)
+            fn = None
+            kind = None
+            if isinstance(raw, staticmethod):
+                fn = raw.__func__
+                kind = "static"
+            elif isinstance(raw, classmethod):
+                fn = raw.__func__
+                kind = "class"
+            elif inspect.isfunction(raw):
+                fn = raw
+                kind = "instance"
+            else:
+                continue
+            if getattr(fn, PICO_INFRA, None) != "provides":
+                continue
+            if not self._enabled_by_condition(fn):
+                continue
+            k = getattr(fn, PICO_KEY)
+            if kind == "instance":
                 provider = DeferredProvider(lambda pico, loc, fc=cls, mn=name: _build_method(getattr(_build_class(fc, pico, loc), mn), pico, loc))
-                rt = _get_return_type(real)
-                qset = set(str(q) for q in getattr(real, PICO_META, {}).get("qualifier", ()))
-                sc = getattr(real, PICO_META, {}).get("scope", getattr(cls, PICO_META, {}).get("scope", "singleton"))
-                md = ProviderMetadata(key=k, provided_type=rt if isinstance(rt, type) else (k if isinstance(k, type) else None), concrete_class=None, factory_class=cls, factory_method=name, qualifiers=qset, primary=bool(getattr(real, PICO_META, {}).get("primary")), lazy=bool(getattr(real, PICO_META, {}).get("lazy", False)), infra=getattr(cls, PICO_INFRA, None), pico_name=getattr(real, PICO_NAME, None), scope=sc)
-                self._queue(k, provider, md)
+            else:
+                provider = DeferredProvider(lambda pico, loc, f=fn: _build_method(f, pico, loc))
+            rt = _get_return_type(fn)
+            qset = set(str(q) for q in getattr(fn, PICO_META, {}).get("qualifier", ()))
+            sc = getattr(fn, PICO_META, {}).get("scope", getattr(cls, PICO_META, {}).get("scope", "singleton"))
+            md = ProviderMetadata(
+                key=k,
+                provided_type=rt if isinstance(rt, type) else (k if isinstance(k, type) else None),
+                concrete_class=None,
+                factory_class=cls,
+                factory_method=name,
+                qualifiers=qset,
+                primary=bool(getattr(fn, PICO_META, {}).get("primary")),
+                lazy=bool(getattr(fn, PICO_META, {}).get("lazy", False)),
+                infra=getattr(cls, PICO_INFRA, None),
+                pico_name=getattr(fn, PICO_NAME, None),
+                scope=sc
+            )
+            self._queue(k, provider, md)
 
     def _register_configuration_class(self, cls: type) -> None:
         if not self._enabled_by_condition(cls):
@@ -639,6 +672,30 @@ class Registrar:
         md = ProviderMetadata(key=target, provided_type=target, concrete_class=None, factory_class=None, factory_method=None, qualifiers=qset, primary=True, lazy=False, infra="configured", pico_name=prefix, scope=sc)
         self._queue(target, provider, md)
 
+    def _register_provides_function(self, fn: Callable[..., Any]) -> None:
+        if not self._enabled_by_condition(fn):
+            return
+        k = getattr(fn, PICO_KEY)
+        provider = DeferredProvider(lambda pico, loc, f=fn: _build_method(f, pico, loc))
+        rt = _get_return_type(fn)
+        qset = set(str(q) for q in getattr(fn, PICO_META, {}).get("qualifier", ()))
+        sc = getattr(fn, PICO_META, {}).get("scope", "singleton")
+        md = ProviderMetadata(
+            key=k,
+            provided_type=rt if isinstance(rt, type) else (k if isinstance(k, type) else None),
+            concrete_class=None,
+            factory_class=None,
+            factory_method=getattr(fn, "__name__", None),
+            qualifiers=qset,
+            primary=bool(getattr(fn, PICO_META, {}).get("primary")),
+            lazy=bool(getattr(fn, PICO_META, {}).get("lazy", False)),
+            infra="provides",
+            pico_name=getattr(fn, PICO_NAME, None),
+            scope=sc
+        )
+        self._queue(k, provider, md)
+        self._provides_functions[k] = fn
+
     def register_module(self, module: Any) -> None:
         for _, obj in inspect.getmembers(module):
             if inspect.isclass(obj):
@@ -657,6 +714,9 @@ class Registrar:
                     self._register_configuration_class(obj)
                 elif infra == "configured":
                     self._register_configured_class(obj)
+        for _, fn in inspect.getmembers(module, predicate=inspect.isfunction):
+            if getattr(fn, PICO_INFRA, None) == "provides":
+                self._register_provides_function(fn)
 
     def _prefix_exists(self, md: ProviderMetadata) -> bool:
         if md.infra != "configured":
@@ -722,6 +782,13 @@ class Registrar:
                 dep = self._find_md_for_type(t)
                 if dep and dep.scope != "singleton":
                     return dep.scope
+        if md.infra == "provides":
+            fn = self._provides_functions.get(md.key)
+            if callable(fn):
+                for t in self._iter_param_types(fn):
+                    dep = self._find_md_for_type(t)
+                    if dep and dep.scope != "singleton":
+                        return dep.scope
         return None
 
     def _promote_scopes(self) -> None:
@@ -814,12 +881,18 @@ class Registrar:
                     callables_to_check.append(fn)
                     loc_name = f"factory {_fmt(md.factory_class)}.{md.factory_method}"
                 except AttributeError:
-                     errors.append(f"Component '{_fmt(k)}' refers to missing factory method '{md.factory_method}' on class '{_fmt(md.factory_class)}'")
-                     continue
+                    errors.append(f"Component '{_fmt(k)}' refers to missing factory method '{md.factory_method}' on class '{_fmt(md.factory_class)}'")
+                    continue
+            elif md.infra == "provides":
+                fn = self._provides_functions.get(k)
+                if callable(fn):
+                    callables_to_check.append(fn)
+                    loc_name = f"function {getattr(fn, '__name__', 'unknown')}"
+                else:
+                    continue
             else:
-                 if not md.concrete_class and not md.factory_class and md.override:
-                     continue
-
+                if not md.concrete_class and not md.factory_class and md.override:
+                    continue
 
             for callable_obj in callables_to_check:
                 try:
@@ -848,7 +921,6 @@ class Registrar:
                     elif isinstance(ann, str):
                         key_found_by_name = self._find_md_for_name(ann)
                         directly_bound = ann in self._metadata or self._factory.has(ann)
-
                         if not key_found_by_name and not directly_bound:
                             errors.append(f"{_fmt(k)} ({loc_name}) depends on string key '{ann}' which is not bound")
                         continue
@@ -856,20 +928,20 @@ class Registrar:
                     elif isinstance(ann, type) and not _skip_type(ann):
                         dep_key_found = self._factory.has(ann) or ann in self._metadata
                         if not dep_key_found:
-                             assignable_md = self._find_md_for_type(ann)
-                             if assignable_md is None:
-                                 by_name_key = self._find_md_for_name(getattr(ann, "__name__", ""))
-                                 if by_name_key is None:
-                                      errors.append(f"{_fmt(k)} ({loc_name}) depends on {_fmt(ann)} which is not bound")
+                            assignable_md = self._find_md_for_type(ann)
+                            if assignable_md is None:
+                                by_name_key = self._find_md_for_name(getattr(ann, "__name__", ""))
+                                if by_name_key is None:
+                                    errors.append(f"{_fmt(k)} ({loc_name}) depends on {_fmt(ann)} which is not bound")
                         continue
 
                     elif ann is inspect._empty:
-                         name_key = name
-                         key_found_by_name = self._find_md_for_name(name_key)
-                         directly_bound = name_key in self._metadata or self._factory.has(name_key)
-                         if not key_found_by_name and not directly_bound:
-                              errors.append(f"{_fmt(k)} ({loc_name}) depends on parameter '{name}' with no type hint, and key '{name_key}' is not bound")
-                         continue
+                        name_key = name
+                        key_found_by_name = self._find_md_for_name(name_key)
+                        directly_bound = name_key in self._metadata or self._factory.has(name_key)
+                        if not key_found_by_name and not directly_bound:
+                            errors.append(f"{_fmt(k)} ({loc_name}) depends on parameter '{name}' with no type hint, and key '{name_key}' is not bound")
+                        continue
                          
         if errors:
             raise InvalidBindingError(errors)
@@ -905,6 +977,7 @@ class Registrar:
                 self._deferred.append(provider)
         self._rebuild_indexes()
         self._validate_bindings()
+
 
 def init(modules: Union[Any, Iterable[Any]], *, profiles: Tuple[str, ...] = (), allowed_profiles: Optional[Iterable[str]] = None, environ: Optional[Dict[str, str]] = None, overrides: Optional[Dict[KeyT, Any]] = None, logger: Optional[logging.Logger] = None, config: Tuple[ConfigSource, ...] = (), custom_scopes: Optional[Dict[str, "ScopeProtocol"]] = None, validate_only: bool = False, container_id: Optional[str] = None, tree_config: Tuple["TreeSource", ...] = (), observers: Optional[List["ContainerObserver"]] = None,) -> PicoContainer:
     active = tuple(p.strip() for p in profiles if p)
@@ -1001,6 +1074,10 @@ def _dependency_keys_for_static(md: ProviderMetadata, locator: ComponentLocator)
         fn = md.concrete_class.__init__
     elif md.factory_class is not None and md.factory_method is not None:
         fn = getattr(md.factory_class, md.factory_method)
+    elif md.infra == "provides":
+        fn = getattr(locator, "_provides_functions", {}).get(md.key)
+        if not callable(fn):
+            return ()
     else:
         return ()
     plan = _compile_argplan_static(fn, locator)
@@ -1017,14 +1094,30 @@ def _build_resolution_graph(pico: "PicoContainer") -> Dict[KeyT, Tuple[KeyT, ...
     loc = pico._locator
     if not loc:
         return {}
+
+    def _map_dep_to_bound_key(dep_key: KeyT) -> KeyT:
+        if dep_key in loc._metadata:
+            return dep_key
+        if isinstance(dep_key, type):
+            for k, md in loc._metadata.items():
+                typ = md.provided_type or md.concrete_class
+                if isinstance(typ, type):
+                    try:
+                        if issubclass(typ, dep_key):
+                            return k
+                    except Exception:
+                        continue
+        return dep_key
+
     graph: Dict[KeyT, Tuple[KeyT, ...]] = {}
     for key, md in list(loc._metadata.items()):
-        deps = []
+        deps: List[KeyT] = []
         for d in _dependency_keys_for_static(md, loc):
-            canon = pico._canonical_key(d)
-            deps.append(canon)
+            mapped = _map_dep_to_bound_key(d)
+            deps.append(mapped)
         graph[key] = tuple(deps)
     return graph
+
 
 def _find_cycle(graph: Dict[KeyT, Tuple[KeyT, ...]]) -> Optional[Tuple[KeyT, ...]]:
     temp: Set[KeyT] = set()

@@ -20,23 +20,23 @@ Marks a class as a factory for creating other components. Factory methods should
 
 ### `@provides(key: Any, *, ...)`
 
-Marks a method *inside* a `@factory` class as the provider for a specific **Key**.
+Marks a function or method as the provider for a specific **Key**. Can be used on module-level functions, or on methods within a `@factory` class (as instance methods or `@staticmethod`s).
 * **`key`**: The **Key** (class type or string) that this method provides an instance for.
 
 ### Common Parameters for `@component`, `@factory`, `@provides`
 
-| Parameter                 | Type                         | Default       | Description                                                                                             | Applies To            |
+| Parameter                 | Type                         | Default       | Description                            DRAFT                                                        | Applies To            |
 | :------------------------ | :--------------------------- | :------------ | :------------------------------------------------------------------------------------------------------ | :-------------------- |
-| `name`                    | `str \| None`                | `None`        | Optional explicit component name/key. Defaults to class name or `key` for `@provides`.                   | All                   |
-| `qualifiers`              | `Iterable[str]`              | `()`          | Qualifier tags for disambiguation when injecting lists (`Annotated[List[Type], Qualifier(...)]`).        | All                   |
-| `scope`                   | `str`                        | `"singleton"` | Component lifetime: `"singleton"`, `"prototype"`, `"request"`, `"session"`, `"transaction"`, or custom. | All                   |
-| `primary`                 | `bool`                       | `False`       | Marks this component as the preferred candidate when multiple implementations match a type.              | All                   |
-| `lazy`                    | `bool`                       | `False`       | Defers singleton instantiation until first use (`get`/`aget`).                                            | All                   |
-| `conditional_profiles`    | `Iterable[str]`              | `()`          | Enables the component only if one of the specified profiles is active (`init(profiles=...)`).             | All                   |
-| `conditional_require_env` | `Iterable[str]`              | `()`          | Enables the component only if all specified environment variables exist and are non-empty.              | All                   |
-| `conditional_predicate`   | `Callable[[], bool] \| None` | `None`        | Custom function returning `True`/`False` to control conditional activation.                             | All                   |
-| `on_missing_selector`     | `str \| type \| None`        | `None`        | Registers this component only if no other provider for the `selector` key/type is found. Acts as a fallback. | `@component`, `@factory` |
-| `on_missing_priority`     | `int`                        | `0`           | Priority for `on_missing` providers when multiple fallbacks target the same selector (higher wins).   | `@component`, `@factory` |
+| `name`                    | `str \| None`                | `None`        | Optional explicit component name/key. Defaults to class name or `key` for `@provides`.                   | All                   |
+| `qualifiers`              | `Iterable[str]`              | `()`          | Qualifier tags for disambiguation when injecting lists (`Annotated[List[Type], Qualifier(...)]`).        | All                   |
+| `scope`                   | `str`                        | `"singleton"` | Component lifetime: `"singleton"`, `"prototype"`, `"request"`, `"session"`, `"transaction"`, or custom. | All                   |
+| `primary`                 | `bool`                       | `False`       | Marks this component as the preferred candidate when multiple implementations match a type.              | All                   |
+| `lazy`                    | `bool`                       | `False`       | Defers singleton instantiation until first use (`get`/`aget`).                                            | All                   |
+| `conditional_profiles`DRAFT | `Iterable[str]`              | `()`          | Enables the component only if one of the specified profiles is active (`init(profiles=...)`).             | All                   |
+| `conditional_require_env` | `Iterable[str]`              | `()`          | Enables the component only if all specified environment variables exist and are non-empty.              | All                   |
+| `conditional_predicate`   | `Callable[[], bool] \| None` | `None`        | Custom function returning `True`/`False` to control conditional activation.                        S      | All                   |
+| `on_missing_selector`     | `str \| type \| None`        | `None`        | Registers this component only if no other provider for the `selector` key/type is found. Acts as a fallback. | `@component`, `@factory` |
+| `on_missing_priority`     | `int`                        | `0`           | Priority for `on_missing` providers when multiple fallbacks target the same selector (higher wins).S  | `@component`, `@factory` |
 
 ---
 
@@ -88,8 +88,8 @@ Marks a method (usually within an `AutoSubscriberMixin` class) to be called when
 * **`event_type`**: The specific `Event` subclass to listen for.
 * **`priority`**: (Optional) Handlers with higher numerical priority run first. Default `0`.
 * **`policy`**: (Optional) Controls execution strategy:
-    * `ExecPolicy.INLINE` (Default): Handler runs synchronously in the publisher's context (awaited if async).
-    * `ExecPolicy.TASK`: Handler runs as a background `asyncio.Task` ("fire and forget").
-    * `ExecPolicy.THREADPOOL`: Sync handler runs in a thread pool executor.
+DRAFT     * `ExecPolicy.INLINE` (Default): Handler runs synchronously in the publisher's context (awaited if async).
+    * `ExecPolicy.TASK`: Handler runs as a background `asyncio.Task` ("fire and forget").
+    * `ExecPolicy.THREADPOOL`: Sync handler runs in a thread pool executor.
 * **`once`**: (Optional) If `True`, the handler runs only once and is then automatically unsubscribed.
 
