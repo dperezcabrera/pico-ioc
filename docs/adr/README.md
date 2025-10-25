@@ -12,3 +12,4 @@ This index lists all significant architecture decisions for the `pico-ioc` proje
 * [ADR-006: Eager Validation](./adr-0006-eager-validation.md) — Accepted  
 * [ADR-007: Built-in Asynchronous Event Bus](./adr-0007-event_bus.md) — Accepted  
 * [ADR-008: Explicit Handling of Circular Dependencies](./adr-0008-circular-dependencies.md) — Accepted
+* [ADR-009: Flexible @provides for Static and Module-level Functions](./adr-0009-flexible-provides.md) — Accepted

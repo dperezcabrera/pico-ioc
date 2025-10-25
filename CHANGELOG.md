@@ -60,6 +60,37 @@ This version marks a significant redesign and the first major public release, es
 
 ---
 
+## [2.0.1] - 2025-10-25
+
+### Added ✨
+
+- **ADR-0009: Flexible `@provides` Support**  
+  Implemented support for using `@provides` in additional contexts:
+  - `@staticmethod` methods within `@factory` classes  
+  - `@classmethod` methods within `@factory` classes  
+  - Module-level functions  
+  These new provider types are discovered automatically during module scanning and participate fully in dependency resolution, validation, and graph generation.
+
+- **Dependency Graph and Validation Enhancements**  
+  - `_build_resolution_graph` now includes edges for all `@provides` functions, regardless of where they are defined.  
+  - Fail-fast validation checks now cover static/class/module-level providers, reporting missing bindings consistently.  
+  - Scope inference and promotion logic apply equally to these new provider types.
+
+### Documentation 📚
+
+- Expanded `docs/overview.md` to document the new flexible provider options (`@staticmethod`, `@classmethod`, module-level functions).  
+- Updated `docs/guide.md` with practical examples showing when to use each style of provider.  
+- Linked ADR-0009 for design rationale and migration guidance.
+
+### Notes 📝
+
+- This is a **minor feature release** introducing a major ergonomics improvement (ADR-0009).  
+- Fully backward compatible with existing factories, components, and configuration mechanisms.  
+- Encourages a lighter, more Pythonic style for simple provider declarations.
+
+
+---
+
 ## [<2.0.0]
 
 * Internal development and prototyping phase. Basic dependency injection concepts established. Architecture significantly reworked for the v2.0.0 release.

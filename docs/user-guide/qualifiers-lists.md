@@ -40,7 +40,7 @@ The pattern is simple:
     @component(qualifiers=[PAYMENT])
     class StripeProvider(PaymentProvider): ...
     ```
-    *(Note: Previously, a `@qualifier` decorator was used, but this was replaced by the `qualifiers` parameter for a unified API, as described in ADR-009).*
+
 3.  **Request a Tagged List:** In your service, you use `typing.Annotated` to request a `List` of all components that match a specific `Qualifier`.
     ```python
     from typing import List, Annotated

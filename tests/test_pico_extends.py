@@ -65,7 +65,7 @@ class Widget:
 
 @factory
 class WidgetFactory:
-    @provides(Widget)
+    @provides(Widget, primary=True)
     def build_widget(self) -> Widget:
         test_logger.info("Widget_Factory: Creating Widget")
         return Widget()
@@ -338,4 +338,122 @@ async def test_event_bus_integration_and_shutdown():
     await container.cleanup_all_async()
     with pytest.raises(EventBusClosedError):
         await bus.publish(MyTestEvent("Goodbye"))
+
+def test_dependency_graph_dot_export(tmp_path):
+    import types
+    from pico_ioc.api import component, provides, init, _build_resolution_graph, _format_key
+
+    class Repo:
+        pass
+
+    class Service:
+        pass
+
+    class ServiceImpl(Service):
+        def __init__(self, repo: Repo) -> None:
+            self.repo = repo
+
+    class Tool:
+        pass
+
+    def make_module():
+        m = types.ModuleType("graph_mod_dot")
+
+        @component
+        class MyRepo(Repo):
+            pass
+
+        @provides(Service)
+        def build_service(repo: Repo) -> Service:
+            return ServiceImpl(repo)
+
+        @provides(Tool)
+        def build_tool(svc: Service) -> Tool:
+            return Tool()
+
+        setattr(m, "MyRepo", MyRepo)
+        setattr(m, "build_service", build_service)
+        setattr(m, "build_tool", build_tool)
+        return m
+
+    def graph_to_dot(graph):
+        nodes = list(graph.keys())
+        ids = {k: f"n{i}" for i, k in enumerate(nodes)}
+        lines = []
+        lines.append("digraph PicoIoC {")
+        lines.append("rankdir=LR;")
+        lines.append("node [shape=box];")
+        for k in nodes:
+            nid = ids[k]
+            label = _format_key(k)
+            lines.append(f'{nid} [label="{label}"];')
+        for k, deps in graph.items():
+            src = ids[k]
+            for d in deps:
+                if d in ids:
+                    dst = ids[d]
+                    lines.append(f"{src} -> {dst};")
+        lines.append("}")
+        return "\n".join(lines)
+
+    mod = make_module()
+    pico = init(mod, validate_only=True)
+    graph = _build_resolution_graph(pico)
+    dot = graph_to_dot(graph)
+    out = tmp_path / "dependencies.dot"
+    out.write_text(dot, encoding="utf-8")
+    assert "Service" in dot
+    assert "Repo" in dot
+    assert "Tool" in dot
+    assert "->" in dot
+
+def test_dependency_graph_includes_provides_functions():
+    import types
+    from pico_ioc.api import component, provides, init, _build_resolution_graph
+
+    class Repo:
+        pass
+
+    class Service:
+        pass
+
+    class ServiceImpl(Service):
+        def __init__(self, repo: Repo) -> None:
+            self.repo = repo
+
+    class Tool:
+        pass
+
+    def make_module():
+        m = types.ModuleType("graph_mod")
+
+        @component
+        class MyRepo(Repo):
+            pass
+
+        @provides(Service)
+        def build_service(repo: Repo) -> Service:
+            return ServiceImpl(repo)
+
+        @provides(Tool)
+        def build_tool(svc: Service) -> Tool:
+            return Tool()
+
+        setattr(m, "MyRepo", MyRepo)
+        setattr(m, "build_service", build_service)
+        setattr(m, "build_tool", build_tool)
+        return m
+
+    mod = make_module()
+    pico = init(mod, validate_only=True)
+    graph = _build_resolution_graph(pico)
+
+    assert Service in graph
+    assert Tool in graph
+    assert any(getattr(k, "__name__", "") == "MyRepo" for k in graph)
+
+    myrepo_key = next(k for k in graph if getattr(k, "__name__", "") == "MyRepo")
+    assert myrepo_key in graph[Service]
+    assert Service in graph[Tool]
+
 
