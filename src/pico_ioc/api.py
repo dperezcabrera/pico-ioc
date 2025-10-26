@@ -426,7 +426,7 @@ def _resolve_args(callable_obj: Callable[..., Any], pico: "PicoContainer") -> Di
                 kwargs[name] = vals
     finally:
         tracer.restore_via(prev)
-    return kwargsresol
+    return kwargs
 
 def _needs_async_configure(obj: Any) -> bool:
     for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
