@@ -23,6 +23,7 @@ from .api import (
     ConfigSource,
     EnvSource,
     FileSource,
+    FlatDictSource,
     init,
     configured,
 )
@@ -76,6 +77,7 @@ __all__ = [
     "EnvSource",
     "FileSource",
     "ConfigSource",
+    "FlatDictSource",
     "init",
     "configured",
     "EventBus",
