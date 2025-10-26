@@ -91,6 +91,32 @@ This version marks a significant redesign and the first major public release, es
 
 ---
 
+## [2.0.2] - 2025-10-26
+
+### Fixed 🧩
+
+* **`@provides` Decorator Execution**
+  Corrected an issue where the `@provides` decorator executed its wrapped function prematurely during module import, leading to runtime errors like `TypeError: Service() takes no arguments`.
+  The decorator now properly registers provider metadata without invoking the function until dependency resolution time.
+
+### Added ✨
+
+* **`FlatDictSource` Configuration Provider**
+  Introduced a lightweight configuration source for flat in-memory dictionaries.
+  Supports optional key prefixing and case sensitivity control for simple, programmatic configuration injection.
+
+### Internal 🔧
+
+* Updated type imports and registration logic in `api.py` to support `Mapping` for the new configuration source.
+* Added `FlatDictSource` to the public API (`__all__` and import namespace).
+
+### Notes 📝
+
+* Fully backward compatible.
+* This patch release focuses on decorator correctness and configuration flexibility improvements.
+
+---
+
 ## [<2.0.0]
 
 * Internal development and prototyping phase. Basic dependency injection concepts established. Architecture significantly reworked for the v2.0.0 release.
