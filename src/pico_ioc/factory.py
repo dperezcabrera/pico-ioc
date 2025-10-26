@@ -28,9 +28,9 @@ class ComponentFactory:
         self._providers[key] = provider
     def has(self, key: KeyT) -> bool:
         return key in self._providers
-    def get(self, key: KeyT) -> Provider:
+    def get(self, key: KeyT, origin: KeyT) -> Provider:
         if key not in self._providers:
-            raise ProviderNotFoundError(key)
+            raise ProviderNotFoundError(key, origin)
         return self._providers[key]
 
 class DeferredProvider:

@@ -9,7 +9,6 @@ from dataclasses import is_dataclass, fields, dataclass, MISSING
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union, get_args, get_origin, Annotated, Protocol, Mapping
 from .constants import LOGGER, PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
 from .exceptions import (
-    ProviderNotFoundError,
     CircularDependencyError,
     ScopeError,
     ConfigurationError,
@@ -409,8 +408,18 @@ def _resolve_args(callable_obj: Callable[..., Any], pico: "PicoContainer") -> Di
     try:
         for kind, name, data in plan:
             if kind == "key":
-                tracer.note_param(data if isinstance(data, (str, type)) else name, name)
-                kwargs[name] = pico.get(data)
+                primary_key = data
+                tracer.note_param(primary_key, name)
+                try:
+                    kwargs[name] = pico.get(primary_key)
+                except ProviderNotFoundError as first_error:
+                    if primary_key != name:
+                        try:
+                            kwargs[name] = pico.get(name)
+                        except ProviderNotFoundError:
+                            raise first_error from None
+                    else:
+                        raise first_error from None
             else:
                 vals = [pico.get(k) for k in data]
                 kwargs[name] = vals
@@ -574,7 +583,7 @@ class Registrar:
             deferred.attach(pico, locator)
         for key, md in list(self._metadata.items()):
             if md.lazy:
-                original = self._factory.get(key)
+                original = self._factory.get(key, origin='lazy')
                 def lazy_proxy_provider(_orig=original, _p=pico):
                     return UnifiedComponentProxy(container=_p, object_creator=_orig)
                 self._factory.bind(key, lazy_proxy_provider)
