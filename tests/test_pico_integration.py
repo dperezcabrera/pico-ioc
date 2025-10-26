@@ -1,7 +1,9 @@
+# tests/test_pico_integration.py
 import pytest
 import os
 import json
 import contextvars
+import types
 from dataclasses import dataclass
 from typing import List, Optional, Annotated, Callable, Any, Protocol
 import logging
@@ -193,6 +195,35 @@ for item in definitions:
 
 test_scopes = {"request": request_scope}
 
+class BaseNamedService:
+    def get_name(self) -> str:
+        return "Base"
+
+class ConcreteNamedService(BaseNamedService):
+    def get_name(self) -> str:
+        return "ConcreteViaStringKey"
+
+@component
+class NeedsNamedServiceByTypeWithFallback:
+    def __init__(self, named_service: BaseNamedService):
+        self.injected_service = named_service
+
+def build_fallback_test_module():
+    m = types.ModuleType("fallback_test_module")
+    @provides("named_service")
+    def build_concrete() -> ConcreteNamedService:
+        return ConcreteNamedService()
+    setattr(m, "NeedsNamedServiceByTypeWithFallback", NeedsNamedServiceByTypeWithFallback)
+    setattr(m, "build_concrete", build_concrete)
+    return m
+
+def test_resolve_fallback_to_parameter_name():
+    test_mod = build_fallback_test_module()
+    container = init(modules=[test_mod])
+    instance = container.get(NeedsNamedServiceByTypeWithFallback)
+    assert isinstance(instance.injected_service, ConcreteNamedService)
+    assert instance.injected_service.get_name() == "ConcreteViaStringKey"
+
 def test_basic_di():
     container = init(test_module)
     instance_b = container.get(ServiceBImpl)
@@ -314,4 +345,3 @@ def test_cleanup_called():
     container.cleanup_all()
     assert holder.closed
     assert "ResourceHolder closed" in log_capture
-
