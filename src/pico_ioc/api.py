@@ -6,7 +6,7 @@ import importlib
 import pkgutil
 import logging
 from dataclasses import is_dataclass, fields, dataclass, MISSING
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union, get_args, get_origin, Annotated, Protocol
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union, get_args, get_origin, Annotated, Protocol, Mapping
 from .constants import LOGGER, PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
 from .exceptions import (
     ProviderNotFoundError,
@@ -53,6 +53,31 @@ class FileSource:
         if isinstance(v, (str, int, float, bool)):
             return str(v)
         return None
+
+class FlatDictSource(ConfigSource):
+    def __init__(self, data: Mapping[str, Any], prefix: str = "", case_sensitive: bool = True):
+        base = dict(data)
+        if case_sensitive:
+            self._data = {str(k): v for k, v in base.items()}
+            self._prefix = prefix
+        else:
+            self._data = {str(k).upper(): v for k, v in base.items()}
+            self._prefix = prefix.upper()
+        self._case_sensitive = case_sensitive
+
+    def get(self, key: str) -> Optional[str]:
+        if not key:
+            return None
+        k = f"{self._prefix}{key}" if self._prefix else key
+        if not self._case_sensitive:
+            k = k.upper()
+        v = self._data.get(k)
+        if v is None:
+            return None
+        if isinstance(v, (str, int, float, bool)):
+            return str(v)
+        return None
+
 
 def _meta_get(obj: Any) -> Dict[str, Any]:
     m = getattr(obj, PICO_META, None)
@@ -132,29 +157,21 @@ def factory(
         return c
     return dec(cls) if cls else dec
 
-def provides(
-    key: Any,
-    *,
-    name: Any = None,
-    qualifiers: Iterable[str] = (),
-    scope: str = "singleton",
-    primary: bool = False,
-    lazy: bool = False,
-    conditional_profiles: Iterable[str] = (),
-    conditional_require_env: Iterable[str] = (),
-    conditional_predicate: Optional[Callable[[], bool]] = None,
-    on_missing_selector: Optional[object] = None,
-    on_missing_priority: int = 0,
-):
-    def dec(fn):
+def provides(*dargs, **dkwargs):
+    def _apply(fn, key_hint, *, name=None, qualifiers=(), scope="singleton", primary=False, lazy=False, conditional_profiles=(), conditional_require_env=(), conditional_predicate=None, on_missing_selector=None, on_missing_priority=0):
         target = fn.__func__ if isinstance(fn, (staticmethod, classmethod)) else fn
-        @functools.wraps(target)
-        def w(*a, **k):
-            return target(*a, **k)
-        setattr(w, PICO_INFRA, "provides")
-        setattr(w, PICO_NAME, name if name is not None else key)
-        setattr(w, PICO_KEY, key)
-        m = _meta_get(w)
+        inferred_key = key_hint
+        if inferred_key is MISSING:
+            rt = _get_return_type(target)
+            if isinstance(rt, type):
+                inferred_key = rt
+            else:
+                inferred_key = getattr(target, "__name__", str(target))
+        setattr(target, PICO_INFRA, "provides")
+        pico_name = name if name is not None else (inferred_key if isinstance(inferred_key, str) else getattr(target, "__name__", str(target)))
+        setattr(target, PICO_NAME, pico_name)
+        setattr(target, PICO_KEY, inferred_key)
+        m = _meta_get(target)
         m["qualifier"] = tuple(str(q) for q in qualifiers or ())
         m["scope"] = scope
         if primary:
@@ -169,8 +186,16 @@ def provides(
             }
         if on_missing_selector is not None:
             m["on_missing"] = {"selector": on_missing_selector, "priority": int(on_missing_priority)}
-        return w
-    return dec
+        return fn
+
+    if dargs and len(dargs) == 1 and inspect.isfunction(dargs[0]) and not dkwargs:
+        fn = dargs[0]
+        return _apply(fn, MISSING)
+    else:
+        key = dargs[0] if dargs else MISSING
+        def _decorator(fn):
+            return _apply(fn, key, **dkwargs)
+        return _decorator
 
 class Qualifier(str):
     __slots__ = ()
