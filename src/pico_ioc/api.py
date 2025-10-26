@@ -9,6 +9,7 @@ from dataclasses import is_dataclass, fields, dataclass, MISSING
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union, get_args, get_origin, Annotated, Protocol, Mapping
 from .constants import LOGGER, PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
 from .exceptions import (
+    ProviderNotFoundError,
     CircularDependencyError,
     ScopeError,
     ConfigurationError,
@@ -425,7 +426,7 @@ def _resolve_args(callable_obj: Callable[..., Any], pico: "PicoContainer") -> Di
                 kwargs[name] = vals
     finally:
         tracer.restore_via(prev)
-    return kwargs
+    return kwargsresol
 
 def _needs_async_configure(obj: Any) -> bool:
     for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
