@@ -4,9 +4,15 @@ class PicoError(Exception):
     pass
 
 class ProviderNotFoundError(PicoError):
-    def __init__(self, key: Any):
-        super().__init__(f"Provider not found for key: {getattr(key, '__name__', key)}")
+    def __init__(self, key: Any, origin: Any | None = None):
+        key_name = getattr(key, '__name__', str(key))
+        origin_name = getattr(origin, '__name__', str(origin)) if origin else "init"
+        super().__init__(
+            f"Provider for key '{key_name}' not found "
+            f"(required by: '{origin_name}')"
+        )
         self.key = key
+        self.origin = origin
 
 class CircularDependencyError(PicoError):
     def __init__(self, chain: Iterable[Any], current: Any, details: str | None = None, hint: str | None = None):
@@ -51,6 +57,15 @@ class InvalidBindingError(ValidationError):
         super().__init__("Invalid bindings:\n" + "\n".join(f"- {e}" for e in errors))
         self.errors = errors
 
+class AsyncResolutionError(PicoError):
+    def __init__(self, key: Any):
+        key_name = getattr(key, '__name__', str(key))
+        super().__init__(
+            f"Synchronous get() received an awaitable for key '{key_name}'. "
+            "Use aget() instead."
+        )
+        self.key = key
+        
 class EventBusError(PicoError):
     def __init__(self, msg: str):
         super().__init__(msg)

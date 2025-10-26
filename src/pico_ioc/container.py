@@ -4,7 +4,7 @@ import contextvars
 from typing import Any, Dict, List, Optional, Tuple, overload, Union
 from contextlib import contextmanager
 from .constants import LOGGER, PICO_META
-from .exceptions import CircularDependencyError, ComponentCreationError, ProviderNotFoundError
+from .exceptions import CircularDependencyError, ComponentCreationError, ProviderNotFoundError, AsyncResolutionError
 from .factory import ComponentFactory
 from .locator import ComponentLocator
 from .scope import ScopedCaches, ScopeManager
@@ -173,85 +173,88 @@ class PicoContainer:
                     return k
         return key
 
+    def _resolve_or_create_internal(self, key: KeyT) -> Tuple[Any, float, bool]:
+        key = self._canonical_key(key)
+        cache = self._cache_for(key)
+        cached = cache.get(key)
+        if cached is not None:
+            self.context.cache_hit_count += 1
+            for o in self._observers: o.on_cache_hit(key)
+            return cached, 0.0, True
+
+        import time as _tm
+        t0 = _tm.perf_counter()
+        chain = list(_resolve_chain.get())
+
+        for k_in_chain in chain:
+            if k_in_chain == key:
+                details = self._tracer.describe_cycle(tuple(chain), key, self._locator)
+                raise ComponentCreationError(key, CircularDependencyError(chain, key, details=details))
+
+        token_chain = _resolve_chain.set(tuple(chain + [key]))
+        token_container = self.activate()
+        token_tracer = self._tracer.enter(key, via="provider")
+
+        requester = chain[-1] if chain else None
+        instance_or_awaitable = None
+
+        try:
+            provider = self._factory.get(key, origin=requester)
+            try:
+                instance_or_awaitable = provider()
+            except ProviderNotFoundError as e:
+                raise
+            except Exception as creation_error:
+                raise ComponentCreationError(key, creation_error) from creation_error
+
+            took_ms = (_tm.perf_counter() - t0) * 1000
+            return instance_or_awaitable, took_ms, False
+
+        finally:
+            self._tracer.leave(token_tracer)
+            _resolve_chain.reset(token_chain)
+            self.deactivate(token_container)
+            
     @overload
     def get(self, key: type) -> Any: ...
     @overload
     def get(self, key: str) -> Any: ...
     def get(self, key: KeyT) -> Any:
-        key = self._canonical_key(key)
+        instance_or_awaitable, took_ms, was_cached = self._resolve_or_create_internal(key)
+
+        if was_cached:
+            return instance_or_awaitable
+
+        instance = instance_or_awaitable
+        if inspect.isawaitable(instance):
+            key_name = getattr(key, '__name__', str(key))
+            raise AsyncResolutionError(key)
+
+        final_instance = self._maybe_wrap_with_aspects(key, instance)
         cache = self._cache_for(key)
-        cached = cache.get(key)
-        if cached is not None:
-            self.context.cache_hit_count += 1
-            for o in self._observers: o.on_cache_hit(key)
-            return cached
-        import time as _tm
-        t0 = _tm.perf_counter()
-        chain = list(_resolve_chain.get())
-        for k in chain:
-            if k == key:
-                details = self._tracer.describe_cycle(tuple(chain), key, self._locator)
-                raise ComponentCreationError(key, CircularDependencyError(chain, key, details=details))
-        token_chain = _resolve_chain.set(tuple(chain + [key]))
-        token_container = self.activate()
-        token_tracer = self._tracer.enter(key, via="provider")
-        try:
-            provider = self._factory.get(key)
-            try:
-                instance = provider()
-            except ProviderNotFoundError as e:
-                raise
-            except Exception as e:
-                raise ComponentCreationError(key, e) from e
-            instance = self._maybe_wrap_with_aspects(key, instance)
-            cache.put(key, instance)
-            self.context.resolve_count += 1
-            took_ms = (_tm.perf_counter() - t0) * 1000
-            for o in self._observers: o.on_resolve(key, took_ms)
-            return instance
-        finally:
-            self._tracer.leave(token_tracer)
-            _resolve_chain.reset(token_chain)
-            self.deactivate(token_container)
+        cache.put(key, final_instance)
+        self.context.resolve_count += 1
+        for o in self._observers: o.on_resolve(key, took_ms)
+
+        return final_instance
 
     async def aget(self, key: KeyT) -> Any:
-        key = self._canonical_key(key)
+        instance_or_awaitable, took_ms, was_cached = self._resolve_or_create_internal(key)
+
+        if was_cached:
+            return instance_or_awaitable
+
+        instance = instance_or_awaitable
+        if inspect.isawaitable(instance_or_awaitable):
+            instance = await instance_or_awaitable
+
+        final_instance = self._maybe_wrap_with_aspects(key, instance)
         cache = self._cache_for(key)
-        cached = cache.get(key)
-        if cached is not None:
-            self.context.cache_hit_count += 1
-            for o in self._observers: o.on_cache_hit(key)
-            return cached
-        import time as _tm
-        t0 = _tm.perf_counter()
-        chain = list(_resolve_chain.get())
-        for k in chain:
-            if k == key:
-                details = self._tracer.describe_cycle(tuple(chain), key, self._locator)
-                raise ComponentCreationError(key, CircularDependencyError(chain, key, details=details))
-        token_chain = _resolve_chain.set(tuple(chain + [key]))
-        token_container = self.activate()
-        token_tracer = self._tracer.enter(key, via="provider")
-        try:
-            provider = self._factory.get(key)
-            try:
-                instance = provider()
-                if inspect.isawaitable(instance):
-                    instance = await instance
-            except ProviderNotFoundError as e:
-                raise
-            except Exception as e:
-                raise ComponentCreationError(key, e) from e
-            instance = self._maybe_wrap_with_aspects(key, instance)
-            cache.put(key, instance)
-            self.context.resolve_count += 1
-            took_ms = (_tm.perf_counter() - t0) * 1000
-            for o in self._observers: o.on_resolve(key, took_ms)
-            return instance
-        finally:
-            self._tracer.leave(token_tracer)
-            _resolve_chain.reset(token_chain)
-            self.deactivate(token_container)
+        cache.put(key, final_instance)
+        self.context.resolve_count += 1
+        for o in self._observers: o.on_resolve(key, took_ms)
+
+        return final_instance
 
     def _resolve_type_key(self, key: type):
         if not self._locator:

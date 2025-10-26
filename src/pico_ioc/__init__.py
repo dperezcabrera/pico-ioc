@@ -11,6 +11,7 @@ from .exceptions import (
     ValidationError,
     InvalidBindingError,
     EventBusClosedError,
+    AsyncResolutionError,
 )
 from .api import (
     component,
@@ -51,6 +52,7 @@ __all__ = [
     "SerializationError",
     "ValidationError",
     "InvalidBindingError",
+    "AsyncResolutionError",
     "EventBusClosedError",
     "component",
     "factory",

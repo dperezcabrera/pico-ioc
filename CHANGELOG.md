@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.h
 
 ---
 
+## [2.0.3] - 2025-10-26
+
+### Fixed
+
+- Injection now falls back from an annotated key to the parameter name when the annotated key is unbound, enabling resolution against string-key providers registered via `@provides("name")`.
+- `ProviderNotFoundError` includes the requesting origin (component or key) to aid debugging and test assertions.
+- Unified sync/async resolution path in `PicoContainer`:
+  - `get()` raises `AsyncResolutionError` if a provider returns an awaitable, guiding users to `aget()`.
+  - `aget()` awaits awaitables and applies aspects and caching consistently.
+  - Observers receive accurate resolve timings in both paths.
+
+### Added
+
+- `AsyncResolutionError` to signal misuse of `get()` when a provider is async.
+- More informative tracer notes for parameter binding.
+
+### Internal
+
+- `ComponentFactory.get()` now accepts an `origin` to enrich `ProviderNotFoundError` messages.
+- Lazy proxy creation calls `factory.get(key, origin="lazy")` to attribute provenance.
+- Public API exports updated to include `AsyncResolutionError`.
+
+### Compatibility
+
+- No public API breaking changes. Internal factory signature changed but remains encapsulated within the container/registrar.
+
+---
+
+## [2.0.2] - 2025-10-26
+
+### Fixed 🧩
+
+* **`@provides` Decorator Execution**
+  Corrected an issue where the `@provides` decorator executed its wrapped function prematurely during module import, leading to runtime errors like `TypeError: Service() takes no arguments`.
+  The decorator now properly registers provider metadata without invoking the function until dependency resolution time.
+
+### Added ✨
+
+* **`FlatDictSource` Configuration Provider**
+  Introduced a lightweight configuration source for flat in-memory dictionaries.
+  Supports optional key prefixing and case sensitivity control for simple, programmatic configuration injection.
+
+### Internal 🔧
+
+* Updated type imports and registration logic in `api.py` to support `Mapping` for the new configuration source.
+* Added `FlatDictSource` to the public API (`__all__` and import namespace).
+
+### Notes 📝
+
+* Fully backward compatible.
+* This patch release focuses on decorator correctness and configuration flexibility improvements.
+
+---
+
+## [2.0.1] - 2025-10-25
+
+### Added ✨
+
+- **ADR-0009: Flexible `@provides` Support**  
+  Implemented support for using `@provides` in additional contexts:
+  - `@staticmethod` methods within `@factory` classes  
+  - `@classmethod` methods within `@factory` classes  
+  - Module-level functions  
+  These new provider types are discovered automatically during module scanning and participate fully in dependency resolution, validation, and graph generation.
+
+- **Dependency Graph and Validation Enhancements**  
+  - `_build_resolution_graph` now includes edges for all `@provides` functions, regardless of where they are defined.  
+  - Fail-fast validation checks now cover static/class/module-level providers, reporting missing bindings consistently.  
+  - Scope inference and promotion logic apply equally to these new provider types.
+
+### Documentation 📚
+
+- Expanded `docs/overview.md` to document the new flexible provider options (`@staticmethod`, `@classmethod`, module-level functions).  
+- Updated `docs/guide.md` with practical examples showing when to use each style of provider.  
+- Linked ADR-0009 for design rationale and migration guidance.
+
+### Notes 📝
+
+- This is a **minor feature release** introducing a major ergonomics improvement (ADR-0009).  
+- Fully backward compatible with existing factories, components, and configuration mechanisms.  
+- Encourages a lighter, more Pythonic style for simple provider declarations.
+
+
+---
+
 ## [2.0.0] - 2025-10-23
 
 This version marks a significant redesign and the first major public release, establishing the core architecture and feature set based on the principles outlined in the Architecture Decision Records (ADRs).
@@ -57,63 +142,6 @@ This version marks a significant redesign and the first major public release, es
 
 * Added comprehensive test suite covering core features, async behavior, AOP, configuration, scopes, and error handling.
 * Introduced patterns for testing with overrides and profiles.
-
----
-
-## [2.0.1] - 2025-10-25
-
-### Added ✨
-
-- **ADR-0009: Flexible `@provides` Support**  
-  Implemented support for using `@provides` in additional contexts:
-  - `@staticmethod` methods within `@factory` classes  
-  - `@classmethod` methods within `@factory` classes  
-  - Module-level functions  
-  These new provider types are discovered automatically during module scanning and participate fully in dependency resolution, validation, and graph generation.
-
-- **Dependency Graph and Validation Enhancements**  
-  - `_build_resolution_graph` now includes edges for all `@provides` functions, regardless of where they are defined.  
-  - Fail-fast validation checks now cover static/class/module-level providers, reporting missing bindings consistently.  
-  - Scope inference and promotion logic apply equally to these new provider types.
-
-### Documentation 📚
-
-- Expanded `docs/overview.md` to document the new flexible provider options (`@staticmethod`, `@classmethod`, module-level functions).  
-- Updated `docs/guide.md` with practical examples showing when to use each style of provider.  
-- Linked ADR-0009 for design rationale and migration guidance.
-
-### Notes 📝
-
-- This is a **minor feature release** introducing a major ergonomics improvement (ADR-0009).  
-- Fully backward compatible with existing factories, components, and configuration mechanisms.  
-- Encourages a lighter, more Pythonic style for simple provider declarations.
-
-
----
-
-## [2.0.2] - 2025-10-26
-
-### Fixed 🧩
-
-* **`@provides` Decorator Execution**
-  Corrected an issue where the `@provides` decorator executed its wrapped function prematurely during module import, leading to runtime errors like `TypeError: Service() takes no arguments`.
-  The decorator now properly registers provider metadata without invoking the function until dependency resolution time.
-
-### Added ✨
-
-* **`FlatDictSource` Configuration Provider**
-  Introduced a lightweight configuration source for flat in-memory dictionaries.
-  Supports optional key prefixing and case sensitivity control for simple, programmatic configuration injection.
-
-### Internal 🔧
-
-* Updated type imports and registration logic in `api.py` to support `Mapping` for the new configuration source.
-* Added `FlatDictSource` to the public API (`__all__` and import namespace).
-
-### Notes 📝
-
-* Fully backward compatible.
-* This patch release focuses on decorator correctness and configuration flexibility improvements.
 
 ---
 

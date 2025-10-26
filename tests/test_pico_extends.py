@@ -188,12 +188,12 @@ def test_provider_not_found_error():
     container = init(types.ModuleType("empty_mod"))
     with pytest.raises(ProviderNotFoundError) as e_str:
         container.get("non_existent_key")
-    assert "Provider not found for key: non_existent_key" in str(e_str.value)
+    assert "Provider for key 'non_existent_key' not found" in str(e_str.value)
     class NonExistentClass:
         pass
     with pytest.raises(ProviderNotFoundError) as e_type:
         container.get(NonExistentClass)
-    assert "Provider not found for key: NonExistentClass" in str(e_type.value)
+    assert "Provider for key 'NonExistentClass' not found" in str(e_type.value)
 
 def test_configuration_error_missing_value():
     config_module = types.ModuleType("config_test_mod")
