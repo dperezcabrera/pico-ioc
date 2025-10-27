@@ -18,13 +18,13 @@ It brings *Inversion of Control* and *dependency injection* to Python in a deter
 
 ## ⚖️ Core Principles
 
--   **Single Purpose** – Do one thing: dependency management.
--   **Declarative** – Use simple decorators (`@component`, `@factory`, `@configuration`) instead of config files or YAML magic.
--   **Deterministic** – No hidden scanning or side-effects; everything flows from an explicit `init()`.
--   **Async-Native** – Fully supports async providers, async lifecycle hooks, and async interceptors.
--   **Fail-Fast** – Detects missing bindings and circular dependencies at bootstrap.
--   **Testable by Design** – Use `overrides` and `profiles` to swap components instantly.
--   **Zero Core Dependencies** – Built entirely on the Python standard library. Optional features may require external packages (see Installation).
+- **Single Purpose** – Do one thing: dependency management.
+- **Declarative** – Use simple decorators (`@component`, `@factory`, `@provides`, `@configured`) instead of complex config files.
+- **Deterministic** – No hidden scanning or side-effects; everything flows from an explicit `init()`.
+- **Async-Native** – Fully supports async providers, async lifecycle hooks (`__ainit__`), and async interceptors.
+- **Fail-Fast** – Detects missing bindings and circular dependencies at bootstrap (`init()`).
+- **Testable by Design** – Use `overrides` and `profiles` to swap components instantly.
+- **Zero Core Dependencies** – Built entirely on the Python standard library. Optional features may require external packages (see Installation).
 
 ---
 
@@ -33,25 +33,24 @@ It brings *Inversion of Control* and *dependency injection* to Python in a deter
 As Python systems evolve, wiring dependencies by hand becomes fragile and unmaintainable.
 **Pico-IoC** eliminates that friction by letting you declare how components relate — not how they’re created.
 
-| Feature        | Manual Wiring              | With Pico-IoC                   |
-| :------------- | :------------------------- | :------------------------------ |
-| Object creation| `svc = Service(Repo(Config()))` | `svc = container.get(Service)`  |
-| Replacing deps | Monkey-patch               | `overrides={Repo: FakeRepo()}`  |
-| Coupling       | Tight                      | Loose                           |
-| Testing        | Painful                    | Instant                         |
-| Async support  | Manual                     | Built-in                        |
+| Feature         | Manual Wiring              | With Pico-IoC                     |
+| :-------------- | :------------------------- | :-------------------------------- |
+| Object creation | `svc = Service(Repo(Config()))` | `svc = container.get(Service)`    |
+| Replacing deps  | Monkey-patch               | `overrides={Repo: FakeRepo()}`    |
+| Coupling        | Tight                      | Loose                             |
+| Testing         | Painful                    | Instant                           |
+| Async support   | Manual                     | Built-in (`aget`, `__ainit__`, ...) |
 
 ---
 
-## 🧩 Highlights (v2.0.0)
+## 🧩 Highlights (v2.0+)
 
--   **Full redesign:** unified architecture with simpler, more powerful APIs.
--   **Async-aware AOP system** — method interceptors via `@intercepted_by`.
--   **Typed configuration** — dataclasses with JSON/YAML/env sources.
--   **Scoped resolution** — singleton, prototype, request, session, transaction.
--   **UnifiedComponentProxy** — transparent lazy/AOP proxy supporting serialization.
--   **Tree-based configuration runtime** with reusable adapters and discriminators.
--   **Observable container context** with stats, health checks, and async cleanup.
+- **Unified Configuration:** Use `@configured` to bind both **flat** (ENV-like) and **tree** (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
+- **Async-aware AOP system:** Method interceptors via `@intercepted_by`.
+- **Scoped resolution:** singleton, prototype, request, session, transaction, and custom scopes.
+- **`UnifiedComponentProxy`:** Transparent `lazy=True` and AOP proxy supporting serialization.
+- **Tree-based configuration runtime:** Advanced mapping with reusable adapters and discriminators (`Annotated[Union[...], Discriminator(...)]`).
+- **Observable container context:** Built-in stats, health checks (`@health`), observer hooks (`ContainerObserver`), dependency graph export (`export_graph`), and async cleanup.
 
 ---
 
@@ -59,7 +58,7 @@ As Python systems evolve, wiring dependencies by hand becomes fragile and unmain
 
 ```bash
 pip install pico-ioc
-```
+````
 
 For optional features, you can install extras:
 
@@ -71,50 +70,68 @@ For optional features, you can install extras:
 
     (Requires `PyYAML`)
 
-  * **Dependency Graph Export:**
+  * **Dependency Graph Export (Rendering):**
 
     ```bash
-    pip install pico-ioc[graphviz]
+    # You still need Graphviz command-line tools installed separately
+    # This extra is currently not required by the code,
+    # as export_graph generates the .dot file content directly.
+    # pip install pico-ioc[graphviz] # Consider removing if not used by code
     ```
-
-    (Requires the `graphviz` Python package and the Graphviz command-line tools)
 
 -----
 
-## ⚙️ Quick Example
+## ⚙️ Quick Example (Unified Configuration)
 
 ```python
+import os
 from dataclasses import dataclass
-from pico_ioc import component, configuration, init
+from pico_ioc import component, configured, configuration, init, EnvSource
 
-@configuration
+# 1. Define configuration with @configured
+@configured(prefix="APP_", mapping="auto") # Auto-detects flat mapping
 @dataclass
 class Config:
     db_url: str = "sqlite:///demo.db"
 
+# 2. Define components
 @component
 class Repo:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config): # Inject config
         self.cfg = cfg
     def fetch(self):
         return f"fetching from {self.cfg.db_url}"
 
 @component
 class Service:
-    def __init__(self, repo: Repo):
+    def __init__(self, repo: Repo): # Inject Repo
         self.repo = repo
     def run(self):
         return self.repo.fetch()
 
-container = init(modules=[__name__])
+# --- Example Setup ---
+os.environ['APP_DB_URL'] = 'postgresql://user:pass@host/db'
+
+# 3. Build configuration context
+config_ctx = configuration(
+    EnvSource(prefix="") # Read APP_DB_URL from environment
+)
+
+# 4. Initialize container
+container = init(modules=[__name__], config=config_ctx) # Pass context via 'config'
+
+# 5. Get and use the service
 svc = container.get(Service)
 print(svc.run())
+
+# --- Cleanup ---
+del os.environ['APP_DB_URL']
 ```
 
 **Output:**
 
 ```
-fetching from sqlite:///demo.db
+fetching from postgresql://user:pass@host/db
 ```
 
 -----
@@ -125,7 +142,16 @@ fetching from sqlite:///demo.db
 class FakeRepo:
     def fetch(self): return "fake-data"
 
-container = init(modules=[__name__], overrides={Repo: FakeRepo()})
+# Build configuration context (might be empty or specific for test)
+test_config_ctx = configuration()
+
+# Use overrides during init
+container = init(
+    modules=[__name__],
+    config=test_config_ctx,
+    overrides={Repo: FakeRepo()} # Replace Repo with FakeRepo
+)
+
 svc = container.get(Service)
 assert svc.run() == "fake-data"
 ```
@@ -135,23 +161,46 @@ assert svc.run() == "fake-data"
 ## 🩺 Lifecycle & AOP
 
 ```python
-from pico_ioc import intercepted_by, MethodInterceptor, MethodCtx
+import time # For example
+from pico_ioc import component, init, intercepted_by, MethodInterceptor, MethodCtx
 
+# Define an interceptor component
+@component
 class LogInterceptor(MethodInterceptor):
     def invoke(self, ctx: MethodCtx, call_next):
-        print(f"→ calling {ctx.name}")
-        res = call_next(ctx)
-        print(f"← {ctx.name} done")
-        return res
+        print(f"→ calling {ctx.cls.__name__}.{ctx.name}")
+        start = time.perf_counter()
+        try:
+            res = call_next(ctx)
+            duration = (time.perf_counter() - start) * 1000
+            print(f"← {ctx.cls.__name__}.{ctx.name} done ({duration:.2f}ms)")
+            return res
+        except Exception as e:
+            duration = (time.perf_counter() - start) * 1000
+            print(f"← {ctx.cls.__name__}.{ctx.name} failed ({duration:.2f}ms): {e}")
+            raise
 
 @component
 class Demo:
-    @intercepted_by(LogInterceptor)
+    @intercepted_by(LogInterceptor) # Apply the interceptor
     def work(self):
+        print("   Working...")
+        time.sleep(0.01)
         return "ok"
 
+# Initialize container (must scan module containing interceptor too)
 c = init(modules=[__name__])
-c.get(Demo).work()
+result = c.get(Demo).work()
+print(f"Result: {result}")
+```
+
+**Output:**
+
+```
+→ calling Demo.work
+   Working...
+← Demo.work done (10.xxms)
+Result: ok
 ```
 
 -----
@@ -183,7 +232,7 @@ tox
 
 ## 🧾 Changelog
 
-See [CHANGELOG.md](./CHANGELOG.md) — *Full redesign for v2.0.0.*
+See [CHANGELOG.md](./CHANGELOG.md) — *Significant redesigns and features in v2.0+.*
 
 -----
 

@@ -14,21 +14,6 @@ class ProviderNotFoundError(PicoError):
         self.key = key
         self.origin = origin
 
-class CircularDependencyError(PicoError):
-    def __init__(self, chain: Iterable[Any], current: Any, details: str | None = None, hint: str | None = None):
-        chain_str = " -> ".join(getattr(k, "__name__", str(k)) for k in chain)
-        cur_str = getattr(current, "__name__", str(current))
-        base = f"Circular dependency detected: {chain_str} -> {cur_str}"
-        if details:
-            base += f"\n\n{details}"
-        if hint:
-            base += f"\n\nHint: {hint}"
-        super().__init__(base)
-        self.chain = tuple(chain)
-        self.current = current
-        self.details = details
-        self.hint = hint
-
 class ComponentCreationError(PicoError):
     def __init__(self, key: Any, cause: Exception):
         k = getattr(key, "__name__", key)
@@ -84,4 +69,3 @@ class EventBusHandlerError(EventBusError):
         self.event_name = event_name
         self.handler_name = handler_name
         self.cause = cause
-

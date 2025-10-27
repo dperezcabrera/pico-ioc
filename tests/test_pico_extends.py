@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from typing import List, Any, Callable, Optional
 import pico_ioc.event_bus
 from pico_ioc import (
-    init, component, factory, provides, configuration,
+    init, component, factory, provides, configured, configuration,
     cleanup, configure, health, intercepted_by,
     PicoContainer, MethodInterceptor, MethodCtx, ScopeError,
-    InvalidBindingError, CircularDependencyError, ComponentCreationError,
+    InvalidBindingError, ComponentCreationError,
     ProviderNotFoundError, ConfigurationError, SerializationError,
     Event, subscribe, AutoSubscriberMixin, EventBus, EventBusClosedError
 )
@@ -55,7 +55,7 @@ class FailingComponent:
     def __init__(self):
         raise ValueError("Creation failure")
 
-@configuration
+@configured(target="self", mapping="auto")
 @dataclass
 class RequiredConfig:
     REQUIRED_KEY: str
@@ -161,6 +161,9 @@ all_definitions = [
 for item in all_definitions:
     if hasattr(item, "__name__"):
         setattr(test_module, item.__name__, item)
+        if item is RequiredConfig:
+            setattr(test_module, item.__name__, configured(target=item, mapping="auto")(item))
+
 
 def test_invalid_binding_error_on_init():
     mod = types.ModuleType("fail_mod")
@@ -197,10 +200,17 @@ def test_provider_not_found_error():
 
 def test_configuration_error_missing_value():
     config_module = types.ModuleType("config_test_mod")
-    setattr(config_module, RequiredConfig.__name__, RequiredConfig)
+    
+    @configured(target="self", mapping="auto")
+    @dataclass
+    class LocalRequiredConfig:
+        REQUIRED_KEY: str
+    
+    setattr(config_module, LocalRequiredConfig.__name__, LocalRequiredConfig)
+    
     with pytest.raises(ComponentCreationError) as e:
-        container = init(config_module, config=())
-        container.get(RequiredConfig)
+        container = init(config_module, config=configuration())
+        container.get(LocalRequiredConfig)
     assert isinstance(e.value.cause, ConfigurationError)
     assert "Missing configuration key: REQUIRED_KEY" in str(e.value.cause)
 
@@ -341,7 +351,7 @@ async def test_event_bus_integration_and_shutdown():
 
 def test_dependency_graph_dot_export(tmp_path):
     import types
-    from pico_ioc.api import component, provides, init, _build_resolution_graph, _format_key
+    from pico_ioc.api import component, provides, init, _format_key
 
     class Repo:
         pass
@@ -398,7 +408,7 @@ def test_dependency_graph_dot_export(tmp_path):
 
     mod = make_module()
     pico = init(mod, validate_only=True)
-    graph = _build_resolution_graph(pico)
+    graph = pico.build_resolution_graph()
     dot = graph_to_dot(graph)
     out = tmp_path / "dependencies.dot"
     out.write_text(dot, encoding="utf-8")
@@ -409,7 +419,7 @@ def test_dependency_graph_dot_export(tmp_path):
 
 def test_dependency_graph_includes_provides_functions():
     import types
-    from pico_ioc.api import component, provides, init, _build_resolution_graph
+    from pico_ioc.api import component, provides, init
 
     class Repo:
         pass
@@ -446,7 +456,7 @@ def test_dependency_graph_includes_provides_functions():
 
     mod = make_module()
     pico = init(mod, validate_only=True)
-    graph = _build_resolution_graph(pico)
+    graph = pico.build_resolution_graph()
 
     assert Service in graph
     assert Tool in graph
@@ -455,5 +465,3 @@ def test_dependency_graph_includes_provides_functions():
     myrepo_key = next(k for k in graph if getattr(k, "__name__", "") == "MyRepo")
     assert myrepo_key in graph[Service]
     assert Service in graph[Tool]
-
-

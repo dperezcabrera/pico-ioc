@@ -1,4 +1,3 @@
-# src/pico_ioc/config_runtime.py
 import json
 import os
 import re
@@ -153,18 +152,23 @@ class ObjectGraphBuilder:
     def _build(self, node: Any, t: Any, path: Tuple[str, ...]) -> Any:
         if t is Any or t is object:
             return node
+        
         adapter = self._registry.get(t) if isinstance(t, type) else None
         if adapter:
             return adapter(node)
+            
         org = get_origin(t)
+        
         if org is Annotated:
             base, meta = self._split_annotated(t)
             return self._build_discriminated(node, base, meta, path)
+            
         if org in (list, List):
             elem_t = get_args(t)[0] if get_args(t) else Any
             if not isinstance(node, list):
                 raise ConfigurationError(f"Expected list at {'.'.join(path)}")
             return [self._build(x, elem_t, path + (str(i),)) for i, x in enumerate(node)]
+            
         if org in (dict, Dict, Mapping):
             args = get_args(t)
             kt = args[0] if args else str
@@ -174,6 +178,7 @@ class ObjectGraphBuilder:
             if not isinstance(node, dict):
                 raise ConfigurationError(f"Expected dict at {'.'.join(path)}")
             return {k: self._build(v, vt, path + (k,)) for k, v in node.items()}
+            
         if org is Union:
             args = [a for a in get_args(t)]
             if not isinstance(node, dict):
@@ -183,6 +188,7 @@ class ObjectGraphBuilder:
                     except Exception:
                         continue
                 raise ConfigurationError(f"No union match at {'.'.join(path)}")
+            
             if "$type" in node:
                 tn = str(node["$type"])
                 for cand in args:
@@ -190,12 +196,14 @@ class ObjectGraphBuilder:
                         cleaned = {k: v for k, v in node.items() if k != "$type"}
                         return self._build(cleaned, cand, path)
                 raise ConfigurationError(f"Discriminator $type did not match at {'.'.join(path)}")
+                
             for cand in args:
                 try:
                     return self._build(node, cand, path)
                 except Exception:
                     continue
             raise ConfigurationError(f"No union match at {'.'.join(path)}")
+            
         if isinstance(t, type) and issubclass(t, Enum):
             if isinstance(node, str):
                 try:
@@ -205,6 +213,7 @@ class ObjectGraphBuilder:
                         if str(e.value) == node:
                             return e
             raise ConfigurationError(f"Invalid enum at {'.'.join(path)}")
+            
         if isinstance(t, type) and is_dataclass(t):
             if not isinstance(node, dict):
                 raise ConfigurationError(f"Expected object at {'.'.join(path)}")
@@ -219,6 +228,7 @@ class ObjectGraphBuilder:
                 else:
                     continue
             return t(**vals)
+            
         if isinstance(t, type):
             if t in (str, int, float, bool):
                 return self._coerce_prim(node, t, path)
@@ -234,18 +244,22 @@ class ObjectGraphBuilder:
                     if name in node:
                         kwargs[name] = self._build(node[name], p.annotation if p.annotation is not inspect._empty else Any, path + (name,))
                 return t(**kwargs)
+                
         return node
+        
     def _split_annotated(self, t: Any) -> Tuple[Any, Tuple[Any, ...]]:
         args = get_args(t)
         base = args[0] if args else Any
         metas = tuple(args[1:]) if len(args) > 1 else ()
         return base, metas
+        
     def _build_discriminated(self, node: Any, base: Any, metas: Tuple[Any, ...], path: Tuple[str, ...]) -> Any:
         disc_name = None
         for m in metas:
             if isinstance(m, Discriminator):
                 disc_name = m.name
                 break
+                
         if disc_name and isinstance(node, dict) and disc_name in node:
             if get_origin(base) is Union:
                 tn = str(node[disc_name])
@@ -254,7 +268,9 @@ class ObjectGraphBuilder:
                         cleaned = {k: v for k, v in node.items() if k != disc_name}
                         return self._build(cleaned, cand, path)
                 raise ConfigurationError(f"Discriminator {disc_name} did not match at {'.'.join(path)}")
+                
         return self._build(node, base, path)
+        
     def _coerce_prim(self, node: Any, t: type, path: Tuple[str, ...]) -> Any:
         if t is str:
             if isinstance(node, str):
@@ -286,4 +302,3 @@ class ObjectGraphBuilder:
                     return False
             raise ConfigurationError(f"Expected bool at {'.'.join(path)}")
         return node
-

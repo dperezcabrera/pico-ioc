@@ -8,6 +8,7 @@ from pico_ioc import (
     init,
     configured,
     component,
+    configuration,
     DictSource,
     JsonTreeSource,
     YamlTreeSource,
@@ -142,7 +143,8 @@ def temp_yaml_file(tmp_path):
 
 def test_configured_basic_dataclass():
     config_data = {"db": {"host": "localhost", "port": 5432}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     settings = container.get(DBSettings)
     assert isinstance(settings, DBSettings)
     assert settings.host == "localhost"
@@ -151,7 +153,8 @@ def test_configured_basic_dataclass():
 
 def test_configured_nested_dataclass():
     config_data = {"cache": {"ttl": 3600, "redis": {"url": "redis://host:6379"}}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     settings = container.get(CacheSettings)
     assert isinstance(settings, CacheSettings)
     assert settings.ttl == 3600
@@ -160,14 +163,16 @@ def test_configured_nested_dataclass():
 
 def test_configured_list_of_primitives():
     config_data = {"app": {"features": ["foo", "bar", "baz"]}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     config = container.get(FeatureConfig)
     assert isinstance(config, FeatureConfig)
     assert config.features == ["foo", "bar", "baz"]
 
 def test_configured_list_of_dataclasses():
     config_data = {"user_config": {"users": [{"name": "Alice"}, {"name": "Bob"}]}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     config = container.get(UserList)
     assert isinstance(config, UserList)
     assert len(config.users) == 2
@@ -177,14 +182,16 @@ def test_configured_list_of_dataclasses():
 
 def test_configured_dict():
     config_data = {"api": {"headers": {"X-Auth": "token123", "User-Agent": "pico"}}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     config = container.get(HeadersConfig)
     assert isinstance(config, HeadersConfig)
     assert config.headers == {"X-Auth": "token123", "User-Agent": "pico"}
 
 def test_configured_plain_class_init():
     config_data = {"service": {"endpoint": "http://api.com", "timeout": 5}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     service = container.get(SimpleService)
     assert isinstance(service, SimpleService)
     assert service.endpoint == "http://api.com"
@@ -192,7 +199,8 @@ def test_configured_plain_class_init():
 
 def test_configured_json_tree_source(temp_json_file):
     config_path = temp_json_file({"db_file": {"host": "file.host", "port": 1234, "user": "file_user"}})
-    container = init(modules=[__name__], tree_config=(JsonTreeSource(config_path),))
+    ctx = configuration(JsonTreeSource(config_path))
+    container = init(modules=[__name__], config=ctx)
     settings = container.get(DBSettings)
     assert isinstance(settings, DBSettings)
     assert settings.host == "file.host"
@@ -207,7 +215,8 @@ db_yaml:
   port: 5678
 """
     config_path = temp_yaml_file(config_content)
-    container = init(modules=[__name__], tree_config=(YamlTreeSource(config_path),))
+    ctx = configuration(YamlTreeSource(config_path))
+    container = init(modules=[__name__], config=ctx)
     settings = container.get(DBSettings)
     assert isinstance(settings, DBSettings)
     assert settings.host == "yaml.host"
@@ -216,21 +225,24 @@ db_yaml:
 def test_configured_env_interpolation(monkeypatch):
     monkeypatch.setenv("DB_HOST_ENV", "env.host")
     config_data = {"db_env": {"host": "${ENV:DB_HOST_ENV}", "port": 9999}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     settings = container.get(DBSettings)
     assert settings.host == "env.host"
     assert settings.port == 9999
 
 def test_configured_ref_interpolation():
     config_data = {"defaults": {"user": "ref_user"}, "db_ref": {"host": "ref.host", "port": 1111, "user": "${ref:defaults.user}"}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     settings = container.get(DBSettings)
     assert settings.host == "ref.host"
     assert settings.port == 1111
     assert settings.user == "ref_user"
 
 def test_configured_error_on_missing_prefix():
-    container = init(modules=[__name__], tree_config=(DictSource({}),))
+    ctx = configuration(DictSource({}))
+    container = init(modules=[__name__], config=ctx)
     with pytest.raises(ComponentCreationError) as e:
         container.get(DBSettings)
     assert isinstance(e.value.cause, ConfigurationError)
@@ -238,14 +250,16 @@ def test_configured_error_on_missing_prefix():
 
 def test_configured_union_default_discriminator():
     config_data = {"pet_owner_default": {"pet": {"$type": "Cat", "name": "Fluffy"}}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     owner = container.get(PetOwnerDefault)
     assert isinstance(owner.pet, Cat)
     assert owner.pet.name == "Fluffy"
 
 def test_configured_union_custom_discriminator():
     config_data = {"pet_owner_custom": {"pet": {"animal_type": "Dog", "name": "Buddy", "breed": "Labrador"}}}
-    container = init(modules=[__name__], tree_config=(DictSource(config_data),))
+    ctx = configuration(DictSource(config_data))
+    container = init(modules=[__name__], config=ctx)
     owner = container.get(PetOwnerCustom)
     assert isinstance(owner.pet, Dog)
     assert owner.pet.name == "Buddy"
@@ -261,13 +275,15 @@ def test_configured_selects_existing_and_longest_prefix():
     mod = sys.modules[__name__]
     setattr(mod, "CfgA", CfgA)
     setattr(mod, "CfgB", CfgB)
-    container = init([__name__], tree_config=(DictSource({"db_prod": {"host": "h", "port": 1}}),))
+    ctx = configuration(DictSource({"db_prod": {"host": "h", "port": 1}}))
+    container = init([__name__], config=ctx)
     s = container.get(DBSettings)
     assert s.host == "h"
 
 def test_configured_sets_config_metadata():
     data = {"db": {"host": "x", "port": 1}}
-    c = init([__name__], tree_config=(DictSource(data),))
+    ctx = configuration(DictSource(data))
+    c = init([__name__], config=ctx)
     s = c.get(DBSettings)
     meta = getattr(s, "_pico_meta")
     assert meta["config_prefix"] == "db"
@@ -276,7 +292,8 @@ def test_configured_sets_config_metadata():
 
 def test_union_wrong_discriminator_raises_clear_error():
     data = {"pet_owner_default": {"pet": {"$type": "Bird", "name": "Kiwi"}}}
-    c = init([__name__], tree_config=(DictSource(data),))
+    ctx = configuration(DictSource(data))
+    c = init([__name__], config=ctx)
     with pytest.raises(ComponentCreationError) as e:
         c.get(PetOwnerDefault)
     assert "Discriminator $type did not match" in str(e.value.cause)
@@ -291,7 +308,8 @@ def test_configured_typed_dict_and_type_errors():
     mod = sys.modules[__name__]
     setattr(mod, "D", D)
     setattr(mod, "C", C)
-    c = init([__name__], tree_config=(DictSource({"d": {"m": {"a": "1"}}}),))
+    ctx = configuration(DictSource({"d": {"m": {"a": "1"}}}))
+    c = init([__name__], config=ctx)
     assert c.get(D).m == {"a": 1}
 
 def test_string_injection_resolves_by_pico_name_or_classname():
@@ -307,4 +325,3 @@ def test_string_injection_resolves_by_pico_name_or_classname():
     setattr(mod, "Needs", Needs)
     c = init([__name__])
     assert isinstance(c.get(Needs).w, W)
-

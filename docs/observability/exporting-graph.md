@@ -1,38 +1,32 @@
 # Exporting the Dependency Graph 📈
 
-Understanding the full dependency graph of your application can be crucial for debugging, refactoring, and verifying the architecture. `pico-ioc` provides a utility to export a visual representation of the dependency graph of an initialized container.
+Understanding the full dependency graph of your application can be crucial for debugging, refactoring, and verifying the architecture. `pico-ioc` provides a utility to export a representation of the dependency graph of an initialized container in the **Graphviz DOT format**.
 
 ---
 
 ## How it Works
 
-The `container.export_graph()` method generates a `.dot` file (Graphviz format) representing all components, their dependencies, and their scopes. This `.dot` file can then be rendered into various image formats (like PNG, SVG) using the `graphviz` tool.
+The `container.export_graph()` method generates the content for a `.dot` file. This file describes the graph structure (nodes representing components, edges representing dependencies). You can then use the **Graphviz tool** (which needs to be installed separately) to render this `.dot` file into various visual formats (like PNG, SVG, PDF).
 
 ### Prerequisites
 
-To use this feature, you need:
-
-1.  **`graphviz` Python package:** Install `pico-ioc` with the `graphviz` extra:
-    ```bash
-    pip install pico-ioc[graphviz]
-    ```
-    This will install the `graphviz` Python library, which is a wrapper for the native tool.
-
-2.  **Graphviz native tool:** You also need the `graphviz` command-line tool installed on your system.
-    * **macOS (Homebrew):** `brew install graphviz`
-    * **Linux (apt):** `sudo apt-get install graphviz`
-    * **Windows:** Download from [graphviz.org](https://graphviz.org/download/) and ensure it's added to your system's PATH.
+To render the generated `.dot` file into an image, you need the **Graphviz command-line tool** installed on your system.
+* **macOS (Homebrew):** `brew install graphviz`
+* **Linux (apt):** `sudo apt-get update && sudo apt-get install graphviz`
+* **Windows:** Download from [graphviz.org](https://graphviz.org/download/) and ensure the `dot` command is added to your system's PATH.
 
 ---
 
 ## Basic Usage
 
-You call `export_graph()` on an initialized container instance.
+You call `export_graph()` on an initialized container instance, specifying the path where you want to save the `.dot` file.
 
 ```python
 # my_app.py
 from pico_ioc import component, init
-from pico_ioc.container import DependencyResolverError
+# Assuming DependencyResolverError is not the standard error,
+# InvalidBindingError or ComponentCreationError might be more relevant
+# from pico_ioc import InvalidBindingError
 
 @component
 class ConfigService:
@@ -58,87 +52,62 @@ class AppRunner:
 # Initialize the container
 container = init(modules=[__name__])
 
-# Export the graph
-# The 'path' argument specifies the output file (e.g., 'my_graph.dot')
-# and can include a directory.
-# The 'format' argument specifies the output image format (e.g., 'png', 'svg', 'jpeg').
-container.export_graph(path="./dependency_graph.png", format="png")
+# Export the graph definition to a .dot file
+dot_file_path = "./dependency_graph.dot"
+container.export_graph(path=dot_file_path, title="My Application Graph")
 
-print("Dependency graph exported to dependency_graph.png")
+print(f"Dependency graph definition exported to {dot_file_path}")
+print(f"To render as PNG, run: dot -Tpng {dot_file_path} -o dependency_graph.png")
+
+# --- Example: How to render using the 'dot' command ---
+# Open your terminal and run:
+# dot -Tpng dependency_graph.dot -o dependency_graph.png
+# Or for SVG:
+# dot -Tsvg dependency_graph.dot -o dependency_graph.svg
 ```
 
-When you run `my_app.py`, a file named `dependency_graph.png` (or whatever format you choose) will be generated in the specified location.
+When you run `my_app.py`, a file named `dependency_graph.dot` will be generated. You then use the `dot` command-line tool to create the visual image (e.g., `dependency_graph.png`).
 
 ### `export_graph` Parameters
 
-  * `path: str`: The full path for the output file (e.g., `./graphs/app_dependencies.png`). The extension determines the output format. You can also specify a `.dot` extension if you only want the raw Graphviz source.
-  * `format: Optional[str] = None`: The output format for the graph (e.g., `"png"`, `"svg"`, `"jpeg"`, `"pdf"`). If `None`, the format is inferred from the `path` extension. If the path has no extension or is `.dot`, then `format` defaults to `"dot"`.
-  * `include_unresolved: bool = False`: If `True`, components that could not be resolved (e.g., due to missing dependencies if `init(fail_on_error=False)` was used) will still be included in the graph, marked in red.
-  * `show_scopes: bool = True`: If `True`, component nodes will be labeled with their scope (e.g., `(singleton)`, `(request)`).
-  * `show_lazy: bool = True`: If `True`, lazy components will be marked (e.g., `(lazy)`).
-  * `rankdir: str = "LR"`: Graphviz `rankdir` attribute, controlling layout direction (e.g., `"TB"` for top-to-bottom, `"LR"` for left-to-right).
-
-```text
-┌───────────┐      ┌───────────────┐
-│    App    │ ───> │  UserService  │
-└───────────┘      └───────────────┘
-       │                   │
-       │                   │
-       ▼                   ▼
-┌───────────┐      ┌───────────┐
-│   Config  │ <─── │  Database │
-└───────────┘      └───────────┘
-```
+  * **`path: str`**: The full path (including filename, typically ending in `.dot`) where the Graphviz definition file will be saved.
+  * **`include_scopes: bool = True`**: If `True`, adds scope information (e.g., `[scope=request]`) to the node labels in the `.dot` file.
+  * **`include_qualifiers: bool = False`**: If `True`, adds qualifier information (e.g., `\\n⟨q⟩`) to the node labels in the `.dot` file.
+  * **`rankdir: str = "LR"`**: Sets the layout direction hint for Graphviz (e.g., `"LR"` for Left-to-Right, `"TB"` for Top-to-Bottom) in the `.dot` file.
+  * **`title: Optional[str] = None`**: An optional title string to include in the graph definition.
 
 -----
 
-## Example of an Exported Graph
+## Example of a Rendered Graph
 
-Here's an example of what a simple dependency graph might look like:
+Rendering the generated `.dot` file (e.g., with `dot -Tpng dependency_graph.dot -o graph.png`) might produce an image like this for a simple dependency structure:
 
-http://googleusercontent.com/image_generation_content/0
+**Node Labels (controlled by parameters):**
 
-**Legend:**
-
-  * **Blue nodes (default):** Singleton or other standard scopes.
-  * **Green text:** Indicates a context-aware scope (e.g., `(request)`).
-  * **Red text:** Indicates a `lazy` component.
-  * **Orange text:** Indicates a `prototype` scope.
+  * **Component Name:** Always shown (e.g., `UserService`).
+  * **Scope:** Added if `include_scopes=True` (e.g., `UserService\n[scope=singleton]`).
+  * **Qualifiers:** Added if `include_qualifiers=True` and qualifiers exist (e.g., `MyService\n⟨payment⟩`).
 
 -----
 
-## Visualizing Unresolved Dependencies
+## Visualizing Potential Issues
 
-If you initialize your container with `fail_on_error=False`, `pico-ioc` will attempt to build the graph even with errors. You can then use `include_unresolved=True` to visualize the problematic components.
+While the current implementation focuses on exporting the graph of *successfully resolved* bindings during `init`, you can use the visual graph to:
 
-```python
-from pico_ioc import component, init
-from pico_ioc.container import DependencyResolverError
+  * Identify overly complex dependency chains.
+  * Spot components with too many responsibilities (many outgoing arrows).
+  * Verify that components are assigned the expected scopes.
+  * Visually trace how dependencies flow through your application.
 
-@component
-class MissingDependency:
-    def __init__(self, non_existent_service: "NonExistentService"): # This will fail
-        self.non_existent_service = non_existent_service
-
-@component
-class WorkingService:
-    pass
-
-container = init(modules=[__name__], fail_on_error=False) # Don't raise error immediately
-
-# Export, including the component with the missing dependency
-container.export_graph(path="./unresolved_graph.png", format="png", include_unresolved=True)
-
-print("Graph with unresolved dependencies exported to unresolved_graph.png")
-```
-
-In the generated graph, `MissingDependency` would be visually highlighted (e.g., with a red border or text) to indicate it could not be fully resolved.
+*(Note: The `include_unresolved` feature mentioned in older documentation is not present in the current code implementation provided.)*
 
 ## Next Steps
 
-This concludes the section on Observability. You now know how to manage container contexts, get metrics, trace resolutions, and visualize your entire application.
+This concludes the section on Observability. You now know how to manage container contexts, get metrics, trace resolutions, and visualize your application's structure.
 
 The next section provides practical, copy-paste recipes for integrating `pico-ioc` with popular web frameworks.
 
-  * **[Integrations Overview](./integrations/README.md)**: Learn how to use `pico-ioc` with FastAPI, Flask, and more.
+  * **[Integrations Overview](../integrations/README.md)**: Learn how to use `pico-ioc` with FastAPI, Flask, and more.
+
+<!-- end list -->
 
