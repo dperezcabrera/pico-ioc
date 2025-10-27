@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+
+---
+
+## [2.1.0] - 2025-10-28
+
+### Added ✨
+
+* **Unified Configuration Builder (`configuration(...)`)**: Introduced a new top-level function `configuration(...)` that accepts various sources (`EnvSource`, `DictSource`, `JsonTreeSource`, `YamlTreeSource`, `FlatDictSource`, etc.) and `overrides` to produce an immutable `ContextConfig` object. This centralizes configuration definition and precedence rules (ADR-010).
+* **`ContextConfig` Object**: A new object encapsulating the fully processed configuration state, passed to `init(config=...)`.
+* **Enhanced `@configured` Decorator**:
+    * Added `mapping: Literal["auto", "flat", "tree"]` parameter to explicitly control binding strategy.
+    * Implemented `"auto"` detection: uses `"tree"` if any field is complex (dataclass, list, dict, Union), otherwise uses `"flat"`.
+    * Supports unified normalization rules for keys (e.g., `ENV_VAR_NAME` <-> `field_name`, `ENV_VAR__NESTED` <-> `parent.nested`).
+    * Integrates seamlessly with both flat and tree sources managed by `ContextConfig`.
+
+### Changed ⚠️
+
+* **`init()` Signature**: The `config` and `tree_config` parameters have been removed. Configuration is now passed solely through the new `config: Optional[ContextConfig]` parameter (ADR-010).
+* **Configuration Precedence**: Configuration loading and precedence are now strictly defined by the order of sources passed to the `configuration(...)` builder, followed by its `overrides` parameter, and finally `Annotated[..., Value(...)]` (ADR-010).
+
+### Removed ❌
+
+* **`@configuration` Decorator**: This decorator, previously used for flat key-value binding, has been completely removed in favor of the unified `@configured` decorator (ADR-010).
+* Separate `config` (flat) and `tree_config` arguments in `init()`.
+
+### Documentation 📚
+
+* Updated all documentation (User Guide, API Reference, Examples, ADRs) to reflect the unified configuration system based on `@configured`, `configuration(...)`, and `ContextConfig`.
+* Added `docs/specs/spec-configuration.md` detailing the unified configuration rules.
+* Added migration notes related to removing `@configuration`.
+
+### Breaking Changes ⚠️
+
+* This release introduces **significant breaking changes** related to configuration management, requiring migration from the old `@configuration` decorator and `init()` arguments to the new `@configured` modes and `configuration(...)` builder (ADR-010).
+
 ---
 
 ## [2.0.3] - 2025-10-26

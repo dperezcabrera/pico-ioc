@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Set, Tuple, Union
 from .exceptions import ProviderNotFoundError
+from .analysis import DependencyRequest
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
@@ -18,6 +19,7 @@ class ProviderMetadata:
     lazy: bool
     infra: Optional[str]
     pico_name: Optional[Any]
+    dependencies: Tuple[DependencyRequest, ...] = ()
     override: bool = False
     scope: str = "singleton"
 
@@ -45,4 +47,3 @@ class DeferredProvider:
         if self._pico is None or self._locator is None:
             raise RuntimeError("DeferredProvider must be attached before use")
         return self._builder(self._pico, self._locator)
-

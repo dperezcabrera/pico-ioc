@@ -10,7 +10,7 @@ import logging
 import time
 
 from pico_ioc import (
-    component, factory, provides, configuration,
+    component, factory, provides, configuration, configured,
     Qualifier, intercepted_by, cleanup,
     init, PicoContainer, MethodInterceptor, MethodCtx,
     EnvSource, FileSource, ScopeProtocol, ContextVarScope
@@ -84,7 +84,7 @@ class LazyComponent:
         test_logger.info("LazyComponent Instantiated!")
         self.created_at = time.time()
 
-@configuration(prefix="APP_")
+@configured(target="self", prefix="APP_", mapping="auto")
 @dataclass
 class AppConfig:
     DEBUG: bool = False
@@ -192,6 +192,9 @@ definitions = [
 for item in definitions:
     if hasattr(item, '__name__'):
         setattr(test_module, item.__name__, item)
+        if item is AppConfig:
+            setattr(test_module, item.__name__, configured(target=item, prefix="APP_", mapping="auto")(item))
+
 
 test_scopes = {"request": request_scope}
 
@@ -233,7 +236,8 @@ def test_basic_di():
     assert instance_b is instance_b_2
 
 def test_configuration_injection_defaults():
-    container = init(test_module, config=())
+    ctx = configuration()
+    container = init(test_module, config=ctx)
     config = container.get(AppConfig)
     assert isinstance(config, AppConfig)
     assert config.DEBUG is False
@@ -243,7 +247,8 @@ def test_configuration_injection_defaults():
 def test_configuration_injection_env(monkeypatch):
     monkeypatch.setenv("APP_DEBUG", "true")
     monkeypatch.setenv("APP_TIMEOUT", "60")
-    container = init(test_module, config=(EnvSource(prefix="APP_"),))
+    ctx = configuration(EnvSource(prefix="APP_"))
+    container = init(test_module, config=ctx)
     config = container.get(AppConfig)
     assert config.DEBUG is True
     assert config.TIMEOUT == 60
@@ -251,7 +256,8 @@ def test_configuration_injection_env(monkeypatch):
 
 def test_configuration_injection_file(temp_config_file):
     config_path = temp_config_file({"APP_DB_HOST": "remote.db", "APP_TIMEOUT": 90})
-    container = init(test_module, config=(FileSource(config_path, prefix="APP_"),))
+    ctx = configuration(FileSource(config_path, prefix="APP_"))
+    container = init(test_module, config=ctx)
     config = container.get(AppConfig)
     assert config.DB_HOST == "remote.db"
     assert config.TIMEOUT == 90
@@ -260,7 +266,8 @@ def test_configuration_injection_file(temp_config_file):
 def test_configuration_precedence_env_over_file(monkeypatch, temp_config_file):
     monkeypatch.setenv("APP_TIMEOUT", "120")
     config_path = temp_config_file({"APP_TIMEOUT": 90})
-    container = init(test_module, config=(EnvSource(prefix="APP_"), FileSource(config_path, prefix="APP_")))
+    ctx = configuration(EnvSource(prefix="APP_"), FileSource(config_path, prefix="APP_"))
+    container = init(test_module, config=ctx)
     config = container.get(AppConfig)
     assert config.TIMEOUT == 120
 

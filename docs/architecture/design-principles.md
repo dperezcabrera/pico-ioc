@@ -8,13 +8,13 @@ These core principles guided its architecture:
 
 ## 1. Fail-Fast at Startup ⚡
 
-**Principle:** Detect configuration and dependency wiring errors *immediately* during application initialization (`init()`) rather than encountering them *at runtime* during operation (e.g., during a user request).
+**Principle:** Detect configuration and dependency wiring errors **immediately** during application initialization (`init()`) rather than encountering them *at runtime* during operation (e.g., during a user request).
 
 **Rationale:** Runtime errors like `ProviderNotFoundError` or `CircularDependencyError` caused by incorrect setup are disruptive, hard to debug in production, and can lead to unpredictable application states. Catching these issues early improves reliability and developer confidence.
 
 **Implementation:**
-* **Eager Validation (ADR-006):** During `init()`, the `Registrar._validate_bindings` step proactively analyzes the dependency graph. It verifies that a provider exists for every required dependency (excluding `lazy=True` components) in component constructors (`__init__`) and factory methods (`@provides`). If any dependency cannot be satisfied, `init()` raises an `InvalidBindingError` immediately, listing all issues.
-* **Cycle Detection (ADR-008):** Circular dependencies are also detected during this static analysis phase, raising a `CircularDependencyError` with the full chain, preventing the application from starting with an unresolvable graph.
+* **Eager Validation (ADR-006):** During `init()`, the `Registrar.validate_bindings` step proactively analyzes the dependency graph. It verifies that a provider exists for every required dependency (excluding `lazy=True` components) in component constructors (`__init__`) and factory methods (`@provides`). If any dependency cannot be satisfied, `init()` raises an `InvalidBindingError` immediately, listing all issues.
+* **Cycle Detection (ADR-008):** Circular dependencies are also detected during this static analysis phase or upon first resolution attempt, raising an `InvalidBindingError` (or similar) with the full chain, preventing the application from starting with an unresolvable graph.
 
 **Trade-off:** This eager validation adds a small overhead to application startup time. This is generally considered a worthwhile trade-off for increased runtime stability. (`lazy=True` offers an escape hatch for components where startup performance is critical and delayed error detection is acceptable).
 
@@ -57,7 +57,7 @@ These core principles guided its architecture:
 **Implementation:**
 * **Decorator-Driven Registration:** Components are registered via explicit decorators.
 * **Type Hint Injection:** Dependencies are primarily resolved based on constructor/method type hints.
-* **Explicit Configuration Binding:** `@configuration` and `@configured` require clear mapping definitions between configuration sources (env vars, files) and target `dataclasses`.
+* **Explicit Configuration Binding (ADR-0010):** The `@configured` decorator, combined with the `configuration(...)` builder, requires clear definitions of sources and explicit mapping parameters (`prefix`, `mapping`) or relies on predictable auto-detection based on the dataclass structure to bind configuration to objects.
 
 ---
 
@@ -71,7 +71,7 @@ These core principles guided its architecture:
 * **Dependency Injection:** The core pattern inherently decouples components by externalizing dependency creation.
 * **AOP (`@intercepted_by`, ADR-005):** Provides a dedicated mechanism to extract cross-cutting concerns into reusable `MethodInterceptor` components, keeping business logic clean.
 * **Event Bus (ADR-007):** Enables further decoupling through asynchronous event-based communication (Publish/Subscribe) instead of direct service calls.
-* **Configuration Binding (ADR-002):** Separates the loading, parsing, and validation of configuration from the components that consume it.
+* **Unified Configuration Binding (ADR-0010):** The `@configured` decorator and `configuration(...)` builder separate the loading, parsing, validation, and source management of configuration from the components that consume it.
 
 ---
 
@@ -79,10 +79,10 @@ These core principles guided its architecture:
 
 **Principle:** Circular dependencies should be treated as an explicit design decision, not resolved implicitly by the container through potentially fragile mechanisms like automatic proxy injection into constructors. The container must detect cycles and require developers to break them using clear, defined patterns.
 
-**Rationale:** Automatically resolving cycles can hide architectural problems and lead to objects being used in partially initialized states. Failing fast during startup (`CircularDependencyError`) and requiring explicit patterns like `@configure` or provider injection ensures a predictable and robust component lifecycle.
+**Rationale:** Automatically resolving cycles can hide architectural problems and lead to objects being used in partially initialized states. Failing fast during startup (`InvalidBindingError` or similar) and requiring explicit patterns like `@configure` or provider injection ensures a predictable and robust component lifecycle.
 
 **Implementation:**
-* **Fail-Fast Detection:** Cycles are detected during eager validation in `init()`, raising `CircularDependencyError` with the full chain.
+* **Fail-Fast Detection:** Cycles are detected during eager validation in `init()`, raising an error with the full chain.
 * **No Implicit Resolution:** `pico-ioc` deliberately avoids automatic proxy injection or lazy fields to break cycles within constructors.
 * **Promoted Explicit Patterns:** Encourages using `@configure` methods, provider injection (`Callable[[], T]`), or the `EventBus` to break cycles explicitly where necessary.
 

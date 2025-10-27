@@ -198,12 +198,12 @@ def test_cache_service_uses_in_memory(test_container):
 
 ## 3\. Summary: Which Pattern to Use?
 
-| Pattern                       | `init(overrides={...})`                  | `init(profiles=(...))` + Conditionals |
+| Pattern                       | `init(overrides={...})`                     | `init(profiles=(...))` + Conditionals |
 | :---------------------------- | :--------------------------------------- | :------------------------------------ |
 | **Best For** | **Unit Tests** (Fine-grained mocking)    | **Integration / E2E Tests** (Env setup) |
 | **What it does** | Surgically replaces components *after* discovery. | Controls which components are *discovered* or *selected* initially. |
 | **Analogy** | Using a stunt double for one scene.      | Casting a different actor for the role. |
-| **Example** | `overrides={Database: MockDatabase()}` | `profiles=("test",)`                  |
+| **Example** | `overrides={Database: MockDatabase()}`   | `profiles=("test",)`                  |
 | **Granularity** | Per-component, per-test                  | Per-environment, applies broadly      |
 
 -----

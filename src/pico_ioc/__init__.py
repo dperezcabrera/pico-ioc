@@ -3,7 +3,6 @@ from .constants import LOGGER_NAME, LOGGER, PICO_INFRA, PICO_NAME, PICO_KEY, PIC
 from .exceptions import (
     PicoError,
     ProviderNotFoundError,
-    CircularDependencyError,
     ComponentCreationError,
     ScopeError,
     ConfigurationError,
@@ -18,16 +17,12 @@ from .api import (
     factory,
     provides,
     Qualifier,
-    configuration,
     configure,
     cleanup,
-    ConfigSource,
-    EnvSource,
-    FileSource,
-    FlatDictSource,
     init,
     configured,
 )
+from .config_builder import configuration, ContextConfig, EnvSource, FileSource, FlatDictSource, Value
 from .scope import ScopeManager, ContextVarScope, ScopeProtocol, ScopedCaches
 from .locator import ComponentLocator
 from .factory import ComponentFactory, ProviderMetadata, DeferredProvider
@@ -35,6 +30,7 @@ from .aop import MethodCtx, MethodInterceptor, intercepted_by, UnifiedComponentP
 from .container import PicoContainer
 from .event_bus import EventBus, ExecPolicy, ErrorPolicy, Event, subscribe, AutoSubscriberMixin
 from .config_runtime import JsonTreeSource, YamlTreeSource, DictSource, Discriminator
+from .analysis import DependencyRequest, analyze_callable_dependencies
 
 __all__ = [
     "LOGGER_NAME",
@@ -45,7 +41,6 @@ __all__ = [
     "PICO_META",
     "PicoError",
     "ProviderNotFoundError",
-    "CircularDependencyError",
     "ComponentCreationError",
     "ScopeError",
     "ConfigurationError",
@@ -58,7 +53,6 @@ __all__ = [
     "factory",
     "provides",
     "Qualifier",
-    "configuration",
     "configure",
     "cleanup",
     "ScopeProtocol",
@@ -78,10 +72,12 @@ __all__ = [
     "PicoContainer",
     "EnvSource",
     "FileSource",
-    "ConfigSource",
     "FlatDictSource",
     "init",
     "configured",
+    "configuration",
+    "ContextConfig",
+    "Value",
     "EventBus",
     "ExecPolicy",
     "ErrorPolicy",
@@ -92,6 +88,6 @@ __all__ = [
     "YamlTreeSource",
     "DictSource",
     "Discriminator",
+    "DependencyRequest",
+    "analyze_callable_dependencies",
 ]
-
-
