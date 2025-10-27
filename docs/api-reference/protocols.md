@@ -4,29 +4,29 @@ This page describes the Python protocols (`typing.Protocol`) used by `pico-ioc` 
 
 ---
 
-## **`MethodInterceptor`** 🎭
+## **`MethodInterceptor`** 
 
 Used for implementing Aspect-Oriented Programming (AOP). Classes implementing this protocol can be applied to component methods using the `@intercepted_by` decorator.
 
 ```python
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, Dict # Added Dict
 
 class MethodCtx:
     """Context object passed to the interceptor."""
-    instance: object       # The component instance being called
-    cls: type              # The class of the component instance
-    method: Callable       # The original bound method being intercepted
-    name: str              # The name of the method being called
-    args: tuple            # Positional arguments passed to the method
-    kwargs: dict           # Keyword arguments passed to the method
-    container: Any         # The PicoContainer instance
-    local: Dict[str, Any]  # A dict for interceptors to share state during one call
+    instance: object      # The component instance being called
+    cls: type             # The class of the component instance
+    method: Callable      # The original bound method being intercepted
+    name: str             # The name of the method being called
+    args: tuple           # Positional arguments passed to the method
+    kwargs: dict          # Keyword arguments passed to the method
+    container: Any        # The PicoContainer instance (type hint might need PicoContainer)
+    local: Dict[str, Any] # A dict for interceptors to share state during one call
     request_key: Any | None # The current request scope ID, if applicable
 
 class MethodInterceptor(Protocol):
     def invoke(
-        self, 
-        ctx: MethodCtx, 
+        self,
+        ctx: MethodCtx,
         call_next: Callable[[MethodCtx], Any]
     ) -> Any:
         """
@@ -41,7 +41,7 @@ class MethodInterceptor(Protocol):
             The result of the original method, potentially modified.
         """
         ... # Your logic before/after call_next(ctx)
-````
+```
 
 **Note:** The `invoke` method can be `async def` if the intercepted method is `async`. `pico-ioc` will handle `await`ing `call_next(ctx)` correctly.
 
@@ -81,7 +81,7 @@ class ContainerObserver(Protocol):
 
 -----
 
-## **`ScopeProtocol`** ♻️
+## **`ScopeProtocol`** 
 
 Used for defining custom **Scopes**. Instances are passed to `init(custom_scopes={...})`.
 
@@ -107,9 +107,9 @@ class ScopeProtocol(Protocol):
 
 -----
 
-## **`ConfigSource`** (Basic Config) ⚙️
+## **`ConfigSource`** (Basic Config - *Internal Usage*) 
 
-Used by the `@configuration` system for **flat key-value** configuration. Instances are passed to `init(config=[...])`.
+Defines the interface for sources providing **flat key-value** configuration. Implementations (like `EnvSource`, `FlatDictSource`) are passed to the **`configuration(...)` builder function**, not directly to `init()`.
 
 ```python
 from typing import Optional, Protocol
@@ -128,13 +128,13 @@ class ConfigSource(Protocol):
         ...
 ```
 
-**Implementations Provided:** `EnvSource`, `FileSource` (for flat JSON).
+**Provided Implementations (for `configuration(...)`):** `EnvSource`, `FileSource` (legacy, less common now), `FlatDictSource`.
 
 -----
 
-## **`TreeSource`** (Tree Config) 🌳
+## **`TreeSource`** (Tree Config - *Internal Usage*) 
 
-Used by the `@configured` system for **nested tree-based** configuration. Instances are passed to `init(tree_config=[...])`.
+Defines the interface for sources providing **nested tree-based** configuration. Implementations (like `JsonTreeSource`, `YamlTreeSource`, `DictSource`) are passed to the **`configuration(...)` builder function**, not directly to `init()`.
 
 ```python
 from typing import Mapping, Any, Protocol
@@ -151,5 +151,5 @@ class TreeSource(Protocol):
         ...
 ```
 
-**Implementations Provided:** `JsonTreeSource`, `YamlTreeSource`, `DictSource`.
+**Provided Implementations (for `configuration(...)`):** `JsonTreeSource`, `YamlTreeSource`, `DictSource`.
 

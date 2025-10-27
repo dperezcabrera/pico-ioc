@@ -7,7 +7,7 @@ This documentation site guides you from your first component to building complex
 ## Key Features
 
 * 🚀 **Async-Native:** Full support for `async`/`await` in component resolution (`aget`), lifecycle methods (`__ainit__`, `@cleanup`), AOP interceptors, and the Event Bus.
-* 🌳 **Advanced Tree-Binding:** Use `@configured` to map complex YAML/JSON configuration trees directly to `dataclass` graphs, including support for `Union` types and custom discriminators.
+* 🌳 **Advanced Unified Configuration:** Use `@configured` to map complex YAML/JSON configuration trees *or* flat key-value sources (like ENV) directly to `dataclass` graphs via the `configuration(...)` builder, with clear precedence rules and normalization. # <-- Updated this point slightly for ADR-0010
 * 🔬 **Observability-First:** Built-in container contexts (`as_current`), stats (`.stats()`), and observer protocols (`ContainerObserver`) to monitor, trace, and debug your application's components.
 * ✨ **Powerful AOP:** Intercept method calls for cross-cutting concerns (like logging, tracing, or caching) using `@intercepted_by` without modifying your business logic.
 * ✅ **Fail-Fast Validation:** The container validates all component dependencies at startup (`init()`), preventing `ProviderNotFoundError` exceptions at runtime.
@@ -53,24 +53,25 @@ from pico_ioc import component, init
 
 # 1. Define your components
 class Greeter:
-    def say_hello(self) -> str: ...
+    def say_hello(self) -> str: ...
 
 @component
 class EnglishGreeter(Greeter):
-    def say_hello(self) -> str:
-        return "Hello!"
+    def say_hello(self) -> str:
+        return "Hello!"
 
 @component
 class App:
-    # 2. Declare dependencies in the constructor
-    def __init__(self, greeter: Greeter):
-        self.greeter = greeter
-    
-    def run(self):
-        print(self.greeter.say_hello())
+    # 2. Declare dependencies in the constructor
+    def __init__(self, greeter: Greeter):
+        self.greeter = greeter
+    
+    def run(self):
+        print(self.greeter.say_hello())
 
 # 3. Initialize the container
 # The 'modules' list tells pico_ioc where to scan for @component
+# This example doesn't need explicit configuration sources.
 container = init(modules=[__name__])
 
 # 4. Get the root component and run
@@ -80,10 +81,4 @@ app.run()
 # Output: Hello!
 ```
 
------
-
-##  Navigation
-
-| [⬅️ Anterior: Inicio](./README.md) | [🏠 Índice Principal](./README.md) | [Siguiente ➡️: Guía de Usuario](./user-guide/README.md) |
-| :--- | :--- | :--- |
 

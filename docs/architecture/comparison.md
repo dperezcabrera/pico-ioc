@@ -8,10 +8,10 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 
 ## Feature Comparison Matrix
 
-| Feature                   | pico-ioc          | dependency-injector | punq             | FastAPI `Depends`   |
+| Feature                 | pico-ioc          | dependency-injector | punq             | FastAPI `Depends`   |
 | :------------------------ | :---------------: | :-----------------: | :--------------: | :---------------: |
 | **Primary Style** | Decorators + TH¹  | Declarative Code² | Decorators + TH¹ | Function Wrappers |
-| **Type Hint Based** | ✅ Yes            | ⚠️ Partial³        | ✅ Yes           | ✅ Yes            |
+| **Type Hint Based** | ✅ Yes            | ⚠️ Partial³       | ✅ Yes           | ✅ Yes            |
 | **Startup Validation** | ✅ Yes (Eager)    | ❌ No (Runtime)   | ❌ No (Runtime)  | ❌ No (Runtime)   |
 | **Circular Dep. Check** | ✅ Yes (Startup)  | ✅ Yes (Runtime)  | ✅ Yes (Runtime) | ✅ Yes (Runtime)  |
 | **Async Support** | ✅ Native (`aget`) | ✅ Yes⁴           | ❌ No            | ✅ Native         |
@@ -19,7 +19,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 | **Scopes (Singleton)** | ✅ Yes            | ✅ Yes            | ✅ Yes           | ✅ Yes⁵           |
 | **Scopes (Prototype)** | ✅ Yes            | ✅ Yes            | ✅ Yes           | ✅ Via `use_cache=False` |
 | **Scopes (ContextVar)** | ✅ Built-in       | ✅ Yes            | ❌ No            | ✅ Native (Request)|
-| **Configuration Binding** | ✅ Tree + Basic   | ✅ Basic (KV)     | ❌ Manual        | ❌ Manual         |
+| **Configuration Binding** | ✅ Unified Tree+Flat | ✅ Basic (KV)     | ❌ Manual        | ❌ Manual         |
 | **Qualifiers/Tags** | ✅ Yes            | ✅ Yes (Providers) | ❌ No            | ❌ No             |
 | **List Injection** | ✅ Yes (`Annotated`) | ✅ Yes (`List`)   | ❌ No            | ⚠️ Manual⁶       |
 | **Lazy Loading (`lazy`)** | ✅ Built-in       | ✅ Yes            | ❌ No            | ❌ No             |
@@ -27,7 +27,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 | **Observability (Context)**| ✅ Built-in       | ❌ Manual         | ❌ Manual        | ❌ Manual         |
 | **Observability (Stats)** | ✅ Built-in       | ❌ Manual         | ❌ Manual        | ❌ Manual         |
 | **Testing Overrides** | ✅ `init(overrides)` | ✅ Yes            | ✅ Yes           | ✅ Via `dependency_overrides` |
-| **Python Version** | 3.10+             | 3.7+              | 3.7+             | 3.7+              |
+| **Python Version** | 3.10+           | 3.7+            | 3.7+           | 3.7+            |
 
 **Notes:**
 ¹ Relies heavily on decorators applied directly to classes/methods and uses type hints for injection.
@@ -43,19 +43,19 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 
 ### `pico-ioc`
 
-* **Focus:** Startup safety, async-native, AOP, observability, advanced configuration, modern Python (3.10+).
+* **Focus:** Startup safety, async-native, AOP, observability, advanced unified configuration, modern Python (3.10+).
 * **Philosophy:** Inspired by robust enterprise frameworks (like Spring/Guice), prioritizing early error detection (fail-fast validation), explicit configuration via decorators and type hints, and built-in support for complex application patterns (async, AOP, context management). Treats DI as a core architectural tool for the entire application.
 * **Strengths:**
     * **Startup Safety:** Catches most wiring errors (`InvalidBindingError`, `CircularDependencyError`) before runtime.
     * **Async Native:** Seamless integration with `asyncio` across resolution (`aget`), lifecycle (`__ainit__`, async cleanup), and AOP.
     * **AOP:** Built-in method interception (`@intercepted_by`) for cross-cutting concerns.
-    * **Tree Configuration:** Powerful `@configured` binding for complex YAML/JSON settings.
+    * **Unified Configuration:** Powerful `@configured` binding handling both flat (ENV-like) and tree (YAML/JSON) sources via `configuration(...)` builder, with clear precedence and normalization rules. # <-- UPDATE THIS POINT
     * **Observability:** Designed for monitoring via `stats()`, `ContainerObserver`, and `container_id` context.
 * **Weaknesses:**
     * Requires Python 3.10+.
     * Feature set might be overkill for very simple scripts.
     * Relies heavily on decorators, which might not suit all style preferences.
-* **Best For:** Medium-to-large applications, async web services (FastAPI/Flask), microservices, systems where reliability, testability, and maintainability are crucial, applications needing AOP or complex configuration patterns.
+* **Best For:** Medium-to-large applications, async web services (FastAPI/Flask), microservices, systems where reliability, testability, and maintainability are crucial, applications needing AOP or complex, unified configuration patterns.
 
 ### `dependency-injector`
 
@@ -69,7 +69,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 * **Weaknesses:**
     * Wiring errors typically occur at runtime when a dependency is first accessed.
     * Can lead to boilerplate code in container definition files.
-    * Lacks built-in AOP and advanced tree configuration binding compared to `pico-ioc`.
+    * Lacks built-in AOP and the unified tree/flat configuration binding found in `pico-ioc` post-ADR-0010.
 * **Best For:** Projects preferring explicit, centralized wiring definitions separate from business logic, applications needing Python 3.7-3.9 support, situations where runtime error detection is acceptable.
 
 ### `punq`
@@ -95,15 +95,15 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
     * Naturally supports `async` dependencies within routes.
 * **Weaknesses:**
     * Not intended for managing application-wide singletons or complex object graphs outside the web layer.
-    * Lacks features like AOP, qualifiers, advanced conditional logic, or application-wide startup validation.
+    * Lacks features like AOP, qualifiers, advanced conditional logic, application-wide startup validation, or sophisticated configuration binding. # <-- MAYBE UPDATE THIS POINT
     * Can tightly couple business logic to the web framework if used exclusively for all layers of the application.
-* **Best For:** Managing dependencies directly related to the HTTP request/response cycle within FastAPI applications. Often used *in conjunction* with a dedicated application-layer DI container like `pico-ioc` (see [FastAPI Integration Guide](./integrations/web-fastapi.md)), where FastAPI handles route injection and `pico-ioc` manages deeper service and repository layers.
+* **Best For:** Managing dependencies directly related to the HTTP request/response cycle within FastAPI applications. Often used *in conjunction* with a dedicated application-layer DI container like `pico-ioc`, where FastAPI handles route injection and `pico-ioc` manages deeper service and repository layers.
 
 ---
 
 ## Conclusion
 
-`pico-ioc` is designed for developers building complex, modern Python applications who value **startup safety**, **native async support**, **testability**, and **advanced features** like AOP and structured configuration. Its emphasis on fail-fast validation and observability makes it particularly well-suited for production-grade systems where reliability and maintainability are paramount. It requires Python 3.10+ due to its reliance on modern `typing` features.
+`pico-ioc` is designed for developers building complex, modern Python applications who value **startup safety**, **native async support**, **testability**, and **advanced features** like AOP and structured, unified configuration. Its emphasis on fail-fast validation and observability makes it particularly well-suited for production-grade systems where reliability and maintainability are paramount. It requires Python 3.10+ due to its reliance on modern `typing` features.
 
 ---
 
@@ -111,4 +111,5 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 
 This concludes the Architecture section. Explore the API Reference for detailed documentation on specific functions and decorators.
 
-* **[API Reference Overview](./api-reference/README.md)**: Quick lookup for all public APIs.
+* **[API Reference Overview](../api-reference/README.md)**: Quick lookup for all public APIs.
+

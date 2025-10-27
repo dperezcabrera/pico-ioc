@@ -1,86 +1,75 @@
-# src/pico_ioc/container.py
 import inspect
 import contextvars
-from typing import Any, Dict, List, Optional, Tuple, overload, Union
+import functools
+from typing import Any, Dict, List, Optional, Tuple, overload, Union, Callable, Iterable, Set, get_args, get_origin, Annotated, Protocol, Mapping
 from contextlib import contextmanager
 from .constants import LOGGER, PICO_META
-from .exceptions import CircularDependencyError, ComponentCreationError, ProviderNotFoundError, AsyncResolutionError
-from .factory import ComponentFactory
+from .exceptions import ComponentCreationError, ProviderNotFoundError, AsyncResolutionError
+from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
 from .scope import ScopedCaches, ScopeManager
 from .aop import UnifiedComponentProxy, ContainerObserver
+from .analysis import analyze_callable_dependencies, DependencyRequest
 
 KeyT = Union[str, type]
-_resolve_chain: contextvars.ContextVar[Tuple[KeyT, ...]] = contextvars.ContextVar("pico_resolve_chain", default=())
 
-class _TracerFrame:
-    __slots__ = ("parent_key", "via")
-    def __init__(self, parent_key: KeyT, via: str):
-        self.parent_key = parent_key
-        self.via = via
+def _normalize_callable(obj):
+    return getattr(obj, '__func__', obj)
 
-class ResolutionTracer:
-    def __init__(self, container: "PicoContainer") -> None:
-        self._container = container
-        self._stack_var: contextvars.ContextVar[List[_TracerFrame]] = contextvars.ContextVar("pico_tracer_stack", default=[])
-        self._edges: Dict[Tuple[KeyT, KeyT], Tuple[str, str]] = {}
+def _get_signature_safe(callable_obj):
+    try:
+        return inspect.signature(callable_obj)
+    except (ValueError, TypeError):
+        wrapped = getattr(callable_obj, '__wrapped__', None)
+        if wrapped is not None:
+            return inspect.signature(wrapped)
+        raise
 
-    def enter(self, parent_key: KeyT, via: str) -> contextvars.Token:
-        stack = list(self._stack_var.get())
-        stack.append(_TracerFrame(parent_key, via))
-        return self._stack_var.set(stack)
+def _needs_async_configure(obj: Any) -> bool:
+    for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
+        meta = getattr(m, PICO_META, {})
+        if meta.get("configure", False) and inspect.iscoroutinefunction(m):
+            return True
+    return False
 
-    def leave(self, token: contextvars.Token) -> None:
-        self._stack_var.reset(token)
+def _iter_configure_methods(obj: Any):
+    for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
+        meta = getattr(m, PICO_META, {})
+        if meta.get("configure", False):
+            yield m
 
-    def override_via(self, new_via: str) -> Optional[str]:
-        stack = self._stack_var.get()
-        if not stack:
-            return None
-        prev = stack[-1].via
-        stack[-1].via = new_via
-        return prev
+def _build_resolution_graph(loc) -> Dict[KeyT, Tuple[KeyT, ...]]:
+    if not loc:
+        return {}
+        
+    def _map_dep_to_bound_key(dep_key: KeyT) -> KeyT:
+        if dep_key in loc._metadata:
+            return dep_key
+        
+        if isinstance(dep_key, str):
+            mapped = loc.find_key_by_name(dep_key)
+            if mapped is not None:
+                return mapped
 
-    def restore_via(self, previous: Optional[str]) -> None:
-        if previous is None:
-            return
-        stack = self._stack_var.get()
-        if not stack:
-            return
-        stack[-1].via = previous
+        if isinstance(dep_key, type):
+            for k, md in loc._metadata.items():
+                typ = md.provided_type or md.concrete_class
+                if isinstance(typ, type):
+                    try:
+                        if issubclass(typ, dep_key):
+                            return k
+                    except Exception:
+                        continue
+        return dep_key
 
-    def note_param(self, child_key: KeyT, param_name: str) -> None:
-        stack = self._stack_var.get()
-        if not stack:
-            return
-        parent = stack[-1].parent_key
-        via = stack[-1].via
-        self._edges[(parent, child_key)] = (via, param_name)
-
-    def describe_cycle(self, chain: Tuple[KeyT, ...], current: KeyT, locator: Optional[ComponentLocator]) -> str:
-        def name_of(k: KeyT) -> str:
-            return getattr(k, "__name__", str(k))
-        def scope_of(k: KeyT) -> str:
-            if not locator:
-                return "singleton"
-            md = locator._metadata.get(k)
-            return md.scope if md else "singleton"
-        lines: List[str] = []
-        lines.append("Circular dependency detected.")
-        lines.append("")
-        lines.append("Resolution chain:")
-        full = tuple(chain) + (current,)
-        for idx, k in enumerate(full, 1):
-            mark = "  ❌" if idx == len(full) else ""
-            lines.append(f"  {idx}. {name_of(k)} [scope={scope_of(k)}]{mark}")
-            if idx < len(full):
-                parent = k
-                child = full[idx]
-                via, param = self._edges.get((parent, child), ("provider", "?"))
-                lines.append(f"     └─ via {via} param '{param}' → {name_of(child)}")
-        lines.append("")
-        lines.append("Hint: break the cycle with a @configure setter or use a factory/provider.")
-        return "\n".join(lines)
+    graph: Dict[KeyT, Tuple[KeyT, ...]] = {}
+    for key, md in list(loc._metadata.items()):
+        deps: List[KeyT] = []
+        for d in loc.dependency_keys_for_static(md):
+            mapped = _map_dep_to_bound_key(d)
+            deps.append(mapped)
+        graph[key] = tuple(deps)
+    return graph
 
 class PicoContainer:
     _container_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("pico_container_id", default=None)
@@ -104,7 +93,6 @@ class PicoContainer:
         import time as _t
         self.context = PicoContainer._Ctx(container_id=self.container_id, profiles=profiles, created_at=_t.time())
         PicoContainer._container_registry[self.container_id] = self
-        self._tracer = ResolutionTracer(self)
 
     @staticmethod
     def _generate_container_id() -> str:
@@ -153,6 +141,7 @@ class PicoContainer:
     def _canonical_key(self, key: KeyT) -> KeyT:
         if self._factory.has(key):
             return key
+            
         if isinstance(key, type) and self._locator:
             cands: List[Tuple[bool, Any]] = []
             for k, md in self._locator._metadata.items():
@@ -167,16 +156,19 @@ class PicoContainer:
             if cands:
                 prim = [k for is_p, k in cands if is_p]
                 return prim[0] if prim else cands[0][1]
+                
         if isinstance(key, str) and self._locator:
             for k, md in self._locator._metadata.items():
                 if md.pico_name == key:
                     return k
+                    
         return key
 
     def _resolve_or_create_internal(self, key: KeyT) -> Tuple[Any, float, bool]:
         key = self._canonical_key(key)
         cache = self._cache_for(key)
         cached = cache.get(key)
+        
         if cached is not None:
             self.context.cache_hit_count += 1
             for o in self._observers: o.on_cache_hit(key)
@@ -184,19 +176,9 @@ class PicoContainer:
 
         import time as _tm
         t0 = _tm.perf_counter()
-        chain = list(_resolve_chain.get())
 
-        for k_in_chain in chain:
-            if k_in_chain == key:
-                details = self._tracer.describe_cycle(tuple(chain), key, self._locator)
-                raise ComponentCreationError(key, CircularDependencyError(chain, key, details=details))
-
-        token_chain = _resolve_chain.set(tuple(chain + [key]))
         token_container = self.activate()
-        token_tracer = self._tracer.enter(key, via="provider")
-
-        requester = chain[-1] if chain else None
-        instance_or_awaitable = None
+        requester = None
 
         try:
             provider = self._factory.get(key, origin=requester)
@@ -211,8 +193,6 @@ class PicoContainer:
             return instance_or_awaitable, took_ms, False
 
         finally:
-            self._tracer.leave(token_tracer)
-            _resolve_chain.reset(token_chain)
             self.deactivate(token_container)
             
     @overload
@@ -256,24 +236,6 @@ class PicoContainer:
 
         return final_instance
 
-    def _resolve_type_key(self, key: type):
-        if not self._locator:
-            return None
-        cands: List[Tuple[bool, Any]] = []
-        for k, md in self._locator._metadata.items():
-            typ = md.provided_type or md.concrete_class
-            if not isinstance(typ, type):
-                continue
-            try:
-                if typ is not key and issubclass(typ, key):
-                    cands.append((md.primary, k))
-            except Exception:
-                continue
-        if not cands:
-            return None
-        prim = [k for is_p, k in cands if is_p]
-        return prim[0] if prim else cands[0][1]
-
     def _maybe_wrap_with_aspects(self, key, instance: Any) -> Any:
         if isinstance(instance, UnifiedComponentProxy):
             return instance
@@ -283,14 +245,9 @@ class PicoContainer:
                 return UnifiedComponentProxy(container=self, target=instance)
         return instance
 
-    def cleanup_all(self) -> None:
-        for _, obj in self._caches.all_items():
-            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
-                meta = getattr(m, PICO_META, {})
-                if meta.get("cleanup", False):
-                    from .api import _resolve_args
-                    kwargs = _resolve_args(m, self)
-                    m(**kwargs)
+    def _iterate_cleanup_targets(self) -> Iterable[Any]:
+        yield from (obj for _, obj in self._caches.all_items())
+        
         if self._locator:
             seen = set()
             for md in self._locator._metadata.values():
@@ -298,12 +255,37 @@ class PicoContainer:
                 if fc and fc not in seen:
                     seen.add(fc)
                     inst = self.get(fc) if self._factory.has(fc) else fc()
-                    for _, m in inspect.getmembers(inst, predicate=inspect.ismethod):
-                        meta = getattr(m, PICO_META, {})
-                        if meta.get("cleanup", False):
-                            from .api import _resolve_args
-                            kwargs = _resolve_args(m, self)
-                            m(**kwargs)
+                    yield inst
+
+    def _call_cleanup_method(self, method: Callable[..., Any]) -> Any:
+        deps_requests = analyze_callable_dependencies(method)
+        return method(**self._resolve_args(deps_requests))
+
+    def cleanup_all(self) -> None:
+        for obj in self._iterate_cleanup_targets():
+            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
+                meta = getattr(m, PICO_META, {})
+                if meta.get("cleanup", False):
+                    res = self._call_cleanup_method(m)
+                    if inspect.isawaitable(res):
+                        LOGGER.warning(f"Async cleanup method {m} called during sync shutdown. Awaitable ignored.")
+
+    async def cleanup_all_async(self) -> None:
+        for obj in self._iterate_cleanup_targets():
+            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
+                meta = getattr(m, PICO_META, {})
+                if meta.get("cleanup", False):
+                    res = self._call_cleanup_method(m)
+                    if inspect.isawaitable(res):
+                        await res
+        
+        try:
+            from .event_bus import EventBus
+            for _, obj in self._caches.all_items():
+                if isinstance(obj, EventBus):
+                    await obj.aclose()
+        except Exception:
+            pass
 
     def activate_scope(self, name: str, scope_id: Any):
         return self.scopes.activate(name, scope_id)
@@ -333,39 +315,6 @@ class PicoContainer:
                         out[f"{getattr(k,'__name__',k)}.{name}"] = False
         return out
 
-    async def cleanup_all_async(self) -> None:
-        for _, obj in self._caches.all_items():
-            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
-                meta = getattr(m, PICO_META, {})
-                if meta.get("cleanup", False):
-                    from .api import _resolve_args
-                    res = m(**_resolve_args(m, self))
-                    import inspect as _i
-                    if _i.isawaitable(res):
-                        await res
-        if self._locator:
-            seen = set()
-            for md in self._locator._metadata.values():
-                fc = md.factory_class
-                if fc and fc not in seen:
-                    seen.add(fc)
-                    inst = self.get(fc) if self._factory.has(fc) else fc()
-                    for _, m in inspect.getmembers(inst, predicate=inspect.ismethod):
-                        meta = getattr(m, PICO_META, {})
-                        if meta.get("cleanup", False):
-                            from .api import _resolve_args
-                            res = m(**_resolve_args(m, self))
-                            import inspect as _i
-                            if _i.isawaitable(res):
-                                await res
-        try:
-            from .event_bus import EventBus
-            for _, obj in self._caches.all_items():
-                if isinstance(obj, EventBus):
-                    await obj.aclose()
-        except Exception:
-            pass
-
     def stats(self) -> Dict[str, Any]:
         import time as _t
         resolves = self.context.resolve_count
@@ -385,6 +334,9 @@ class PicoContainer:
         self.cleanup_all()
         PicoContainer._container_registry.pop(self.container_id, None)
 
+    def build_resolution_graph(self) -> None:
+        return _build_resolution_graph(self._locator)
+        
     def export_graph(
         self,
         path: str,
@@ -398,10 +350,8 @@ class PicoContainer:
         if not self._locator:
             raise RuntimeError("No locator attached; cannot export dependency graph.")
 
-        from .api import _build_resolution_graph
-
         md_by_key = self._locator._metadata
-        graph = _build_resolution_graph(self)
+        graph = _build_resolution_graph(self._locator)
 
         lines: List[str] = []
         lines.append("digraph Pico {")
@@ -441,3 +391,94 @@ class PicoContainer:
         with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
+            
+    def _resolve_args(self, dependencies: Tuple[DependencyRequest, ...]) -> Dict[str, Any]:
+        kwargs: Dict[str, Any] = {}
+        if not dependencies:
+            return kwargs
+            
+        for dep in dependencies:
+            if dep.is_list:
+                keys: Tuple[KeyT, ...] = ()
+                if self._locator is not None and isinstance(dep.key, type):
+                    keys = tuple(self._locator.collect_by_type(dep.key, dep.qualifier))
+                kwargs[dep.parameter_name] = [self.get(k) for k in keys]
+                continue
+
+            primary_key = dep.key
+            if isinstance(primary_key, str) and self._locator is not None:
+                mapped = self._locator.find_key_by_name(primary_key)
+                primary_key = mapped if mapped is not None else primary_key
+            
+            try:
+                kwargs[dep.parameter_name] = self.get(primary_key)
+            except Exception as first_error:
+                if primary_key != dep.parameter_name:
+                    try:
+                        kwargs[dep.parameter_name] = self.get(dep.parameter_name)
+                    except Exception:
+                        raise first_error from None
+                else:
+                    raise first_error from None
+        return kwargs
+
+
+    def build_class(self, cls: type, locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]) -> Any:
+        init = cls.__init__
+        if init is object.__init__:
+            inst = cls()
+        else:
+            deps = self._resolve_args(dependencies)
+            inst = cls(**deps)
+        
+        ainit = getattr(inst, "__ainit__", None)
+        has_async = (callable(ainit) and inspect.iscoroutinefunction(ainit)) or _needs_async_configure(inst)
+        
+        if has_async:
+            async def runner():
+                if callable(ainit):
+                    kwargs = {}
+                    try:
+                        ainit_deps = analyze_callable_dependencies(ainit)
+                        kwargs = self._resolve_args(ainit_deps)
+                    except Exception:
+                        kwargs = {}
+                    res = ainit(**kwargs)
+                    if inspect.isawaitable(res):
+                        await res
+                for m in _iter_configure_methods(inst):
+                    configure_deps = analyze_callable_dependencies(m)
+                    args = self._resolve_args(configure_deps)
+                    r = m(**args)
+                    if inspect.isawaitable(r):
+                        await r
+                return inst
+            return runner()
+            
+        for m in _iter_configure_methods(inst):
+            configure_deps = analyze_callable_dependencies(m)
+            args = self._resolve_args(configure_deps)
+            m(**args)
+        return inst
+
+    def build_method(self, fn: Callable[..., Any], locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]) -> Any:
+        deps = self._resolve_args(dependencies)
+        obj = fn(**deps)
+        
+        has_async = _needs_async_configure(obj)
+        if has_async:
+            async def runner():
+                for m in _iter_configure_methods(obj):
+                    configure_deps = analyze_callable_dependencies(m)
+                    args = self._resolve_args(configure_deps)
+                    r = m(**args)
+                    if inspect.isawaitable(r):
+                        await r
+                return obj
+            return runner()
+            
+        for m in _iter_configure_methods(obj):
+            configure_deps = analyze_callable_dependencies(m)
+            args = self._resolve_args(configure_deps)
+            m(**args)
+        return obj

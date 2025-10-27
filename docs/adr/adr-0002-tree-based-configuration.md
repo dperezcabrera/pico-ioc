@@ -1,21 +1,23 @@
-## ADR-002: Tree-Based Configuration Binding
+# ADR-002: Tree-Based Configuration Binding
 
-**Status:** Accepted
+**Status:** Accepted (Partially Superseded by [ADR-0010](./adr-0010-unified-configuration.md))
 
-### Context
+> **Note:** While the core concepts of **tree-binding logic** (`ConfigResolver`, `ObjectGraphBuilder`) and using `@configured` for nested structures remain valid, **ADR-0010 unified the configuration system**. The mechanism described here using a separate `init(tree_config=...)` argument is **no longer current**. Configuration sources (including tree sources like `YamlTreeSource`) are now passed to the `configuration(...)` builder, and the resulting `ContextConfig` object is passed to `init(config=...)`. The `@configured` decorator now handles both flat and tree mapping via its `mapping` parameter.
 
-Basic configuration (`@configuration` with `ConfigSource`) is suitable for flat key-value pairs but becomes cumbersome for complex, nested application settings common in modern microservices (e.g., configuring databases, caches, feature flags, external clients with nested properties). Manually parsing nested structures or using complex prefixes is error-prone and lacks type safety beyond simple primitives. We needed a way to map structured configuration files (like YAML or JSON) directly to Python object graphs (like `dataclasses`).
+## Context
 
-### Decision
+Basic configuration (`@configuration` with `ConfigSource` - *now removed*) was suitable for flat key-value pairs but became cumbersome for complex, nested application settings common in modern microservices (e.g., configuring databases, caches, feature flags, external clients with nested properties). Manually parsing nested structures or using complex prefixes was error-prone and lacked type safety beyond simple primitives. We needed a way to map structured configuration files (like YAML or JSON) directly to Python object graphs (like `dataclasses`).
+
+## Decision
 
 We introduced a **dedicated tree-binding system**:
 
-1.  **`TreeSource` Protocol:** Defined sources that provide configuration as a nested `Mapping` (e.g., `YamlTreeSource`, `JsonTreeSource`). These are passed to `init(tree_config=...)`.
-2.  **`ConfigResolver`:** An internal component that loads, merges (sources are layered), and interpolates (`${ENV:VAR}`, `${ref:path}`) all `TreeSource`s into a single, final configuration tree.
-3.  **`ObjectGraphBuilder`:** An internal component that recursively maps a sub-tree (selected by a `prefix`) from the `ConfigResolver` onto a target Python type (usually a `dataclass`). It handles type coercion, nested objects, lists, dictionaries, `Union`s (with `$type` or custom `Discriminator`), and `Enum`s.
-4.  **`@configured(target=Type, prefix="key")` Decorator:** A registration mechanism that tells `pico-ioc` to create a provider for the `target` type by using the `ObjectGraphBuilder` to map the configuration sub-tree found at `prefix`.
+1.  **`TreeSource` Protocol:** Defined sources that provide configuration as a nested `Mapping` (e.g., `YamlTreeSource`, `JsonTreeSource`). These are now passed to the **`configuration(...)` builder** *(updated per ADR-0010)*.
+2.  **`ConfigResolver`:** An internal component that loads, merges (sources are layered according to `configuration(...)` order), and interpolates (`${ENV:VAR}`, `${ref:path}`) all `TreeSource`s into a single, final configuration tree.
+3.  **`ObjectGraphBuilder`:** An internal component that recursively maps a sub-tree (selected by a `prefix`) from the `ConfigResolver` onto a target Python type (usually a `dataclass`). It handles type coercion, nested objects, lists, dictionaries, `Union`s (with `Discriminator`), and `Enum`s.
+4.  **`@configured(prefix="key", mapping="tree"|"auto")` Decorator:** *(Updated per ADR-0010)* A registration mechanism that tells `pico-ioc` to create a provider for the target type by using the `ObjectGraphBuilder` to map the configuration sub-tree found at `prefix`, when the `mapping` is determined to be `"tree"` (either explicitly or via `"auto"` detection).
 
-### Consequences
+## Consequences
 
 **Positive:** 👍
 * Enables highly structured, type-safe configuration.
@@ -26,6 +28,6 @@ We introduced a **dedicated tree-binding system**:
 * Polymorphic configuration (`Union` + `Discriminator`) allows for flexible setup (e.g., selecting different cache backends via config).
 
 **Negative:** 👎
-* Introduces a second configuration system alongside the basic `@configuration`.
-* Requires understanding the mapping rules (prefix, type coercion, discriminators).
+* *(Original negative points about having two systems are mostly resolved by ADR-0010)*
+* Requires understanding the mapping rules (prefix, type coercion, discriminators, `mapping` parameter).
 * Adds optional dependencies for formats like YAML (`pip install pico-ioc[yaml]`).

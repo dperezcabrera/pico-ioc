@@ -1,4 +1,3 @@
-# src/pico_ioc/aop.py
 import inspect
 import pickle
 import threading
@@ -148,6 +147,7 @@ class UnifiedComponentProxy:
         original_func = bound
         if hasattr(bound, '__func__'):
             original_func = bound.__func__
+        
         if inspect.iscoroutinefunction(original_func):
             async def aw(*args, **kwargs):
                 ctx = MethodCtx(
@@ -192,6 +192,7 @@ class UnifiedComponentProxy:
         attr = getattr(target, name)
         if not callable(attr):
             return attr
+        
         interceptors_cls = _gather_interceptors_for_method(type(target), name)
         if not interceptors_cls:
             return attr
@@ -201,16 +202,12 @@ class UnifiedComponentProxy:
             cache: Dict[str, Tuple[Tuple[Any, ...], Callable[..., Any], Tuple[type, ...]]] = object.__getattribute__(self, "_cache")
             cur_sig = self._scope_signature()
             cached = cache.get(name)
+            
             if cached is not None:
                 sig, wrapped, cls_tuple = cached
                 if sig == cur_sig and cls_tuple == interceptors_cls:
                     return wrapped
                     
-            cached = cache.get(name)
-            if cached is not None:
-                sig, wrapped, cls_tuple = cached
-                if sig == cur_sig and cls_tuple == interceptors_cls:
-                    return wrapped
             sig, wrapped, cls_tuple = self._build_wrapped(name, attr, interceptors_cls)
             cache[name] = (sig, wrapped, cls_tuple)
             return wrapped

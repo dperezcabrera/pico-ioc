@@ -9,6 +9,14 @@ This page lists the public methods of the `PicoContainer` class and the top-leve
 This is the main entry point for creating and configuring a container.
 
 ```python
+import logging # Added for type hint
+from typing import Any, Iterable, Optional, Dict, Tuple, List, Union # Added necessary types
+from pico_ioc import ScopeProtocol, ContainerObserver, PicoContainer # Assuming these are defined here
+from pico_ioc.config_builder import ContextConfig # Correct import for ContextConfig
+
+# Define KeyT for the signature
+KeyT = Union[str, type]
+
 def init(
     modules: Union[Any, Iterable[Any]],
     *,
@@ -17,13 +25,13 @@ def init(
     environ: Optional[Dict[str, str]] = None,
     overrides: Optional[Dict[KeyT, Any]] = None,
     logger: Optional[logging.Logger] = None,
-    config: Tuple[ConfigSource, ...] = (),
+    # MODIFIED: Unified config using ContextConfig
+    config: Optional[ContextConfig] = None,
     custom_scopes: Optional[Dict[str, ScopeProtocol]] = None,
-    validate_only: bool = False,
+    validate_only: bool = False, # Added missing parameter
     container_id: Optional[str] = None,
-    tree_config: Tuple[TreeSource, ...] = (),
     observers: Optional[List[ContainerObserver]] = None
-) -> PicoContainer:
+) -> PicoContainer: ... # Added return type hint
 ```
 
   * **`modules`**: An iterable of modules or package names (strings) to scan for components.
@@ -32,17 +40,16 @@ def init(
   * **`environ`**: (Optional) A dictionary to use instead of `os.environ`. Used for testing conditionals.
   * **`overrides`**: (Optional) A dictionary mapping **Keys** to specific instances or provider functions, replacing any discovered components for those keys. Used primarily for testing.
   * **`logger`**: (Optional) A custom logger instance. Defaults to `pico_ioc.LOGGER`.
-  * **`config`**: A tuple of `ConfigSource` instances (e.g., `EnvSource()`, `FileSource()`) used by the `@configuration` decorator. Sources are checked in the order provided.
+  * **`config`**: (Optional) A **`ContextConfig`** object created by the `configuration(...)` builder. This object encapsulates all configuration sources (like environment variables, files, dictionaries), overrides, and rules for mapping them to `@configured` classes. This replaces the previous separate `config` and `tree_config` arguments.
   * **`custom_scopes`**: (Optional) A dictionary mapping custom scope names (strings) to `ScopeProtocol` implementations.
-  * **`validate_only`**: (Default: `False`) If `True`, performs all scanning and validation steps but returns an empty container without creating any instances or running lifecycle methods. Useful for quick startup checks.
+  * **`validate_only`**: (Default: `False`) If `True`, performs all scanning and validation steps but returns a container without creating instances or running lifecycle methods. Useful for quick startup checks.
   * **`container_id`**: (Optional) A specific ID string to assign to this container. If `None`, a unique ID is automatically generated.
-  * **`tree_config`**: A tuple of `TreeSource` instances (e.g., `YamlTreeSource()`, `JsonTreeSource()`) used by the `@configured` decorator. Sources are merged deeply in the order provided.
   * **`observers`**: (Optional) A list of objects implementing the `ContainerObserver` protocol. These observers will receive events like `on_resolve` and `on_cache_hit` for monitoring and tracing purposes.
   * **Returns**: A configured `PicoContainer` instance ready to resolve components.
 
 -----
 
-## **`PicoContainer` Class Methods**
+## **`PicoContainer` Instance Methods**
 
 ### `get(key: KeyT) -> Any`
 
@@ -165,11 +172,11 @@ Executes all methods decorated with `@health` on cached components and returns a
 
 ### `export_graph(path: str, *, include_scopes: bool = True, include_qualifiers: bool = False, rankdir: str = "LR", title: Optional[str] = None) -> None`
 
-Exports the container's component dependency graph to a `.dot` file for visualization with Graphviz.
+Exports the container's component dependency graph to a `.dot` file (Graphviz format) for visualization. Note: This method generates the `.dot` file content; rendering it requires the Graphviz tool.
 
-  * **`path`**: The full path (including filename and `.dot` extension) where the graph file will be saved.
+  * **`path`**: The full path (including filename, typically with a `.dot` extension) where the graph file will be saved.
   * **`include_scopes`**: (Default: `True`) If `True`, adds scope information (e.g., `[scope=request]`) to the node labels.
-  * **`include_qualifiers`**: (Default: `False`) If `True`, adds qualifier information (e.g., `⟨payment⟩`) to the node labels.
+  * **`include_qualifiers`**: (Default: `False`) If `True`, adds qualifier information (e.g., `\\n⟨q⟩`) to the node labels.
   * **`rankdir`**: (Default: `"LR"`) Sets the layout direction for Graphviz (e.g., `"LR"` for Left-to-Right, `"TB"` for Top-to-Bottom).
   * **`title`**: (Optional) A title string to display at the top of the graph.
   * **Returns**: `None`.
