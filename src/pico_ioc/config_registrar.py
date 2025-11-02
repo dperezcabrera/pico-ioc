@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union, get_args, 
 from .constants import PICO_INFRA, PICO_NAME, PICO_META
 from .exceptions import ConfigurationError
 from .factory import ProviderMetadata, DeferredProvider
-from .config_builder import ContextConfig, ConfigSource, FlatDictSource
+from .config_builder import ContextConfig, ConfigSource, FlatDictSource, Value
 from .config_runtime import ConfigResolver, TypeAdapterRegistry, ObjectGraphBuilder, TreeSource
 from .analysis import analyze_callable_dependencies, DependencyRequest
 
@@ -68,6 +68,22 @@ class ConfigurationManager:
             raise ConfigurationError(f"Configuration class {getattr(cls, '__name__', str(cls))} must be a dataclass")
         values: Dict[str, Any] = {}
         for f in fields(cls):
+            field_type = f.type
+            value_override = None
+            
+            if get_origin(field_type) is Annotated:
+                args = get_args(field_type)
+                field_type = args[0] if args else Any
+                metas = args[1:] if len(args) > 1 else ()
+                for m in metas:
+                    if isinstance(m, Value):
+                        value_override = m.value
+                        break
+            
+            if value_override is not None:
+                values[f.name] = value_override
+                continue
+            
             base_key = _upper_key(f.name)
             keys_to_try = []
             if prefix:
@@ -84,7 +100,7 @@ class ConfigurationManager:
                 if f.default is not MISSING or f.default_factory is not MISSING:
                     continue
                 raise ConfigurationError(f"Missing configuration key: {(prefix or '') + base_key}")
-            values[f.name] = _coerce(raw, f.type if isinstance(f.type, type) or get_origin(f.type) else str)
+            values[f.name] = _coerce(raw, field_type if isinstance(field_type, type) or get_origin(field_type) else str)
         return cls(**values)
     
     def _auto_detect_mapping(self, target_type: type) -> str:
@@ -159,7 +175,7 @@ class ConfigurationManager:
                 factory_method=None,
                 qualifiers=qset,
                 primary=True,
-                lazy=False,
+                lazy=bool(meta.get("lazy", False)),
                 infra="configured",
                 pico_name=prefix,
                 scope=sc,
@@ -180,7 +196,7 @@ class ConfigurationManager:
                 factory_method=None,
                 qualifiers=qset,
                 primary=True,
-                lazy=False,
+                lazy=bool(meta.get("lazy", False)),
                 infra="configured",
                 pico_name=prefix,
                 scope=sc,
@@ -217,3 +233,4 @@ class ConfigurationManager:
             prefix = md.pico_name or ""
             keys = [_upper_key(f.name) for f in fields(target_type)]
             return any(self._lookup_flat(prefix + k) is not None for k in keys)
+

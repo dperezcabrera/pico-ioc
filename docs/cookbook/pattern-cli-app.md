@@ -7,37 +7,35 @@
 ```python
 # The "bad" way - logic is trapped in the CLI
 import typer
-import os # Added for example
+import os
 
-# Assume ApiClient exists
 class ApiClient:
-    def __init__(self, key): self.key = key
-    def create(self, username): print(f"API: Creating {username} with key {self.key[:4]}...")
+    def __init__(self, key): self.key = key
+    def create(self, username): print(f"API: Creating {username} with key {self.key[:4]}...")
 
 app = typer.Typer()
 
 @app.command()
 def create_user(username: str):
-    """
-    Creates a user.
-    """
-    # Problem: Logic is hard-coded
-    api_key = os.environ.get("API_KEY")
-    client = ApiClient(api_key)
-    
-    try:
-        client.create(username)
-        print(f"Success! User '{username}' created.")
-    except Exception as e:
-        print(f"Error: {e}")
+    """
+    Creates a user.
+    """
+    api_key = os.environ.get("API_KEY")
+    client = ApiClient(api_key)
+    
+    try:
+        client.create(username)
+        print(f"Success! User '{username}' created.")
+    except Exception as e:
+        print(f"Error: {e}")
 ```
 
 **Solution:** The CLI command should only be a thin "wrapper." The *real* work should be done by a `pico-ioc`-managed service.
 
-1.  **`main()`:** The `main` entrypoint of your CLI app is responsible for `init()`ing the `pico-ioc` container, providing configuration via the `configuration(...)` builder.
-2.  **Configuration:** Your settings (like `API_KEY`) are loaded into a `@configured` dataclass (using `mapping="flat"` or `"auto"`).
-3.  **Services:** Your core logic (like `UserService`) is a `@component` that injects the configuration.
-4.  **CLI Command:** The `@app.command()` function just `get`s the service from the container and calls its method.
+1.  **`main()`:** The `main` entrypoint of your CLI app is responsible for `init()`ing the `pico-ioc` container, providing configuration via the `configuration(...)` builder.
+2.  **Configuration:** Your settings (like `API_KEY`) are loaded into a `@configured` dataclass (using `mapping="flat"` or `"auto"`).
+3.  **Services:** Your core logic (like `UserService`) is a `@component` that injects the configuration.
+4.  **CLI Command:** The `@app.command()` function just `get`s the service from the container and calls its method.
 
 -----
 
@@ -60,10 +58,10 @@ This example builds a CLI tool that can create a user, with its API key managed 
 ```
 .
 ├── app/
-│   ├── __init__.py
-│   ├── config.py    <-- Configuration dataclass (@configured)
-│   └── services.py  <-- Business logic
-└── cli.py           <-- Typer app
+│   ├── __init__.py
+│   ├── config.py    <-- Configuration dataclass (@configured)
+│   └── services.py  <-- Business logic
+└── cli.py           <-- Typer app
 ```
 
 ### 2\. The Configuration (`app/config.py`)
@@ -73,15 +71,13 @@ We define a `dataclass` to hold our settings, loaded from environment variables 
 ```python
 # app/config.py
 from dataclasses import dataclass
-# Use @configured instead of @configuration
 from pico_ioc import configured
 
-# Use @configured, likely with mapping="auto" or "flat"
-@configured(prefix="MYAPP_", mapping="auto") # mapping="auto" should detect flat
+@configured(prefix="MYAPP_", mapping="auto")
 @dataclass
 class AppConfig:
-    API_KEY: str
-    API_URL: str = "[https://api.example.com](https://api.example.com)" # Corrected URL string
+    API_KEY: str
+    API_URL: str = "[https://api.example.com](https://api.example.com)"
 ```
 
 ### 3\. The Service (`app/services.py`)
@@ -95,22 +91,21 @@ from .config import AppConfig
 
 @component
 class UserService:
-    def __init__(self, config: AppConfig):
-        self.api_key = config.API_KEY
-        self.api_url = config.API_URL
-        print(f"UserService initialized, using API at {self.api_url}")
-        
-    def create_user(self, username: str):
-        if not username:
-            raise ValueError("Username cannot be empty")
-            
-        print(
-            f"Calling '{self.api_url}/users' "
-            f"with key '{self.api_key[:4]}...' "
-            f"to create user '{username}'"
-        )
-        # ... real api call logic ...
-        print("...Success!")
+    def __init__(self, config: AppConfig):
+        self.api_key = config.API_KEY
+        self.api_url = config.API_URL
+        print(f"UserService initialized, using API at {self.api_url}")
+        
+    def create_user(self, username: str):
+        if not username:
+            raise ValueError("Username cannot be empty")
+            
+        print(
+            f"Calling '{self.api_url}/users' "
+            f"with key '{self.api_key[:4]}...' "
+            f"to create user '{username}'"
+        )
+        print("...Success!")
 ```
 
 ### 4\. The CLI (`cli.py`)
@@ -120,107 +115,79 @@ This file ties everything together. It creates the `typer` app, initializes `pic
 ```python
 # cli.py
 import typer
-import os # For setting env vars in example run
-# Import new configuration tools
+import os
 from pico_ioc import init, PicoContainer, configuration, EnvSource
-# Import service from app package
 from app.services import UserService
 
-# 1. Create the Typer app
 app = typer.Typer()
 
-# 2. Define configuration context
-# Use the configuration builder
 config_context = configuration(
-    EnvSource(prefix="") # Load flat env vars (MYAPP_API_KEY, etc.)
+    EnvSource(prefix="")
 )
 
-# 3. Initialize the container
-# Pass the config_context via the 'config' argument
 container: PicoContainer = init(
-    modules=["app.config", "app.services"],
-    config=config_context
+    modules=["app.config", "app.services"],
+    config=config_context
 )
 
-# 4. Define the CLI command
 @app.command()
 def create_user(
-    username: str = typer.Argument(..., help="The username to create"),
-    force: bool = typer.Option(False, "--force", help="Force creation")
+    username: str = typer.Argument(..., help="The username to create"),
+    force: bool = typer.Option(False, "--force", help="Force creation")
 ):
-    """
-    Creates a new user in the system.
-    """
-    print(f"CLI: Received create_user command for '{username}'")
-    
-    try:
-        # 5. Get the service from the container
-        # The CLI function's *only* job is to
-        # parse inputs and call the service.
-        user_service = container.get(UserService)
-        
-        # 6. Call the business logic
-        user_service.create_user(username)
-        
-        print(f"CLI: Successfully created user '{username}'.")
-        
-    except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(code=1)
+    """
+    Creates a new user in the system.
+    """
+    print(f"CLI: Received create_user command for '{username}'")
+    
+    try:
+        user_service = container.get(UserService)
+        
+        user_service.create_user(username)
+        
+        print(f"CLI: Successfully created user '{username}'.")
+        
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(code=1)
 
 @app.command()
 def another_command():
-    """Another command that can also use the container."""
-    typer.echo("Running another command...")
-    # Example: Accessing config directly if needed (though usually via services)
-    # from app.config import AppConfig
-    # config = container.get(AppConfig)
-    # typer.echo(f"API URL from config: {config.API_URL}")
-    pass
+    """Another command that can also use the container."""
+    typer.echo("Running another command...")
+    pass
 
 if __name__ == "__main__":
-    # --- Example setup for running ---
-    # In a real scenario, these would be set in the shell environment
-    print("--- Setting environment variables for example ---")
-    os.environ['MYAPP_API_KEY'] = 'my-secret-key-123'
-    # os.environ['MYAPP_API_URL'] = '[https://api.dev.local](https://api.dev.local)' # Optional override
-    print(f"MYAPP_API_KEY set: {os.environ.get('MYAPP_API_KEY')}")
-    print(f"MYAPP_API_URL set: {os.environ.get('MYAPP_API_URL')}") # Will be None if not set
-    print("--- Running Typer App ---")
-    # --- End Example setup ---
-    
-    app()
-
-    # --- Cleanup after example run ---
-    # del os.environ['MYAPP_API_KEY']
-    # if 'MYAPP_API_URL' in os.environ: del os.environ['MYAPP_API_URL']
-    # --- End Cleanup ---
+    print("--- Setting environment variables for example ---")
+    os.environ['MYAPP_API_KEY'] = 'my-secret-key-123'
+    print(f"MYAPP_API_KEY set: {os.environ.get('MYAPP_API_KEY')}")
+    print(f"MYAPP_API_URL set: {os.environ.get('MYAPP_API_URL')}")
+    print("--- Running Typer App ---")
+    
+    app()
 ```
 
 -----
 
 ## 5\. How to Use It
 
-1.  Set the required environment variables:
-    ```bash
-    export MYAPP_API_KEY="my-secret-key-123"
-    # export MYAPP_API_URL="[https://api.prod.com](https://api.prod.com)" # Optional, defaults in dataclass
-    ```
-2.  Run the CLI:
-    ```bash
-    $ python cli.py create-user "alice"
+1.  Set the required environment variables:
+    ` bash     export MYAPP_API_KEY="my-secret-key-123"      `
+2.  Run the CLI:
+    \`\`\`bash
+    $ python cli.py create-user "alice"
 
-    # Example Output (assuming MYAPP_API_URL was not set, using default):
-    # --- Setting environment variables for example ---
-    # MYAPP_API_KEY set: my-secret-key-123
-    # MYAPP_API_URL set: None
-    # --- Running Typer App ---
-    # UserService initialized, using API at [https://api.example.com](https://api.example.com)
-    # CLI: Received create_user command for 'alice'
-    # Calling '[https://api.example.com/users](https://api.example.com/users)' with key 'my-s...' to create user 'alice'
-    # ...Success!
-    # CLI: Successfully created user 'alice'.
-    ```
+    \# Example Output:
+    \# --- Setting environment variables for example ---
+    \# MYAPP\_API\_KEY set: my-secret-key-123
+    \# MYAPP\_API\_URL set: None
+    \# --- Running Typer App ---
+    \# UserService initialized, using API at [https://api.example.com](https://api.example.com)
+    \# CLI: Received create\_user command for 'alice'
+    \# Calling '[https://api.example.com/users](https://api.example.com/users)' with key 'my-s...' to create user 'alice'
+    \# ...Success\!
+    \# CLI: Successfully created user 'alice'.
+    \`\`\`
 
 ## 6\. Benefits
 

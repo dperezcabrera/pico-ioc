@@ -7,63 +7,65 @@ Pico-IOC provides a **unified system** for managing configuration, designed to h
 Instead of separate systems for flat and nested data, Pico-IOC uses a single, powerful approach:
 
 * **Decorator:** `@configured`
-    * This decorator marks a class (usually a `dataclass`) as a configuration object.
-    * It uses parameters like `prefix` and `mapping` (`"auto"`, `"flat"`, `"tree"`) to control how configuration values are found and mapped to the class fields (explained in the [Binding Data](./configuration-binding.md) guide).
+    * This decorator marks a class (usually a `dataclass`) as a configuration object.
+    * It uses parameters like `prefix` and `mapping` (`"auto"`, `"flat"`, `"tree"`) to control how configuration values are found and mapped to the class fields (explained in the [Binding Data](./configuration-binding.md) guide).
 * **Configuration Builder:** `configuration(...)`
-    * This function gathers and processes various configuration sources in a defined order.
-    * It accepts different source types (environment variables, files, dictionaries).
-    * It returns a `ContextConfig` object, which encapsulates the final, merged configuration state.
+    * This function gathers and processes various configuration sources in a defined order.
+    * It accepts different source types (environment variables, files, dictionaries).
+    * It returns a `ContextConfig` object, which encapsulates the final, merged configuration state.
 * **Sources:** You use specific source classes with the `configuration(...)` builder:
-    * `EnvSource`: Loads flat key-value pairs from environment variables.
-    * `FlatDictSource`: Loads flat key-value pairs from a dictionary.
-    * `JsonTreeSource`: Loads nested configuration from a JSON file.
+    * `EnvSource`: Loads flat key-value pairs from environment variables.
+    * `FlatDictSource`: Loads flat key-value pairs from a dictionary.
+    * `JsonTreeSource`: Loads nested configuration from a JSON file.
 * **Initialization:** The `ContextConfig` object returned by `configuration(...)` is passed to the `init()` function via the `config` argument.
 
 This unified system allows you to manage both simple environment variables and complex, hierarchical settings consistently.
 
 ## Passing Sources to the Container
 
-You define all your configuration sources using the `configuration(...)` builder and pass its result to `init()`. The order matters – sources listed later generally override sources listed earlier according to specific precedence rules (see [Configuration Specification](../specs/spec-configuration.md)).
+You define all your configuration sources using the `configuration(...)` builder and pass its result to `init()`. The order matters – sources listed later generally override sources listed earlier according to specific precedence rules.
 
 ```python
 import os
-from pico_ioc import init, configuration, EnvSource, JsonTreeSource
-# Assume my_app_module contains components including @configured classes
+from dataclasses import dataclass
+from pico_ioc import init, configuration, configured, EnvSource, JsonTreeSource
+
+# --- Define a component that uses configuration ---
+@configured(prefix="APP_", mapping="auto")
+@dataclass
+class AppConfig:
+    PORT: int
+    HOST: str = "localhost"
+
+@configured(prefix="database", mapping="auto")
+@dataclass
+class DbConfig:
+    host: str
 
 # --- Example: Define sources using the builder ---
-# Create a dummy config.json for the example
 with open("config.json", "w") as f:
     f.write('{"database": {"host": "db.prod.com"}}')
-os.environ['APP_PORT'] = '8080' # Example environment variable
+os.environ['APP_PORT'] = '8080'
 
 config_context = configuration(
-    # Load environment variables first (lower precedence)
-    EnvSource(prefix="APP_"),
-
-  What the new `configuration-basic.md` does:
-* It removes all mention of the old `@configuration` decorator.
-* It correctly introduces the `configuration(...)` builder as the central entry point.
-* It explains the different *Source* types (`EnvSource`, `JsonTreeSource`, etc.) and how they are passed to `init(config=...)`.
-* It links to `configuration-binding.md` for the *next* step (how `@configured` consumes this data).
-
-  # Load JSON file next (higher precedence for overlapping keys)
-    JsonTreeSource("config.json"),
-
-    # You could add more sources here (e.g., YamlTreeSource, DictSource)
-    # or overrides={'some_key': 'forced_value'}
+    EnvSource(prefix=""),
+    JsonTreeSource("config.json")
 )
 
 # --- Initialize the container with the unified config ---
 container = init(
-    modules=[my_app_module], # Scan your application modules
-    config=config_context    # Pass the ContextConfig object
+    modules=[__name__],
+    config=config_context
 )
+
+# --- Verify the configuration was loaded ---
+app_cfg = container.get(AppConfig)
+db_cfg = container.get(DbConfig)
+
+print(f"App running on: {app_cfg.HOST}:{app_cfg.PORT}")
+print(f"Database host: {db_cfg.host}")
 
 # --- Cleanup example files ---
 os.remove("config.json")
 del os.environ['APP_PORT']
-
-# Now, any @configured classes within my_app_module will be populated
-# based on the merged sources defined in config_context.
 ```
-

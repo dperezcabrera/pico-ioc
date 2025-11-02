@@ -26,9 +26,9 @@ from pico_ioc.api import component
 
 @component
 class Repository:
-    def __init__(self, url: str) -> None:
-        self.url = url
-````
+    def __init__(self, url: str) -> None:
+        self.url = url
+```
 
 ### Factory classes
 
@@ -38,14 +38,14 @@ Use `@factory` on a class and `@provides` on its methods. Methods can be instanc
 from pico_ioc.api import factory, provides
 
 class Service:
-    pass
+    pass
 
 @factory
 class ServiceFactory:
-    @staticmethod
-    @provides(Service)
-    def build(repo: "Repository") -> Service:
-        return Service()
+    @staticmethod
+    @provides(Service)
+    def build(repo: "Repository") -> Service:
+        return Service()
 ```
 
 ### Module-level functions with `@provides`
@@ -56,11 +56,11 @@ You can also declare providers at module scope using functions. This is convenie
 from pico_ioc.api import provides
 
 class Service:
-    pass
+    pass
 
 @provides(Service)
 def build_service(repo: "Repository") -> Service:
-    return Service()
+    return Service()
 ```
 
 ### String keys
@@ -72,7 +72,7 @@ from pico_ioc.api import provides
 
 @provides("cache")
 def build_cache() -> dict:
-    return {}
+    return {}
 ```
 
 ## Scopes and qualifiers
@@ -82,7 +82,7 @@ All three styles support `scope`, `qualifiers`, `primary`, `lazy`, and condition
 ```python
 @provides("cache", qualifiers=("primary",), scope="singleton", primary=True)
 def build_primary_cache() -> dict:
-    return {}
+    return {}
 ```
 
 ## Validation
@@ -93,7 +93,7 @@ def build_primary_cache() -> dict:
 
 If a constructed object declares asynchronous configuration methods marked with `@configure`, Pico-IoC will await them during construction.
 
-````
+```
 
 ```markdown
 # docs/guide.md
@@ -105,7 +105,7 @@ If a constructed object declares asynchronous configuration methods marked with 
 from pico_ioc.api import init
 
 pico = init(["your_project.package"])
-````
+```
 
 ## Declaring providers
 
@@ -116,8 +116,8 @@ from pico_ioc.api import component
 
 @component
 class Database:
-    def __init__(self, dsn: str) -> None:
-        self.dsn = dsn
+    def __init__(self, dsn: str) -> None:
+        self.dsn = dsn
 ```
 
 ### Factory classes with `@provides`
@@ -126,13 +126,13 @@ class Database:
 from pico_ioc.api import factory, provides
 
 class Service:
-    pass
+    pass
 
 @factory
 class ServiceFactory:
-    @provides(Service)
-    def build(self, db: "Database") -> Service:
-        return Service()
+    @provides(Service)
+    def build(self, db: "Database") -> Service:
+        return Service()
 ```
 
 ### Module-level `@provides` functions
@@ -143,11 +143,11 @@ Use module-level functions to provide objects directly without a factory class.
 from pico_ioc.api import provides
 
 class Cache:
-    pass
+    pass
 
 @provides(Cache)
 def build_cache() -> Cache:
-    return Cache()
+    return Cache()
 ```
 
 You can also use string keys:
@@ -157,7 +157,7 @@ from pico_ioc.api import provides
 
 @provides("feature_flags")
 def build_flags() -> dict:
-    return {"beta": True}
+    return {"beta": True}
 ```
 
 ### Static and class methods with `@provides`
@@ -168,14 +168,14 @@ Factory methods can be `@staticmethod` or `@classmethod`:
 from pico_ioc.api import factory, provides
 
 class Client:
-    pass
+    pass
 
 @factory
 class ClientFactory:
-    @staticmethod
-    @provides(Client)
-    def make() -> Client:
-        return Client()
+    @staticmethod
+    @provides(Client)
+    def make() -> Client:
+        return Client()
 ```
 
 ## Qualifiers and primary
@@ -184,11 +184,11 @@ class ClientFactory:
 from pico_ioc.api import provides, Qualifier
 
 class Store:
-    pass
+    pass
 
 @provides(Store, qualifiers=("fast",), primary=True)
 def fast_store() -> Store:
-    return Store()
+    return Store()
 ```
 
 Consumers can request a list of implementations with a qualifier using `Annotated[List[T], Qualifier("name")]`.
@@ -202,7 +202,7 @@ from pico_ioc.api import provides
 
 @provides("metrics", conditional_profiles=("prod",))
 def prod_metrics() -> dict:
-    return {"enabled": True}
+    return {"enabled": True}
 ```
 
 ## Validation and troubleshooting
@@ -214,9 +214,9 @@ from pico_ioc.api import init
 from pico_ioc.exceptions import InvalidBindingError
 
 try:
-    init(["your_project.package"], validate_only=True)
+    init(["your_project.package"], validate_only=True)
 except InvalidBindingError as e:
-    print(e)
+    print(e)
 ```
 
 ## Example end-to-end
@@ -225,17 +225,16 @@ except InvalidBindingError as e:
 from pico_ioc.api import component, provides, init
 
 class Service:
-    pass
+    pass
 
 @component
 class Repo:
-    pass
+    pass
 
 @provides(Service)
 def service(repo: Repo) -> Service:
-    return Service()
+    return Service()
 
-pico = init(__name__)
+pico = init([__name__])
 svc = pico.get(Service)
-
-
+```
