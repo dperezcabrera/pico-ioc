@@ -1,10 +1,12 @@
+# src/pico_ioc/container.py
+
 import inspect
 import contextvars
 import functools
 from typing import Any, Dict, List, Optional, Tuple, overload, Union, Callable, Iterable, Set, get_args, get_origin, Annotated, Protocol, Mapping
 from contextlib import contextmanager
 from .constants import LOGGER, PICO_META
-from .exceptions import ComponentCreationError, ProviderNotFoundError, AsyncResolutionError
+from .exceptions import ComponentCreationError, ProviderNotFoundError, AsyncResolutionError, ConfigurationError
 from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
 from .scope import ScopedCaches, ScopeManager
@@ -195,6 +197,26 @@ class PicoContainer:
         finally:
             self.deactivate(token_container)
             
+    def _run_configure_methods(self, instance: Any) -> Any:
+        if not _needs_async_configure(instance):
+            for m in _iter_configure_methods(instance):
+                configure_deps = analyze_callable_dependencies(m)
+                args = self._resolve_args(configure_deps)
+                res = m(**args)
+                if inspect.isawaitable(res):
+                    LOGGER.warning(f"Async configure method {m} called during sync get. Awaitable ignored.")
+            return instance
+
+        async def runner():
+            for m in _iter_configure_methods(instance):
+                configure_deps = analyze_callable_dependencies(m)
+                args = self._resolve_args(configure_deps)
+                r = m(**args)
+                if inspect.isawaitable(r):
+                    await r
+            return instance
+        return runner()
+
     @overload
     def get(self, key: type) -> Any: ...
     @overload
@@ -209,6 +231,14 @@ class PicoContainer:
         if inspect.isawaitable(instance):
             key_name = getattr(key, '__name__', str(key))
             raise AsyncResolutionError(key)
+
+        md = self._locator._metadata.get(key) if self._locator else None
+        scope = (md.scope if md else "singleton")
+        if scope != "singleton":
+            instance_or_awaitable_configured = self._run_configure_methods(instance)
+            if inspect.isawaitable(instance_or_awaitable_configured):
+                raise AsyncResolutionError(key)
+            instance = instance_or_awaitable_configured
 
         final_instance = self._maybe_wrap_with_aspects(key, instance)
         cache = self._cache_for(key)
@@ -227,6 +257,15 @@ class PicoContainer:
         instance = instance_or_awaitable
         if inspect.isawaitable(instance_or_awaitable):
             instance = await instance_or_awaitable
+
+        md = self._locator._metadata.get(key) if self._locator else None
+        scope = (md.scope if md else "singleton")
+        if scope != "singleton":
+            instance_or_awaitable_configured = self._run_configure_methods(instance)
+            if inspect.isawaitable(instance_or_awaitable_configured):
+                instance = await instance_or_awaitable_configured
+            else:
+                instance = instance_or_awaitable_configured
 
         final_instance = self._maybe_wrap_with_aspects(key, instance)
         cache = self._cache_for(key)
@@ -432,7 +471,7 @@ class PicoContainer:
             inst = cls(**deps)
         
         ainit = getattr(inst, "__ainit__", None)
-        has_async = (callable(ainit) and inspect.iscoroutinefunction(ainit)) or _needs_async_configure(inst)
+        has_async = (callable(ainit) and inspect.iscoroutinefunction(ainit))
         
         if has_async:
             async def runner():
@@ -446,39 +485,12 @@ class PicoContainer:
                     res = ainit(**kwargs)
                     if inspect.isawaitable(res):
                         await res
-                for m in _iter_configure_methods(inst):
-                    configure_deps = analyze_callable_dependencies(m)
-                    args = self._resolve_args(configure_deps)
-                    r = m(**args)
-                    if inspect.isawaitable(r):
-                        await r
                 return inst
             return runner()
             
-        for m in _iter_configure_methods(inst):
-            configure_deps = analyze_callable_dependencies(m)
-            args = self._resolve_args(configure_deps)
-            m(**args)
         return inst
 
     def build_method(self, fn: Callable[..., Any], locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]) -> Any:
         deps = self._resolve_args(dependencies)
         obj = fn(**deps)
-        
-        has_async = _needs_async_configure(obj)
-        if has_async:
-            async def runner():
-                for m in _iter_configure_methods(obj):
-                    configure_deps = analyze_callable_dependencies(m)
-                    args = self._resolve_args(configure_deps)
-                    r = m(**args)
-                    if inspect.isawaitable(r):
-                        await r
-                return obj
-            return runner()
-            
-        for m in _iter_configure_methods(obj):
-            configure_deps = analyze_callable_dependencies(m)
-            args = self._resolve_args(configure_deps)
-            m(**args)
         return obj

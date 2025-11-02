@@ -7,18 +7,16 @@ Pico-IOC provides a **unified system** for managing configuration, designed to h
 Instead of separate systems for flat and nested data, Pico-IOC uses a single, powerful approach:
 
 * **Decorator:** `@configured`
-    * This decorator marks a class (usually a `dataclass`) as a configuration object.
-    * It uses parameters like `prefix` and `mapping` (`"auto"`, `"flat"`, `"tree"`) to control how configuration values are found and mapped to the class fields (explained in the [Binding Data](./configuration-binding.md) guide).
+    * This decorator marks a class (usually a `dataclass`) as a configuration object.
+    * It uses parameters like `prefix` and `mapping` (`"auto"`, `"flat"`, `"tree"`) to control how configuration values are found and mapped to the class fields (explained in the [Binding Data](./configuration-binding.md) guide).
 * **Configuration Builder:** `configuration(...)`
-    * This function gathers and processes various configuration sources in a defined order.
-    * It accepts different source types (environment variables, files, dictionaries).
-    * It returns a `ContextConfig` object, which encapsulates the final, merged configuration state.
+    * This function gathers and processes various configuration sources in a defined order.
+    * It accepts different source types (environment variables, files, dictionaries).
+    * It returns a `ContextConfig` object, which encapsulates the final, merged configuration state.
 * **Sources:** You use specific source classes with the `configuration(...)` builder:
-    * `EnvSource`: Loads flat key-value pairs from environment variables.
-    * `FlatDictSource`: Loads flat key-value pairs from a dictionary.
-    * `JsonTreeSource`: Loads nested configuration from a JSON file.
-    * `YamlTreeSource`: Loads nested configuration from a YAML file (requires `PyYAML`).
-    * `DictSource`: Loads nested configuration from an in-memory dictionary.
+    * `EnvSource`: Loads flat key-value pairs from environment variables.
+    * `FlatDictSource`: Loads flat key-value pairs from a dictionary.
+    * `JsonTreeSource`: Loads nested configuration from a JSON file.
 * **Initialization:** The `ContextConfig` object returned by `configuration(...)` is passed to the `init()` function via the `config` argument.
 
 This unified system allows you to manage both simple environment variables and complex, hierarchical settings consistently.
@@ -35,24 +33,30 @@ from pico_ioc import init, configuration, EnvSource, JsonTreeSource
 # --- Example: Define sources using the builder ---
 # Create a dummy config.json for the example
 with open("config.json", "w") as f:
-    f.write('{"database": {"host": "db.prod.com"}}')
+    f.write('{"database": {"host": "db.prod.com"}}')
 os.environ['APP_PORT'] = '8080' # Example environment variable
 
 config_context = configuration(
-    # Load environment variables first (lower precedence)
-    EnvSource(prefix="APP_"),
+    # Load environment variables first (lower precedence)
+    EnvSource(prefix="APP_"),
 
-    # Load JSON file next (higher precedence for overlapping keys)
-    JsonTreeSource("config.json"),
+  What the new `configuration-basic.md` does:
+* It removes all mention of the old `@configuration` decorator.
+* It correctly introduces the `configuration(...)` builder as the central entry point.
+* It explains the different *Source* types (`EnvSource`, `JsonTreeSource`, etc.) and how they are passed to `init(config=...)`.
+* It links to `configuration-binding.md` for the *next* step (how `@configured` consumes this data).
 
-    # You could add more sources here (e.g., YamlTreeSource, DictSource)
-    # or overrides={'some_key': 'forced_value'}
+  # Load JSON file next (higher precedence for overlapping keys)
+    JsonTreeSource("config.json"),
+
+    # You could add more sources here (e.g., YamlTreeSource, DictSource)
+    # or overrides={'some_key': 'forced_value'}
 )
 
 # --- Initialize the container with the unified config ---
 container = init(
-    modules=[my_app_module], # Scan your application modules
-    config=config_context    # Pass the ContextConfig object
+    modules=[my_app_module], # Scan your application modules
+    config=config_context    # Pass the ContextConfig object
 )
 
 # --- Cleanup example files ---
@@ -61,8 +65,5 @@ del os.environ['APP_PORT']
 
 # Now, any @configured classes within my_app_module will be populated
 # based on the merged sources defined in config_context.
-````
-
-This approach provides a single point for defining how your application reads its configuration, regardless of whether the target class uses flat or tree mapping.
-
+```
 

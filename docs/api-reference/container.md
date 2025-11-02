@@ -1,3 +1,4 @@
+[ docs/api-reference/container.md: ]
 # `PicoContainer` API Reference
 
 This page lists the public methods of the `PicoContainer` class and the top-level `init()` function.
@@ -18,19 +19,18 @@ from pico_ioc.config_builder import ContextConfig # Correct import for ContextCo
 KeyT = Union[str, type]
 
 def init(
-    modules: Union[Any, Iterable[Any]],
-    *,
-    profiles: Tuple[str, ...] = (),
-    allowed_profiles: Optional[Iterable[str]] = None,
-    environ: Optional[Dict[str, str]] = None,
-    overrides: Optional[Dict[KeyT, Any]] = None,
-    logger: Optional[logging.Logger] = None,
-    # MODIFIED: Unified config using ContextConfig
-    config: Optional[ContextConfig] = None,
-    custom_scopes: Optional[Dict[str, ScopeProtocol]] = None,
-    validate_only: bool = False, # Added missing parameter
-    container_id: Optional[str] = None,
-    observers: Optional[List[ContainerObserver]] = None
+    modules: Union[Any, Iterable[Any]],
+    *,
+    profiles: Tuple[str, ...] = (),
+    allowed_profiles: Optional[Iterable[str]] = None,
+    environ: Optional[Dict[str, str]] = None,
+    overrides: Optional[Dict[KeyT, Any]] = None,
+    logger: Optional[logging.Logger] = None,
+    config: Optional[ContextConfig] = None,
+    custom_scopes: Optional[Iterable[str]] = None,
+    validate_only: bool = False, # Added missing parameter
+    container_id: Optional[str] = None,
+    observers: Optional[List[ContainerObserver]] = None
 ) -> PicoContainer: ... # Added return type hint
 ```
 
@@ -41,7 +41,7 @@ def init(
   * **`overrides`**: (Optional) A dictionary mapping **Keys** to specific instances or provider functions, replacing any discovered components for those keys. Used primarily for testing.
   * **`logger`**: (Optional) A custom logger instance. Defaults to `pico_ioc.LOGGER`.
   * **`config`**: (Optional) A **`ContextConfig`** object created by the `configuration(...)` builder. This object encapsulates all configuration sources (like environment variables, files, dictionaries), overrides, and rules for mapping them to `@configured` classes. This replaces the previous separate `config` and `tree_config` arguments.
-  * **`custom_scopes`**: (Optional) A dictionary mapping custom scope names (strings) to `ScopeProtocol` implementations.
+  * **`custom_scopes`**: (Optional) An iterable of custom scope **names** (strings) to register. `pico-ioc` will automatically create `ContextVarScope` implementations for these names.
   * **`validate_only`**: (Default: `False`) If `True`, performs all scanning and validation steps but returns a container without creating instances or running lifecycle methods. Useful for quick startup checks.
   * **`container_id`**: (Optional) A specific ID string to assign to this container. If `None`, a unique ID is automatically generated.
   * **`observers`**: (Optional) A list of objects implementing the `ContainerObserver` protocol. These observers will receive events like `on_resolve` and `on_cache_hit` for monitoring and tracing purposes.
@@ -149,8 +149,8 @@ Asynchronously calls all methods decorated with `@cleanup` (including `async def
 
 Performs a full shutdown:
 
-1.  Calls `cleanup_all()`.
-2.  Removes the container from the global registry (making it inaccessible via `PicoContainer.get_current()` or `all_containers()`).
+1.  Calls `cleanup_all()`.
+2.  Removes the container from the global registry (making it inaccessible via `PicoContainer.get_current()` or `all_containers()`).
 
 -----
 

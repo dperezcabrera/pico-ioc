@@ -1,8 +1,10 @@
+# src/pico_ioc/api.py
+
 import importlib
 import pkgutil
 import logging
 import inspect
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union, Protocol
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
 from .exceptions import ConfigurationError, InvalidBindingError
 from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
@@ -10,6 +12,7 @@ from .scope import ScopeManager, ScopedCaches
 from .container import PicoContainer
 from .decorators import component, factory, provides, Qualifier, configure, cleanup, configured
 from .config_builder import ContextConfig, configuration
+from .registrar import Registrar
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
@@ -26,7 +29,6 @@ def _iter_input_modules(inputs: Union[Any, Iterable[Any]]) -> Iterable[Any]:
             mod = importlib.import_module(it)
         else:
             mod = it
-        
         if hasattr(mod, "__path__"):
             for sub in _scan_package(mod):
                 name = getattr(sub, "__name__", None)
@@ -49,28 +51,37 @@ def _normalize_override_provider(v: Any):
         return (lambda f=v: f()), False
     return (lambda inst=v: inst), False
 
-def init(modules: Union[Any, Iterable[Any]], *, profiles: Tuple[str, ...] = (), allowed_profiles: Optional[Iterable[str]] = None, environ: Optional[Dict[str, str]] = None, overrides: Optional[Dict[KeyT, Any]] = None, logger: Optional[logging.Logger] = None, config: Optional[ContextConfig] = None, custom_scopes: Optional[Dict[str, "ScopeProtocol"]] = None, validate_only: bool = False, container_id: Optional[str] = None, observers: Optional[List["ContainerObserver"]] = None,) -> PicoContainer:
-    from .registrar import Registrar
-
+def init(
+    modules: Union[Any, Iterable[Any]],
+    *,
+    profiles: Tuple[str, ...] = (),
+    allowed_profiles: Optional[Iterable[str]] = None,
+    environ: Optional[Dict[str, str]] = None,
+    overrides: Optional[Dict[KeyT, Any]] = None,
+    logger: Optional[logging.Logger] = None,
+    config: Optional[ContextConfig] = None,
+    custom_scopes: Optional[Iterable[str]] = None,
+    validate_only: bool = False,
+    container_id: Optional[str] = None,
+    observers: Optional[List["ContainerObserver"]] = None,
+) -> PicoContainer:
     active = tuple(p.strip() for p in profiles if p)
-    allowed_set = set(a.strip() for a in allowed_profiles) if allowed_profiles is not None else None
     
+    allowed_set = set(a.strip() for a in allowed_profiles) if allowed_profiles is not None else None
     if allowed_set is not None:
         unknown = set(active) - allowed_set
         if unknown:
             raise ConfigurationError(f"Unknown profiles: {sorted(unknown)}; allowed: {sorted(allowed_set)}")
-    
+            
     factory = ComponentFactory()
     caches = ScopedCaches()
     scopes = ScopeManager()
-    
     if custom_scopes:
-        for n, impl in custom_scopes.items():
-            scopes.register_scope(n, impl)
+        for name in custom_scopes:
+            scopes.register_scope(name)
             
     pico = PicoContainer(factory, caches, scopes, container_id=container_id, profiles=active, observers=observers or [])
     registrar = Registrar(factory, profiles=active, environ=environ, logger=logger, config=config)
-    
     for m in _iter_input_modules(modules):
         registrar.register_module(m)
         
@@ -79,8 +90,7 @@ def init(modules: Union[Any, Iterable[Any]], *, profiles: Tuple[str, ...] = (), 
             prov, _ = _normalize_override_provider(v)
             factory.bind(k, prov)
             
-    registrar.finalize(overrides)
-    
+    registrar.finalize(overrides, pico_instance=pico)
     if validate_only:
         locator = registrar.locator()
         pico.attach_locator(locator)
@@ -91,13 +101,39 @@ def init(modules: Union[Any, Iterable[Any]], *, profiles: Tuple[str, ...] = (), 
     registrar.attach_runtime(pico, locator)
     pico.attach_locator(locator)
     _fail_fast_cycle_check(pico)
+    
+    if not validate_only:
+        eager_singletons = []
+        for key, md in locator._metadata.items():
+            if md.scope == "singleton" and not md.lazy:
+                cache = pico._cache_for(key)
+                instance = cache.get(key)
+                if instance is None:
+                    instance = pico.get(key)
+                    eager_singletons.append(instance)
+                else:
+                    eager_singletons.append(instance)
+                    
+        configure_awaitables = []
+        for instance in eager_singletons:
+            res = pico._run_configure_methods(instance)
+            if inspect.isawaitable(res):
+                configure_awaitables.append(res)
+                
+        if configure_awaitables:
+            raise ConfigurationError(
+                "Sync init() found eagerly loaded singletons with async @configure methods. "
+                "This can be caused by an async __ainit__ or async @configure. "
+                "Use an async main function and await pico.aget() for those components, "
+                "or mark them as lazy=True."
+            )
+
     return pico
 
 def _find_cycle(graph: Dict[KeyT, Tuple[KeyT, ...]]) -> Optional[Tuple[KeyT, ...]]:
     temp: Set[KeyT] = set()
     perm: Set[KeyT] = set()
     stack: List[KeyT] = []
-    
     def visit(n: KeyT) -> Optional[Tuple[KeyT, ...]]:
         if n in perm:
             return None
@@ -107,20 +143,16 @@ def _find_cycle(graph: Dict[KeyT, Tuple[KeyT, ...]]) -> Optional[Tuple[KeyT, ...
                 return tuple(stack[idx:] + [n])
             except ValueError:
                 return tuple([n, n])
-                
         temp.add(n)
         stack.append(n)
-        
         for m in graph.get(n, ()):
             c = visit(m)
             if c:
                 return c
-                
         stack.pop()
         temp.remove(n)
         perm.add(n)
         return None
-        
     for node in graph.keys():
         c = visit(node)
         if c:

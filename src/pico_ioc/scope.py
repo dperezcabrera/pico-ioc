@@ -3,6 +3,7 @@ import contextvars
 import inspect
 from typing import Any, Dict, Optional, Tuple
 from collections import OrderedDict
+from .exceptions import ScopeError
 
 class ScopeProtocol:
     def get_id(self) -> Any | None: ...
@@ -42,16 +43,24 @@ class ScopeManager:
         self._scopes: Dict[str, ScopeProtocol] = {
             "request": ContextVarScope(contextvars.ContextVar("pico_request_id", default=None)),
             "session": ContextVarScope(contextvars.ContextVar("pico_session_id", default=None)),
+            "websocket": ContextVarScope(contextvars.ContextVar("pico_websocket_id", default=None)),
             "transaction": ContextVarScope(contextvars.ContextVar("pico_tx_id", default=None)),
         }
-    def register_scope(self, name: str, implementation: ScopeProtocol) -> None:
+
+    def register_scope(self, name: str) -> None:
         if not isinstance(name, str) or not name:
-            from .exceptions import ScopeError
             raise ScopeError("Scope name must be a non-empty string")
         if name in ("singleton", "prototype"):
-            from .exceptions import ScopeError
-            raise ScopeError("Cannot register or override reserved scopes: 'singleton' or 'prototype'")
+            raise ScopeError(f"Cannot register reserved scope: '{name}'")
+        if name in self._scopes:
+            return
+
+        var_name = f"pico_{name}_id"
+        context_var = contextvars.ContextVar(var_name, default=None)
+        implementation = ContextVarScope(context_var)
         self._scopes[name] = implementation
+        
+        
     def get_id(self, name: str) -> Any | None:
         if name in ("singleton", "prototype"):
             return None
