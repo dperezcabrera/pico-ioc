@@ -8,6 +8,10 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union, g
 from .exceptions import ConfigurationError
 from .constants import PICO_META
 
+class Value:
+    def __init__(self, value: Any):
+        self.value = value
+
 class Discriminator:
     def __init__(self, name: str):
         self.name = name
@@ -160,8 +164,8 @@ class ObjectGraphBuilder:
         org = get_origin(t)
         
         if org is Annotated:
-            base, meta = self._split_annotated(t)
-            return self._build_discriminated(node, base, meta, path)
+            base, metas = self._split_annotated(t)
+            return self._build_discriminated(node, base, metas, path)
             
         if org in (list, List):
             elem_t = get_args(t)[0] if get_args(t) else Any
@@ -255,20 +259,42 @@ class ObjectGraphBuilder:
         
     def _build_discriminated(self, node: Any, base: Any, metas: Tuple[Any, ...], path: Tuple[str, ...]) -> Any:
         disc_name = None
+        disc_value = None
+        has_value = False
+
         for m in metas:
             if isinstance(m, Discriminator):
                 disc_name = m.name
-                break
-                
-        if disc_name and isinstance(node, dict) and disc_name in node:
-            if get_origin(base) is Union:
-                tn = str(node[disc_name])
-                for cand in get_args(base):
-                    if isinstance(cand, type) and getattr(cand, "__name__", "") == tn:
-                        cleaned = {k: v for k, v in node.items() if k != disc_name}
-                        return self._build(cleaned, cand, path)
-                raise ConfigurationError(f"Discriminator {disc_name} did not match at {'.'.join(path)}")
-                
+            if isinstance(m, Value):
+                disc_value = m.value
+                has_value = True
+
+        tn: Optional[str] = None
+
+        if disc_name and has_value:
+            tn = str(disc_value)
+        elif disc_name and isinstance(node, dict) and disc_name in node:
+            tn = str(node[disc_name])
+        
+        if tn is not None and get_origin(base) is Union:
+            for cand in get_args(base):
+                if isinstance(cand, type) and getattr(cand, "__name__", "") == tn:
+                    
+                    cleaned_node = {k: v for k, v in node.items() if k != disc_name}
+                    
+                    if has_value:
+                        cleaned_node[disc_name] = tn
+                    
+                    return self._build(cleaned_node, cand, path)
+            
+            raise ConfigurationError(
+                f"Discriminator value '{tn}' for field '{disc_name}' "
+                f"did not match any type in Union {base} at {'.'.join(path)}"
+            )
+
+        if has_value and not disc_name:
+             return disc_value
+             
         return self._build(node, base, path)
         
     def _coerce_prim(self, node: Any, t: type, path: Tuple[str, ...]) -> Any:

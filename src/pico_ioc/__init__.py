@@ -29,7 +29,7 @@ from .factory import ComponentFactory, ProviderMetadata, DeferredProvider
 from .aop import MethodCtx, MethodInterceptor, intercepted_by, UnifiedComponentProxy, health, ContainerObserver
 from .container import PicoContainer
 from .event_bus import EventBus, ExecPolicy, ErrorPolicy, Event, subscribe, AutoSubscriberMixin
-from .config_runtime import JsonTreeSource, YamlTreeSource, DictSource, Discriminator
+from .config_runtime import JsonTreeSource, YamlTreeSource, DictSource, Discriminator, Value
 from .analysis import DependencyRequest, analyze_callable_dependencies
 
 __all__ = [
@@ -88,6 +88,7 @@ __all__ = [
     "YamlTreeSource",
     "DictSource",
     "Discriminator",
+    "Value",
     "DependencyRequest",
     "analyze_callable_dependencies",
 ]

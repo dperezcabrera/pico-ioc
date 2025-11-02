@@ -1,4 +1,3 @@
-[ docs/api-reference/container.md: ]
 # `PicoContainer` API Reference
 
 This page lists the public methods of the `PicoContainer` class and the top-level `init()` function.
