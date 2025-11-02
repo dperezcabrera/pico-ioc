@@ -3,12 +3,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Optional, Protocol, Mapping, List, Tuple, Dict, Union
 
-from .config_runtime import TreeSource, DictSource, JsonTreeSource, YamlTreeSource
+from .config_runtime import TreeSource, DictSource, JsonTreeSource, YamlTreeSource, Value
 from .exceptions import ConfigurationError
-
-class Value:
-    def __init__(self, value: Any):
-        self.value = value
 
 class ConfigSource(Protocol):
     pass

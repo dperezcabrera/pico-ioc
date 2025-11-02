@@ -12,10 +12,3 @@ In a complex, production-grade application, you need tools to monitor, trace, an
 * [2. Observers & Metrics: `stats` (KPIs and Tracing Hooks)](./observers-metrics.md)
 * [3. Exporting the Dependency Graph (Visualization)](./exporting-graph.md)
 
----
-
-## Navigation
-
-| [⬅️ Anterior: Health Checks](../advanced-features/health-checks.md) | [🏠 Índice Principal](../README.md) | [Siguiente ➡️: Container Context](./container-context.md) |
-| :--- | :--- | :--- |
-

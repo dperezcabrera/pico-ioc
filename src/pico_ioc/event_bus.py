@@ -1,4 +1,3 @@
-# src/pico_ioc/event_bus.py
 import asyncio
 import inspect
 import logging
@@ -151,29 +150,30 @@ class EventBus:
             self._worker_loop = None
 
     def post(self, event: Event) -> None:
-        if self._closed:
-            raise EventBusClosedError()
-        if self._queue is None:
-            raise EventBusError("Worker queue not initialized. Call start_worker().")
-        loop = self._worker_loop
-        if loop and loop.is_running():
-            try:
-                current_loop = asyncio.get_running_loop()
-                if current_loop is loop:
-                    try:
-                        self._queue.put_nowait(event)
-                        return
-                    except asyncio.QueueFull:
-                        raise EventBusQueueFullError()
-            except RuntimeError:
-                pass
-            try:
-                loop.call_soon_threadsafe(self._queue.put_nowait, event)
-                return
-            except asyncio.QueueFull:
-                raise EventBusQueueFullError()
-        else:
-            raise EventBusError("Worker queue not initialized or loop not running. Call start_worker().")
+        with self._lock:
+            if self._closed:
+                raise EventBusClosedError()
+            if self._queue is None:
+                raise EventBusError("Worker queue not initialized. Call start_worker().")
+            loop = self._worker_loop
+            if loop and loop.is_running():
+                try:
+                    current_loop = asyncio.get_running_loop()
+                    if current_loop is loop:
+                        try:
+                            self._queue.put_nowait(event)
+                            return
+                        except asyncio.QueueFull:
+                            raise EventBusQueueFullError()
+                except RuntimeError:
+                    pass
+                try:
+                    loop.call_soon_threadsafe(self._queue.put_nowait, event)
+                    return
+                except asyncio.QueueFull:
+                    raise EventBusQueueFullError()
+            else:
+                raise EventBusError("Worker queue not initialized or loop not running. Call start_worker().")
 
     async def aclose(self) -> None:
         await self.stop_worker()
@@ -220,4 +220,3 @@ class PicoEventBusProvider:
             loop.create_task(event_bus.aclose())
         else:
             asyncio.run(event_bus.aclose())
-

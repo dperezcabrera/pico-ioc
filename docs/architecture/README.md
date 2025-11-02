@@ -13,11 +13,3 @@ This section focuses on the **"Why"** and the **"How"** of `pico-ioc`—intended
 * [3. Internals Deep-Dive (The "How")](./internals.md)
 * [4. Architecture Decision Records (ADR Index)](./adr/README.md)
 
----
-
-## Navigation
-
-| [⬅️ Anterior: Cookbook Overview](../cookbook/README.md) | [🏠 Índice Principal](../README.md) | [Siguiente ➡️: Design Principles](./design-principles.md) |
-| :--- | :--- | :--- |
-
-

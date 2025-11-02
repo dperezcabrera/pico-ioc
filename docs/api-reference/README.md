@@ -10,10 +10,5 @@ This section provides a concise summary of all public APIs, designed for quick l
 * [2. Decorators Reference](./decorators.md)
 * [3. `PicoContainer` API](./container.md)
 * [4. Protocols (`MethodInterceptor`, etc.)](./protocols.md)
+* [5. `EventBus` API](./event_bus.md)
 
----
-
-## Navigation
-
-| [⬅️ Anterior: Internals Deep-Dive](../architecture/internals.md) | [🏠 Índice Principal](../README.md) | [Siguiente ➡️: Glossary](./glossary.md) |
-| :--- | :--- | :--- |

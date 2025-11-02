@@ -172,13 +172,14 @@ def cleanup(fn):
     m["cleanup"] = True
     return fn
 
-def configured(target: Any = "self", *, prefix: str = "", mapping: str = "auto"):
+def configured(target: Any = "self", *, prefix: str = "", mapping: str = "auto", **kwargs):
     if mapping not in ("auto", "flat", "tree"):
         raise ValueError("mapping must be one of 'auto', 'flat', or 'tree'")
     def dec(cls):
         setattr(cls, PICO_INFRA, "configured")
         m = _meta_get(cls)
         m["configured"] = {"target": target, "prefix": prefix, "mapping": mapping}
+        _apply_common_metadata(cls, **kwargs)
         return cls
     return dec
 

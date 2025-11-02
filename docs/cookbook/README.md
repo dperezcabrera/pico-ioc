@@ -15,10 +15,5 @@ The Cookbook provides complete, end-to-end **architectural patterns**—solution
 * [7. Pattern: Security Checks with AOP (`@secured`)](./pattern-aop-security.md)
 * [8. Pattern: Method Profiling with AOP](./pattern-aop-profiling.md)
 * [9. Pattern: Dynamic LangChain Model/Prompt Selection & Caching](./pattern-dynamic-langchain.md)
+* [10. Pattern: Configuration Overrides & Deterministic Setup](./pattern-config-overrides.md)
 
----
-
-## Navigation
-
-| [⬅️ Anterior: AI & LangChain Integration](../integrations/ai-langchain.md) | [🏠 Índice Principal](../README.md) | [Siguiente ➡️: Multi-Tenant Applications](./pattern-multi-tenant.md) |
-| :--- | :--- | :--- |
