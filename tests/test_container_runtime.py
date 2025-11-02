@@ -67,15 +67,23 @@ def test_nested_context_managers():
 
 def test_container_stats():
     container = init(modules=[__name__])
+    stats_after_init = container.stats()
+    
+    initial_resolves = stats_after_init["total_resolves"]
+    initial_hits = stats_after_init["cache_hits"]
+    
+    assert initial_resolves == 6
+    assert initial_hits == 0
+
     with container.as_current():
         container.get(SimpleA)
         container.get(SimpleA)
         container.get(SimpleB)
-    stats = container.stats()
-    assert stats["total_resolves"] == 2
-    assert stats["cache_hits"] == 1
-    assert stats["cache_hit_rate"] == 1 / 3
-    container.shutdown()
+    
+    stats_after_gets = container.stats()
+
+    assert stats_after_gets["total_resolves"] == initial_resolves
+    assert stats_after_gets["cache_hits"] == initial_hits + 3
 
 def test_container_shutdown_cleanup():
     container = init(modules=[__name__], container_id="test-shutdown")

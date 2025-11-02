@@ -106,24 +106,19 @@ def test_scope_manager_defaults(scope_manager):
     assert "prototype" not in names
 
 def test_scope_manager_register_custom_scope(scope_manager):
-    custom_scope = MockScope()
-    scope_manager.register_scope("custom", custom_scope)
-    
+    scope_manager.register_scope("custom")
     assert "custom" in scope_manager.names()
-    assert scope_manager.get_id("custom") is None
-    
-    custom_scope.set_id("custom_id_1")
-    assert scope_manager.get_id("custom") == "custom_id_1"
+    assert isinstance(scope_manager._scopes["custom"], ContextVarScope)
 
 def test_scope_manager_register_errors(scope_manager):
     with pytest.raises(ScopeError, match="non-empty string"):
-        scope_manager.register_scope("", MockScope())
+        scope_manager.register_scope("")
         
-    with pytest.raises(ScopeError, match="reserved scopes"):
-        scope_manager.register_scope("singleton", MockScope())
+    with pytest.raises(ScopeError, match="reserved scope"):
+        scope_manager.register_scope("singleton")
         
-    with pytest.raises(ScopeError, match="reserved scopes"):
-        scope_manager.register_scope("prototype", MockScope())
+    with pytest.raises(ScopeError, match="reserved scope"):
+        scope_manager.register_scope("prototype")
 
 def test_scope_manager_get_id_reserved(scope_manager):
     assert scope_manager.get_id("singleton") is None
@@ -155,18 +150,18 @@ def test_scope_manager_activate_deactivate_reserved(scope_manager):
 
 def test_scope_manager_signatures(scope_manager):
     assert scope_manager.signature(("request", "session")) == (None, None)
-    assert scope_manager.signature_all() == (None, None, None)
+    assert scope_manager.signature_all() == (None, None, None, None)
     
     t1 = scope_manager.activate("request", "r1")
     t2 = scope_manager.activate("session", "s1")
     
     assert scope_manager.signature(("request", "session")) == ("r1", "s1")
-    assert scope_manager.signature_all() == ("r1", "s1", None)
+    assert scope_manager.signature_all() == ("r1", "s1", None, None)
     
     scope_manager.deactivate("request", t1)
     scope_manager.deactivate("session", t2)
     
-    assert scope_manager.signature_all() == (None, None, None)
+    assert scope_manager.signature_all() == (None, None, None, None)
 
 def test_scoped_caches_for_scope_singleton(scoped_caches, scope_manager):
     c1 = scoped_caches.for_scope(scope_manager, "singleton")

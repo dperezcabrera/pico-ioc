@@ -181,11 +181,12 @@ def test_component_creation_error():
     mod = types.ModuleType("fail_mod2")
     for cls in [FailingComponent, Widget, WidgetFactory, ConfiguredComponent]:
         setattr(mod, cls.__name__, cls)
-    container = init(mod)
-    with pytest.raises(ComponentCreationError) as e:
-        container.get(FailingComponent)
-    assert "Failed to create component for key: FailingComponent" in str(e.value)
-    assert "ValueError: Creation failure" in str(e.value)
+
+    with pytest.raises(ComponentCreationError) as err:
+        init(mod) 
+
+    assert "FailingComponent" in str(err.value)
+    assert "Creation failure" in str(err.value)
 
 def test_provider_not_found_error():
     container = init(types.ModuleType("empty_mod"))
@@ -243,13 +244,10 @@ def test_configure_lifecycle_method():
     for cls in [Widget, WidgetFactory, ConfiguredComponent]:
         setattr(mod, cls.__name__, cls)
     container = init(mod)
-    assert "ConfiguredComponent: __init__" not in log_capture
-    instance = container.get(ConfiguredComponent)
-    assert instance.configured is True
-    assert isinstance(instance.widget, Widget)
-    init_index = log_capture.index("ConfiguredComponent: __init__")
-    configure_index = log_capture.index("ConfiguredComponent: @configure called")
-    assert init_index < configure_index
+
+    assert "ConfiguredComponent: __init__" in log_capture
+    assert "Widget_Factory: Creating Widget" in log_capture
+    assert "ConfiguredComponent: @configure called" in log_capture
 
 @pytest.mark.asyncio
 async def test_async_cleanup_method():

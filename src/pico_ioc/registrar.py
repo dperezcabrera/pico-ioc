@@ -17,6 +17,7 @@ from .provider_selector import ProviderSelector
 from .dependency_validator import DependencyValidator
 from .component_scanner import ComponentScanner
 from .analysis import analyze_callable_dependencies, DependencyRequest
+from .container import PicoContainer
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
@@ -133,7 +134,7 @@ class Registrar:
                 add("pico_name", md.pico_name, k)
 
 
-    def finalize(self, overrides: Optional[Dict[KeyT, Any]]) -> None:
+    def finalize(self, overrides: Optional[Dict[KeyT, Any]], *, pico_instance: PicoContainer) -> None:
         candidates, on_missing, deferred_providers, provides_functions = self._scanner.get_scan_results()
         self._deferred = deferred_providers
         self._provides_functions = provides_functions
@@ -142,6 +143,24 @@ class Registrar:
         for key, (provider, md) in winners.items():
             self._bind_if_absent(key, provider)
             self._metadata[key] = md
+            
+        if PicoContainer not in self._metadata:
+            self._factory.bind(PicoContainer, lambda: pico_instance)
+            self._metadata[PicoContainer] = ProviderMetadata(
+                key=PicoContainer,
+                provided_type=PicoContainer,
+                concrete_class=PicoContainer,
+                factory_class=None,
+                factory_method=None,
+                qualifiers=set(),
+                primary=True,
+                lazy=False,
+                infra="component",
+                pico_name="PicoContainer",
+                override=True,
+                scope="singleton",
+                dependencies=()
+            )
 
         self._promote_scopes()
         self._rebuild_indexes()

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+---
+Sure — here’s your **Changelog 2.1.1** entry fully translated and polished for an English technical audience:
+
+---
+
+## [2.1.1] - 2025-11-02
+
+### Fixed
+
+* Updated `requires-python` to **>=3.10** to align with dependency constraints and avoid environment mismatches.
+* Lazy proxy (`UnifiedComponentProxy`) now correctly detects async `@configure` methods in sync resolution paths and raises `AsyncResolutionError` when appropriate.
+* Cleaned up imports and internal wiring in `api.init(...)` / `registrar.finalize(...)`.
+
+### Changed
+
+* `init(modules=..., custom_scopes=...)` now **accepts an iterable of scope names** and automatically registers them as `ContextVarScope` (previously required a name→implementation mapping).
+* Eager pre-initialization of *non-lazy singletons*: if a component requires an async `@configure`, a `ConfigurationError` is raised during `init()` (forcing the use of `aget()` or `lazy=True`).
+* Execution of async `@configure` for **non-singleton scopes**: in sync mode it raises `AsyncResolutionError`; in async mode (`aget()`) it awaits properly.
+
+### Added
+
+* **Container self-injection**: `PicoContainer` is now registered as a singleton and can be injected into components (`tests/test_container_self_injection.py`).
+* New default **`websocket`** scope (based on `contextvars`) added to `ScopeManager`.
+* Explicit support for `@provides` in **`@classmethod`** methods inside `@factory` classes (documented in ADR and guide).
+
+### Docs
+
+* **ADR-0009** updated: `@provides` can now be used in **module functions**, **`@staticmethod`**, and **`@classmethod`** without instantiating the factory when not required.
+* **API Reference (`container.md`)**: updated `init()` signature — `custom_scopes` is now an iterable of names; documented `validate_only` and `observers` parameters.
+* **Glossary** and **User Guide** unified around `configuration(...)` + `@configured`; removed references to the old `@configuration`.
+* Simplified **Architecture/comparison.md** (removed FastAPI comparison) and corrected minor issues.
+
+### Tests
+
+* Updated assertions in logs and stats to reflect eager initialization and new scope semantics.
+* Added new `test_container_self_injection.py`.
 
 ---
 

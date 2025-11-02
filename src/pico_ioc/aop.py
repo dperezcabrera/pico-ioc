@@ -1,8 +1,10 @@
+# src/pico_ioc/aop.py
+
 import inspect
 import pickle
 import threading
 from typing import Any, Callable, Dict, List, Tuple, Protocol, Union
-from .exceptions import SerializationError
+from .exceptions import SerializationError, AsyncResolutionError
 
 KeyT = Union[str, type]
 
@@ -119,9 +121,19 @@ class UnifiedComponentProxy:
             tgt = creator()
             if tgt is None:
                 raise RuntimeError("UnifiedComponentProxy object_creator returned None")
+
+            container = object.__getattribute__(self, "_container")
+            if container and hasattr(container, "_run_configure_methods"):
+                res = container._run_configure_methods(tgt)
+                if inspect.isawaitable(res):
+                    raise AsyncResolutionError(
+                        f"Lazy component {type(tgt).__name__} requires async "
+                        "@configure but was resolved via sync get()"
+                    )
+
             object.__setattr__(self, "_target", tgt)
             return tgt
-    
+        
     def _scope_signature(self) -> Tuple[Any, ...]:
         container = object.__getattribute__(self, "_container")
         target = object.__getattribute__(self, "_target")
@@ -138,7 +150,7 @@ class UnifiedComponentProxy:
                         return ()
                     return (container.scopes.get_id(sc),)
         return ()
-    
+        
     def _build_wrapped(self, name: str, bound: Callable[..., Any], interceptors_cls: Tuple[type, ...]):
         container = object.__getattribute__(self, "_container")
         interceptors = [container.get(cls) for cls in interceptors_cls]
@@ -182,11 +194,11 @@ class UnifiedComponentProxy:
                     raise RuntimeError(f"Async interceptor returned awaitable on sync method: {name}")
                 return res
             return sig, sw, interceptors_cls
-    
+        
     @property
     def __class__(self):
         return self._get_real_object().__class__
-    
+        
     def __getattr__(self, name: str) -> Any:
         target = self._get_real_object()
         attr = getattr(target, name)
@@ -211,7 +223,7 @@ class UnifiedComponentProxy:
             sig, wrapped, cls_tuple = self._build_wrapped(name, attr, interceptors_cls)
             cache[name] = (sig, wrapped, cls_tuple)
             return wrapped
-    
+        
     def __setattr__(self, name, value): setattr(self._get_real_object(), name, value)
     def __delattr__(self, name): delattr(self._get_real_object(), name)
     def __str__(self): return str(self._get_real_object())
@@ -275,4 +287,3 @@ class UnifiedComponentProxy:
             return (pickle.loads, (data,))
         except Exception as e:
             raise SerializationError(f"Proxy target is not serializable: {e}")
-

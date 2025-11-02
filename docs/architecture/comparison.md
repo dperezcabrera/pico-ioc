@@ -1,6 +1,6 @@
 # Comparison to Other Libraries
 
-Choosing a dependency injection (DI) framework for Python involves considering different philosophies and feature sets. `pico-ioc` makes specific design choices (as outlined in [Design Principles](./design-principles.md)) that differentiate it from other popular libraries like `dependency-injector`, `punq`, or the DI mechanism built into web frameworks like FastAPI.
+Choosing a dependency injection (DI) framework for Python involves considering different philosophies and feature sets. `pico-ioc` makes specific design choices (as outlined in [Design Principles](./design-principles.md)) that differentiate it from other popular libraries like `dependency-injector` or `punq`.
 
 This comparison helps you understand `pico-ioc`'s strengths and typical use cases relative to alternatives.
 
@@ -8,34 +8,32 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 
 ## Feature Comparison Matrix
 
-| Feature                 | pico-ioc          | dependency-injector | punq             | FastAPI `Depends`   |
-| :------------------------ | :---------------: | :-----------------: | :--------------: | :---------------: |
-| **Primary Style** | Decorators + TH¹  | Declarative Code² | Decorators + TH¹ | Function Wrappers |
-| **Type Hint Based** | ✅ Yes            | ⚠️ Partial³       | ✅ Yes           | ✅ Yes            |
-| **Startup Validation** | ✅ Yes (Eager)    | ❌ No (Runtime)   | ❌ No (Runtime)  | ❌ No (Runtime)   |
-| **Circular Dep. Check** | ✅ Yes (Startup)  | ✅ Yes (Runtime)  | ✅ Yes (Runtime) | ✅ Yes (Runtime)  |
-| **Async Support** | ✅ Native (`aget`) | ✅ Yes⁴           | ❌ No            | ✅ Native         |
-| **AOP (Interceptors)** | ✅ Built-in       | ❌ No             | ❌ No            | ❌ No             |
-| **Scopes (Singleton)** | ✅ Yes            | ✅ Yes            | ✅ Yes           | ✅ Yes⁵           |
-| **Scopes (Prototype)** | ✅ Yes            | ✅ Yes            | ✅ Yes           | ✅ Via `use_cache=False` |
-| **Scopes (ContextVar)** | ✅ Built-in       | ✅ Yes            | ❌ No            | ✅ Native (Request)|
-| **Configuration Binding** | ✅ Unified Tree+Flat | ✅ Basic (KV)     | ❌ Manual        | ❌ Manual         |
-| **Qualifiers/Tags** | ✅ Yes            | ✅ Yes (Providers) | ❌ No            | ❌ No             |
-| **List Injection** | ✅ Yes (`Annotated`) | ✅ Yes (`List`)   | ❌ No            | ⚠️ Manual⁶       |
-| **Lazy Loading (`lazy`)** | ✅ Built-in       | ✅ Yes            | ❌ No            | ❌ No             |
-| **Conditional Binding** | ✅ Full (Profile+) | ✅ Basic (Config) | ❌ No            | ❌ No             |
-| **Observability (Context)**| ✅ Built-in       | ❌ Manual         | ❌ Manual        | ❌ Manual         |
-| **Observability (Stats)** | ✅ Built-in       | ❌ Manual         | ❌ Manual        | ❌ Manual         |
-| **Testing Overrides** | ✅ `init(overrides)` | ✅ Yes            | ✅ Yes           | ✅ Via `dependency_overrides` |
-| **Python Version** | 3.10+           | 3.7+            | 3.7+           | 3.7+            |
+| Feature | pico-ioc | dependency-injector | punq |
+| :--- | :---: | :---: | :---: |
+| **Primary Style** | Decorators + TH¹ | Declarative Code² | Decorators + TH¹ |
+| **Type Hint Based** | ✅ Yes | ⚠️ Partial³ | ✅ Yes |
+| **Startup Validation** | ✅ Yes (Eager) | ❌ No (Runtime) | ❌ No (Runtime) |
+| **Circular Dep. Check** | ✅ Yes (Startup) | ✅ Yes (Runtime) | ✅ Yes (Runtime) |
+| **Async Support** | ✅ Native (`aget`) | ✅ Yes⁴ | ❌ No |
+| **AOP (Interceptors)** | ✅ Built-in | ❌ No | ❌ No |
+| **Scopes (Singleton)** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Scopes (Prototype)** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Scopes (ContextVar)** | ✅ Built-in | ✅ Yes | ❌ No |
+| **Configuration Binding** | ✅ Unified Tree+Flat | ✅ Basic (KV) | ❌ Manual |
+| **Qualifiers/Tags** | ✅ Yes | ✅ Yes (Providers) | ❌ No |
+| **List Injection** | ✅ Yes (`Annotated`) | ✅ Yes (`List`) | ❌ No |
+| **Lazy Loading (`lazy`)** | ✅ Built-in | ✅ Yes | ❌ No |
+| **Conditional Binding** | ✅ Full (Profile+) | ✅ Basic (Config) | ❌ No |
+| **Observability (Context)**| ✅ Built-in | ❌ Manual | ❌ Manual |
+| **Observability (Stats)** | ✅ Built-in | ❌ Manual | ❌ Manual |
+| **Testing Overrides** | ✅ `init(overrides)` | ✅ Yes | ✅ Yes |
+| **Python Version** | 3.10+ | 3.7+ | 3.7+ |
 
 **Notes:**
 ¹ Relies heavily on decorators applied directly to classes/methods and uses type hints for injection.
 ² Primarily uses declarative Python code (often in separate `containers.py` files) to define providers and wiring.
 ³ `dependency-injector` can use type hints but doesn't rely on them as the primary mechanism for resolution; its provider syntax is central.
 ⁴ `dependency-injector` supports async providers, but core resolution and lifecycle management might have nuances compared to a fully async-native design.
-⁵ FastAPI `Depends` caches results per-request by default, effectively acting as a request-scoped singleton.
-⁶ List injection in FastAPI typically requires manual aggregation or custom dependency logic.
 
 ---
 
@@ -49,7 +47,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
     * **Startup Safety:** Catches most wiring errors (`InvalidBindingError`, `CircularDependencyError`) before runtime.
     * **Async Native:** Seamless integration with `asyncio` across resolution (`aget`), lifecycle (`__ainit__`, async cleanup), and AOP.
     * **AOP:** Built-in method interception (`@intercepted_by`) for cross-cutting concerns.
-    * **Unified Configuration:** Powerful `@configured` binding handling both flat (ENV-like) and tree (YAML/JSON) sources via `configuration(...)` builder, with clear precedence and normalization rules. # <-- UPDATE THIS POINT
+    * **Unified Configuration:** Powerful `@configured` binding handling both flat (ENV-like) and tree (YAML/JSON) sources via `configuration(...)` builder, with clear precedence and normalization rules.
     * **Observability:** Designed for monitoring via `stats()`, `ContainerObserver`, and `container_id` context.
 * **Weaknesses:**
     * Requires Python 3.10+.
@@ -69,7 +67,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 * **Weaknesses:**
     * Wiring errors typically occur at runtime when a dependency is first accessed.
     * Can lead to boilerplate code in container definition files.
-    * Lacks built-in AOP and the unified tree/flat configuration binding found in `pico-ioc` post-ADR-0010.
+    * Lacks built-in AOP and the unified tree/flat configuration binding found in `pico-ioc` post-ADR-010.
 * **Best For:** Projects preferring explicit, centralized wiring definitions separate from business logic, applications needing Python 3.7-3.9 support, situations where runtime error detection is acceptable.
 
 ### `punq`
@@ -84,20 +82,6 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
     * Lacks many advanced features found in `pico-ioc` or `dependency-injector` (e.g., advanced scopes, async support, AOP, configuration binding, qualifiers, conditional registration, startup validation).
     * Errors occur at runtime.
 * **Best For:** Smaller applications or scripts where only basic constructor injection is needed and advanced container features are unnecessary.
-
-### FastAPI `Depends` (Framework-Native DI)
-
-* **Focus:** Web request dependencies, request lifecycle integration.
-* **Philosophy:** Specifically designed to inject dependencies *into FastAPI route handlers*, managing resources tied to the lifespan of an HTTP request (path params, request body, headers, request-scoped services).
-* **Strengths:**
-    * Seamless integration with the FastAPI framework and request lifecycle.
-    * Excellent for handling web-specific dependencies (request data, security credentials).
-    * Naturally supports `async` dependencies within routes.
-* **Weaknesses:**
-    * Not intended for managing application-wide singletons or complex object graphs outside the web layer.
-    * Lacks features like AOP, qualifiers, advanced conditional logic, application-wide startup validation, or sophisticated configuration binding. # <-- MAYBE UPDATE THIS POINT
-    * Can tightly couple business logic to the web framework if used exclusively for all layers of the application.
-* **Best For:** Managing dependencies directly related to the HTTP request/response cycle within FastAPI applications. Often used *in conjunction* with a dedicated application-layer DI container like `pico-ioc`, where FastAPI handles route injection and `pico-ioc` manages deeper service and repository layers.
 
 ---
 
