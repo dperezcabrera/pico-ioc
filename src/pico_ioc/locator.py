@@ -115,10 +115,6 @@ class ComponentLocator:
                 return k
         return None
 
-    def _compile_argplan_static(self, callable_obj):
-        raise NotImplementedError("This method is obsolete and replaced by analysis module")
-
-
     def dependency_keys_for_static(self, md: ProviderMetadata):
         deps: List[KeyT] = []
         for dep in md.dependencies:

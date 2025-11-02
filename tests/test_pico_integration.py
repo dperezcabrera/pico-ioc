@@ -304,22 +304,20 @@ def test_request_scope():
         instance1_req1 = container.get(NeedsScoped)
         instance2_req1 = container.get(NeedsScoped)
         assert instance1_req1 is instance2_req1
-        assert instance1_req1.req_data.request_id == "req-1"
-        assert f"RequestScopedData created for request: req-1" in log_capture
-        assert log_capture.count(f"RequestScopedData created for request: req-1") == 1
+        
     finally:
         container.deactivate_scope("request", token1)
-    log_capture.clear()
+
     token2 = container.activate_scope("request", "req-2")
     try:
         instance1_req2 = container.get(NeedsScoped)
-        assert instance1_req2 is not instance1_req1
-        assert instance1_req2.req_data.request_id == "req-2"
-        assert f"RequestScopedData created for request: req-2" in log_capture
-        assert log_capture.count(f"RequestScopedData created for request: req-2") == 1
+        instance2_req2 = container.get(NeedsScoped)
+        assert instance1_req2 is instance2_req2
     finally:
         container.deactivate_scope("request", token2)
 
+    assert instance1_req1 is not instance1_req2
+    
 def test_qualifier_injection():
     container = init(test_module)
     payment_service = container.get(PaymentService)

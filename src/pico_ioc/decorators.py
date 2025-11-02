@@ -172,7 +172,7 @@ def cleanup(fn):
     m["cleanup"] = True
     return fn
 
-def configured(target: Any, *, prefix: str = "", mapping: str = "auto"):
+def configured(target: Any = "self", *, prefix: str = "", mapping: str = "auto"):
     if mapping not in ("auto", "flat", "tree"):
         raise ValueError("mapping must be one of 'auto', 'flat', or 'tree'")
     def dec(cls):

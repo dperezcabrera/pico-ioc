@@ -15,9 +15,9 @@ Any object managed by the `pico-ioc` container. Typically, these are your applic
 ---
 
 ## **Configuration Source** (`ConfigSource` / `TreeSource`) ⚙️
-An object that provides configuration values to the container.
-* **`ConfigSource`**: Used by `@configuration` for flat key-value pairs (e.g., `EnvSource`, `FileSource`).
-* **`TreeSource`**: Used by `@configured` for nested configuration trees (e.g., `YamlTreeSource`, `JsonTreeSource`).
+An object that provides configuration values. Sources are passed to the `configuration(...)` builder function to create a `ContextConfig`.
+* **Flat Sources** (like `EnvSource`, `FlatDictSource`): Provide flat key-value pairs (e.g., `APP_PORT=8080`).
+* **Tree Sources** (like `YamlTreeSource`, `JsonTreeSource`, `DictSource`): Provide nested configuration trees (e.g., from a YAML file).
 
 ---
 
@@ -71,3 +71,4 @@ Determines the lifecycle and caching strategy for a component instance. Key scop
 * **`singleton`**: (Default) One instance per container. Created once and cached forever.
 * **`prototype`**: A new instance is created *every time* the component is requested. Never cached.
 * **`request`** (or `session`, etc.): One instance per active scope ID (e.g., per HTTP request). Cached for the duration of that scope.
+
