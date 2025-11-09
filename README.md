@@ -9,8 +9,8 @@
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-ioc&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-ioc)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=dperezcabrera_pico-ioc&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=dperezcabrera_pico-ioc)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/pico-ioc?period=monthly&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=Monthly+downloads)](https://pepy.tech/projects/pico-ioc)
-[![Docs](https://img.shields.io/badge/docs-pico--ioc-blue?style=for-the-badge&logo=readthedocs)](https://dperezcabrera.github.io/pico-ioc/)
-[![Interactive Lab](https://img.shields.io/badge/learn-online-green?style=for-the-badge&logo=python)](https://dperezcabrera.github.io/learn-pico-ioc/)
+[![Docs](https://img.shields.io/badge/Docs-pico--ioc-blue?style=flat&logo=readthedocs&logoColor=white)](https://dperezcabrera.github.io/pico-ioc/)
+[![Interactive Lab](https://img.shields.io/badge/Learn-online-green?style=flat&logo=python&logoColor=white)](https://dperezcabrera.github.io/learn-pico-ioc/)
 
 
 **Pico-IoC** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
