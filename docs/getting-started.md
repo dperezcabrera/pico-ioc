@@ -6,21 +6,21 @@ This guide will get you installed and running your first dependency-injected app
 
 By the end of this tutorial, you will understand the three most fundamental APIs in `pico-ioc`:
 
-1.  **`@component`**: The decorator that registers your classes with the container.
-2.  **`init()`**: The function that scans your project and builds the container.
-3.  **`container.get()`**: The method you use to ask the container for your final, fully-wired object.
+1.  `@component`: The decorator that registers your classes with the container.
+2.  `init()`: The function that scans your project and builds the container.
+3.  `container.get()`: The method you use to ask the container for your final, fully-wired object.
 
 ---
 
 ## 1. Installation
 
-`pico-ioc` requires **Python 3.10** or newer.
+`pico-ioc` requires Python 3.10 or newer.
 
 You can install it directly from PyPI using `pip`:
 
 ```bash
 pip install pico-ioc
-````
+```
 
 This core package includes all the necessary logic. For advanced, tree-based configuration from YAML files (covered in the User Guide), you can install the optional dependency:
 
@@ -30,16 +30,16 @@ pip install pico-ioc[yaml]
 
 -----
 
-## 2\. The 5-Minute Tutorial
+## 2. The 5-Minute Tutorial
 
-Let's build a simple "Hello, World\!" application.
+Let's build a simple "Hello, World!" application.
 
 ### Step 1: Define Your Components
 
 First, create a file named `app.py`. We'll define two classes:
 
 1.  `GreeterService`: A simple service with one job: providing a greeting.
-2.  `App`: Our main application class, which *depends on* the `GreeterService`.
+2.  `App`: Our main application class, which depends on the `GreeterService`.
 
 The `@component` decorator is the core of `pico-ioc`. It's a marker that tells the container: "Find this class, scan its dependencies, and make it available for injection."
 
@@ -66,11 +66,11 @@ class App:
         print(self.greeter.greet())
 ```
 
-#### **What's happening here?**
+#### What's happening here?
 
-  * `@component` on `GreeterService` tells `pico-ioc` to register this class. It has no dependencies.
-  * `@component` on `App` also registers it.
-  * `def __init__(self, greeter: GreeterService):` This is the magic. `pico-ioc` reads your constructor's type hints. It sees that `App` requires an instance of `GreeterService` and understands that it must provide one when building an `App`.
+- `@component` on `GreeterService` tells `pico-ioc` to register this class. It has no dependencies.
+- `@component` on `App` also registers it.
+- `def __init__(self, greeter: GreeterService):` This is the magic. `pico-ioc` reads your constructor's type hints. It sees that `App` requires an instance of `GreeterService` and understands that it must provide one when building an `App`.
 
 -----
 
@@ -92,14 +92,14 @@ if __name__ == "__main__":
     container = init(modules=[__name__])
 ```
 
-#### **What's happening here?**
+#### What's happening here?
 
-  * `if __name__ == "__main__":` ensures this code only runs when the script is executed directly.
-  * `container = init(modules=[__name__])`: This line does all the work:
-    1.  It scans the module specified (in this case, `__name__` refers to the current file, `app.py`).
-    2.  It finds `GreeterService` and `App`.
-    3.  It validates their dependencies (sees that `App` needs `GreeterService` and that `GreeterService` is available).
-    4.  It returns a `PicoContainer` instance, which is now a fully-configured *factory* ready to build your components.
+- `if __name__ == "__main__":` ensures this code only runs when the script is executed directly.
+- `container = init(modules=[__name__])`: This line does all the work:
+  1. It scans the module specified (in this case, `__name__` refers to the current file, `app.py`).
+  2. It finds `GreeterService` and `App`.
+  3. It validates their dependencies (sees that `App` needs `GreeterService` and that `GreeterService` is available).
+  4. It returns a `PicoContainer` instance, which is now a fully-configured factory ready to build your components.
 
 -----
 
@@ -123,20 +123,20 @@ if __name__ == "__main__":
     app.run()
 ```
 
-#### **What's happening here?**
+#### What's happening here?
 
 When you call `container.get(App)`, `pico-ioc` performs a "depth-first" resolution:
 
-1.  It sees you want an `App`.
-2.  It checks `App`'s dependencies and sees it needs a `GreeterService`.
-3.  It checks `GreeterService`'s dependencies (it has none).
-4.  It creates the `GreeterService` instance (and caches it for future use).
-5.  It creates the `App` instance, injecting the `GreeterService` instance into its constructor.
-6.  It returns the fully-wired `App` instance to you.
+1. It sees you want an `App`.
+2. It checks `App`'s dependencies and sees it needs a `GreeterService`.
+3. It checks `GreeterService`'s dependencies (it has none).
+4. It creates the `GreeterService` instance (and caches it for future use).
+5. It creates the `App` instance, injecting the `GreeterService` instance into its constructor.
+6. It returns the fully-wired `App` instance to you.
 
 -----
 
-## 3\. Putting It All Together
+## 3. Putting It All Together
 
 Here is the complete, runnable `app.py` file.
 
@@ -183,13 +183,23 @@ Hello, pico-ioc!
 
 -----
 
-## 4\. Next Steps
+## 4. Next Steps
 
-Congratulations\! You've successfully built your first `pico-ioc` application.
+Congratulations! You've successfully built your first `pico-ioc` application.
 
 You've learned the three core APIs: `@component` to register classes, `init()` to build the container, and `container.get()` to resolve components.
 
-Now you're ready to explore the core features in the **[User Guide](./user-guide/README.md)**.
+Now you're ready to explore the core features in the User Guide:
+- User Guide: ./user-guide/README.md
 
-```
+-----
 
+## 5. Tips and Troubleshooting
+
+- Make sure every class you want the container to build is annotated with `@component`.
+- Use type hints on `__init__` parameters so `pico-ioc` can understand dependencies.
+- Ensure you pass the correct modules to `init(modules=[...])` where your components are defined.
+- If you see resolution errors, check for:
+  - Missing `@component` on a dependency class.
+  - Typos in type hints.
+  - Circular dependencies between components.

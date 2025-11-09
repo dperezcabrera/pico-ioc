@@ -8,10 +8,10 @@ But what about a one-to-many relationship? This is a very common scenario:
 * You have one `PaymentProvider` protocol, but two implementations: `StripeProvider` and `PayPalProvider`.
 
 This creates two problems:
-1.  If a component just asks for `Sender`, how does the container know *which one* to inject? (This is solved by [`primary=True`](./conditional-binding.md)).
-2.  What if a component (like a `NotificationService`) needs *all* `Sender` implementations?
+1.  If a component just asks for `Sender`, how does the container know which one to inject? (This is solved by [`primary=True`](./conditional-binding.md)).
+2.  What if a component (like a `NotificationService`) needs all `Sender` implementations?
 
-This guide solves the second problem using **Qualifiers**. Qualifiers are "tags" you attach to your components, allowing you to inject specific *lists* of implementations.
+This guide solves the second problem using Qualifiers. Qualifiers are "tags" you attach to your components, allowing you to inject specific lists of implementations.
 
 ---
 
@@ -19,19 +19,19 @@ This guide solves the second problem using **Qualifiers**. Qualifiers are "tags"
 
 The pattern is simple:
 
-1.  **Define a Tag:** You create a `Qualifier` instance. This is your tag.
+1.  Define a Tag: You create a `Qualifier` instance. This is your tag.
     ```python
     from pico_ioc import Qualifier
 
     NOTIFICATION = Qualifier("notification")
     PAYMENT = Qualifier("payment")
     ```
-2.  **Tag Your Components:** You use the `qualifiers=[...]` parameter within the `@component` or `@provides` decorators to apply one or more tags to your components.
+2.  Tag Your Components: You use the `qualifiers=[...]` parameter within the `@component` (or `@provides`) decorator to apply one or more tags to your components.
     ```python
     from pico_ioc import component
     # Assume NOTIFICATION and PAYMENT are Qualifier instances
 
-    @component(qualifiers=[NOTIFICATION]) # <-- Pass qualifiers as a list/tuple
+    @component(qualifiers=[NOTIFICATION])  # <-- Pass qualifiers as a list/tuple
     class EmailSender(Sender): ...
 
     @component(qualifiers=[NOTIFICATION])
@@ -40,8 +40,7 @@ The pattern is simple:
     @component(qualifiers=[PAYMENT])
     class StripeProvider(PaymentProvider): ...
     ```
-
-3.  **Request a Tagged List:** In your service, you use `typing.Annotated` to request a `List` of all components that match a specific `Qualifier`.
+3.  Request a Tagged List: In your service, you use `typing.Annotated` to request a `List` of all components that match a specific `Qualifier`.
     ```python
     from typing import List, Annotated
 
@@ -55,11 +54,15 @@ The pattern is simple:
             self.senders = senders
     ```
 
+Notes:
+- The injected list includes components that match both the requested type and the qualifier.
+- You can attach multiple qualifiers to the same component; it will appear in lists for each qualifier requested.
+
 ---
 
 ## 2. Step-by-Step Example
 
-Let's build a complete example. We'll create a `PaymentService` that needs to process a payment with *all* available payment providers.
+Let's build a complete example. We'll create a `PaymentService` that needs to process a payment with all available payment providers.
 
 ### Step 1: Define the Interface (Protocol)
 
@@ -72,7 +75,7 @@ from typing import Protocol
 class PaymentProvider(Protocol):
     """The common interface for all payment providers."""
     def process_payment(self, amount: float) -> str: ...
-````
+```
 
 ### Step 2: Define the Qualifiers
 
@@ -93,13 +96,13 @@ Now, we create our concrete classes. We decorate them with `@component` as usual
 # providers.py
 from pico_ioc import component
 
-@component(qualifiers=[PAYMENT]) # <-- Pass the qualifier here
+@component(qualifiers=[PAYMENT])  # <-- Pass the qualifier here
 class StripeProvider(PaymentProvider):
     def process_payment(self, amount: float) -> str:
         print(f"Processing ${amount} with Stripe...")
         return "stripe_tx_123"
 
-@component(qualifiers=[PAYMENT]) # <-- Pass the qualifier here
+@component(qualifiers=[PAYMENT])  # <-- Pass the qualifier here
 class PayPalProvider(PaymentProvider):
     def process_payment(self, amount: float) -> str:
         print(f"Processing ${amount} with PayPal...")
@@ -158,7 +161,17 @@ service.charge(100.00)
 # Processing $100.00 with PayPal...
 ```
 
-The list `service.providers` contains instances of `StripeProvider` and `PayPalProvider`, but *not* `SomeOtherComponent`.
+The list `service.providers` contains instances of `StripeProvider` and `PayPalProvider`, but not `SomeOtherComponent`.
+
+-----
+
+## Tips and Common Pitfalls
+
+- Always import `Annotated` from `typing` when requesting qualified lists.
+- Pass qualifiers as a sequence in the decorator: `qualifiers=[TAG1, TAG2]`.
+- If no components match the requested qualifier and type, the injected list will be empty.
+- Components can have multiple qualifiers and will be included in each matching list request.
+- Qualifier identity is based on the `Qualifier` instance, not just the string name—re-use the same instance when tagging and requesting.
 
 -----
 
@@ -166,9 +179,9 @@ The list `service.providers` contains instances of `StripeProvider` and `PayPalP
 
 Qualifiers are the standard way to manage one-to-many dependencies in `pico-ioc`.
 
-  * **`Qualifier("name")`** creates a unique tag instance (e.g., `PAYMENT = Qualifier("payment")`).
-  * **`@component(qualifiers=[TAG, ...])`** (or `@provides`) applies tags to a component.
-  * **`Annotated[List[Interface], TAG]`** requests a list of all components that have been tagged with `TAG`.
+- `Qualifier("name")` creates a unique tag instance (e.g., `PAYMENT = Qualifier("payment")`).
+- `@component(qualifiers=[TAG, ...])` (or `@provides`) applies tags to a component.
+- `Annotated[List[Interface], TAG]` requests a list of all components that have been tagged with `TAG`.
 
 -----
 
@@ -176,5 +189,4 @@ Qualifiers are the standard way to manage one-to-many dependencies in `pico-ioc`
 
 You now know how to register components, configure them, control their lifecycle, and inject specific lists. The final piece of the core user guide is learning how to test your application.
 
-  * **[Testing Applications](./testing.md)**: Learn how to use `overrides` and `profiles` to mock dependencies and test your services in isolation.
-
+- Testing Applications: Learn how to use `overrides` and `profiles` to mock dependencies and test your services in isolation. See [Testing Applications](./testing.md).

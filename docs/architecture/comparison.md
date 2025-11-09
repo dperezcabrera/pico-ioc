@@ -45,7 +45,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 * **Philosophy:** Inspired by robust enterprise frameworks (like Spring/Guice), prioritizing early error detection (fail-fast validation), explicit configuration via decorators and type hints, and built-in support for complex application patterns (async, AOP, context management). Treats DI as a core architectural tool for the entire application.
 * **Strengths:**
     * **Startup Safety:** Catches most wiring errors (`InvalidBindingError`, `CircularDependencyError`) before runtime.
-    * **Async Native:** Seamless integration with `asyncio` across resolution (`aget`), lifecycle (`__ainit__`, async cleanup), and AOP.
+    * **Async Native:** Seamless integration with `asyncio` across resolution (`aget`), lifecycle, and AOP.
     * **AOP:** Built-in method interception (`@intercepted_by`) for cross-cutting concerns.
     * **Unified Configuration:** Powerful `@configured` binding handling both flat (ENV-like) and tree (YAML/JSON) sources via `configuration(...)` builder, with clear precedence and normalization rules.
     * **Observability:** Designed for monitoring via `stats()`, `ContainerObserver`, and `container_id` context.
@@ -87,7 +87,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 
 ## Conclusion
 
-`pico-ioc` is designed for developers building complex, modern Python applications who value **startup safety**, **native async support**, **testability**, and **advanced features** like AOP and structured, unified configuration. Its emphasis on fail-fast validation and observability makes it particularly well-suited for production-grade systems where reliability and maintainability are paramount. It requires Python 3.10+ due to its reliance on modern `typing` features.
+`pico-ioc` is designed for developers building complex, modern Python applications who value startup safety, native async support, testability, and advanced features like AOP and structured, unified configuration. Its emphasis on fail-fast validation and observability makes it particularly well-suited for production-grade systems where reliability and maintainability are paramount. It requires Python 3.10+ due to its reliance on modern `typing` features.
 
 ---
 
@@ -96,4 +96,3 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 This concludes the Architecture section. Explore the API Reference for detailed documentation on specific functions and decorators.
 
 * **[API Reference Overview](../api-reference/README.md)**: Quick lookup for all public APIs.
-

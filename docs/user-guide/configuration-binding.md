@@ -1,34 +1,39 @@
 # Configuration: Binding Data with `@configured`
 
-This guide explains how to bind configuration data to your Python classes (typically `dataclasses`) using the unified `@configured` decorator, as defined in **ADR-0010**.
-This single decorator supports both **flat** (key-value) and **tree** (nested) configuration structures.
+This guide explains how to bind configuration data to your Python classes (typically `dataclasses`) using the unified `@configured` decorator, as defined in ADR-0010.
+A single decorator supports both flat (key–value) and tree (nested) configuration structures.
 
 ---
 
 ## 1. Unified Configuration Model
 
-The core idea is to define your configuration shape as a `dataclass` and use `@configured` to tell **pico-ioc** how to populate it from various sources.
+Define your configuration shape as a `dataclass` and use `@configured` to tell pico-ioc how to populate it from various sources.
 
-* **Decorator:** `@configured(prefix: str = "", mapping: Literal["auto", "flat", "tree"] = "auto")`
+- Decorator: `@configured(prefix: str = "", mapping: Literal["auto", "flat", "tree"] = "auto")`
+  - prefix — namespace for configuration keys (e.g. `"MYAPP_"` for flat, `"app"` for tree).
+  - mapping — determines how configuration keys map to dataclass fields (`"auto"`, `"flat"`, `"tree"`).
+- Sources: Combine multiple configuration providers (environment, files, dicts) via the `configuration(...)` builder.
+- Initialization: Pass the `ContextConfig` returned by `configuration(...)` into `init(config=...)`.
 
-  * `prefix` — namespace for configuration keys (e.g. `"APP_"` for flat, `"app"` for tree).
-  * `mapping` — determines how configuration keys map to dataclass fields (`"auto"`, `"flat"`, `"tree"`).
-* **Sources:** Combine multiple configuration providers (environment, files, dicts) via the `configuration(...)` builder.
-* **Initialization:** Pass the `ContextConfig` returned by `configuration(...)` into `init(config=...)`.
+Notes:
+- Auto detection: `"auto"` behaves as `"flat"` for simple dataclasses (only primitive fields) and as `"tree"` when nested or complex fields are present.
+- The prefix applies to the root of the config domain:
+  - Flat: key prefix, typically uppercase with underscores.
+  - Tree: top-level object name in structured sources (e.g., `app:` in YAML).
 
 ---
 
 ## 2. Binding Modes (`mapping` parameter)
 
-### `mapping="flat"` (or `"auto"` for simple dataclasses)
+### mapping="flat" (or "auto" for simple dataclasses)
 
-Used for flat key-value environments (e.g. `os.environ`).
+Use for flat key–value environments (e.g., `os.environ`).
 
-* **Lookup:** Keys like `PREFIX_FIELDNAME` (usually uppercase).
-* **Auto-Detection:** `"auto"` behaves as `"flat"` if all fields are primitive.
-* **Coercion:** Strings are automatically cast to the target type.
+- Lookup: Keys like `PREFIX_FIELDNAME` (usually uppercase).
+- Auto detection: `"auto"` acts as `"flat"` if all fields are primitive (str, int, float, bool).
+- Coercion: Strings are automatically cast to the target field type.
 
-**Example (Flat Mapping):**
+Example (flat mapping):
 
 ```bash
 export MYAPP_SERVICE_HOST="api.example.com"
@@ -65,17 +70,22 @@ print(settings.debug_mode)    # True
 print(settings.timeout)       # 30
 ```
 
+Field naming conventions:
+- Field `service_port` maps to `MYAPP_SERVICE_PORT`.
+- Case-insensitive value parsing for booleans (`"true"`, `"False"`, etc.).
+- Missing keys fall back to dataclass defaults (if provided).
+
 ---
 
-### `mapping="tree"` (or `"auto"` for nested dataclasses)
+### mapping="tree" (or "auto" for nested dataclasses)
 
-For hierarchical sources like YAML, JSON, or structured environment variables.
+Use for hierarchical sources like YAML/JSON or structured environment variables.
 
-* **Lookup:** Nested under the given prefix.
-* **Auto-Detection:** `"auto"` acts as `"tree"` if the dataclass has nested or complex fields.
-* **Features:** Supports nested dataclasses, lists, dicts, unions, interpolation, etc.
+- Lookup: Nested under the given prefix (e.g., `app:` in YAML).
+- Auto detection: `"auto"` acts as `"tree"` if the dataclass contains nested dataclasses, lists, dicts, or unions.
+- Features: Supports nested dataclasses, lists, dicts, discriminated unions, and interpolation.
 
-**Example (Tree Mapping):**
+Example (tree mapping with YAML):
 
 ```yaml
 app:
@@ -130,17 +140,53 @@ ctx = configuration(YamlTreeSource("config.yml"))
 container = init(modules=[__name__], config=ctx)
 cfg = container.get(AppConfig)
 
-print(cfg.service_name)                 # My Awesome Service
+print(cfg.service_name)                  # My Awesome Service
 print(cfg.database.credentials.password) # secret123
 ```
 
+Structured environment variables (tree mapping via env):
+- Many setups support double-underscore separators to express nesting:
+  - `APP__DATABASE__HOST="db.example.com"`
+  - `APP__DATABASE__PORT="5432"`
+  - `APP__FEATURES__0__NAME="FeatureA"`
+- Use `@configured(prefix="APP", mapping="tree")` with `EnvSource`.
+
 ---
 
-## 3. Advanced Binding with `Annotated`
+## 3. Combining Sources and Precedence
+
+Use the `configuration(...)` builder to compose multiple sources. Typical patterns:
+- Base config from a file (YAML/JSON).
+- Environment variables to override file values.
+- In-memory dicts for tests or explicit overrides.
+
+Example:
+
+```python
+from pico_ioc import configuration, YamlTreeSource, EnvSource, DictSource, init
+
+overrides = {"app": {"service_name": "Override Name"}}
+
+ctx = configuration(
+    YamlTreeSource("config.yml"),
+    EnvSource(prefix=""),  # overrides file values
+    DictSource(overrides)  # highest precedence overrides
+)
+
+container = init(modules=[__name__], config=ctx)
+```
+
+Precedence:
+- When multiple sources define the same setting, later sources in the `configuration(...)` call override earlier ones.
+- Field-level `Value` annotations (see below) have the highest precedence and bypass sources entirely.
+
+---
+
+## 4. Advanced Binding with `Annotated`
 
 Python’s `typing.Annotated` enables metadata-based extensions to field behavior.
 
-### `Discriminator` for `Union` Types
+### Discriminator for Union types
 
 `Discriminator` chooses which subtype to instantiate based on a field value.
 
@@ -172,11 +218,13 @@ db = container.get(DbCfg)
 print(db)
 ```
 
----
+Notes:
+- The discriminator field (`"kind"`) must be present in the input and in each union subtype.
+- Values must match the subtype’s identifier (e.g., `"Postgres"` vs `"Sqlite"`).
 
-### `Value` for Field-Level Overrides
+### Value for field-level overrides
 
-`Value` provides the **highest precedence** override — a field annotated with `Value(...)` always uses that constant, ignoring environment variables, files, or overrides.
+`Value` provides the highest precedence override — a field annotated with `Value(...)` always uses that constant, ignoring environment variables, files, or in-memory overrides.
 
 ```python
 from dataclasses import dataclass
@@ -207,5 +255,53 @@ print(api_cfg.retries)         # 5 (from ENV)
 
 ---
 
-This guide unifies all configuration patterns supported by `@configured` and `configuration(...)` according to **ADR-0010**, covering flat and tree mappings, discriminated unions, and inline constant overrides using `Annotated[..., Value(...)]`.
+## 5. Defaults, Optional fields, and Validation
 
+- Defaults: Dataclass defaults are used when a value is missing in all sources.
+- Optional: Use `Optional[T]` (or `T | None`) for nullable fields; missing keys become `None` unless defaulted.
+- Post-init validation: Add `__post_init__` to perform custom checks and raise errors early.
+
+Example:
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+from pico_ioc import configured
+
+@configured(prefix="APP_", mapping="flat")
+@dataclass
+class HttpConfig:
+    host: str
+    port: int = 80
+    base_path: Optional[str] = None
+
+    def __post_init__(self):
+        if not (1 <= self.port <= 65535):
+            raise ValueError("port must be between 1 and 65535")
+```
+
+---
+
+## 6. Error Handling and Type Coercion
+
+- Missing required keys: If a required field (without default) is missing, binding fails with a descriptive error.
+- Type coercion:
+  - Numbers: `"8080"` → `int(8080)`
+  - Booleans: `"true"/"false"`, `"1"/"0"` → `bool`
+  - Lists/dicts (tree sources): parsed according to the structured format (YAML/JSON).
+- Union and discriminator mismatches produce errors indicating the offending path and expected variants.
+
+---
+
+## 7. Tips and Conventions
+
+- Keep prefixes consistent:
+  - Flat: `MYAPP_` for env.
+  - Tree: `app` for file-based configs.
+- Prefer `"auto"` for most cases; switch to explicit `"flat"` or `"tree"` when needed.
+- For environment-only tree configs, use double-underscore separators to express nested structure.
+- Use `DictSource` for tests to avoid filesystem and environment dependencies.
+
+---
+
+This guide unifies configuration patterns supported by `@configured` and `configuration(...)` according to ADR-0010, covering flat and tree mappings, multiple-source composition and precedence, discriminated unions, and inline constant overrides using `Annotated[..., Value(...)]`.

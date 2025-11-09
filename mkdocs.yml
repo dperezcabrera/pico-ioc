@@ -1,0 +1,191 @@
+site_name: Pico-IoC Documentation
+site_description: Lightweight, async-native dependency injection container for Python
+site_author: Pico-IoC Team
+site_url: https://<dperezcabrera.github.io/pico-ioc/
+
+repo_name: dperezcabrera/pico-ioc
+repo_url: https://github.com/dperezcabrera/pico-ioc
+edit_uri: edit/main/docs/
+copyright: Copyright © 2025 Pico-IoC
+
+strict: true
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - announce.dismiss
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/pico-ioc/pico-ioc
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/pico-ioc/
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
+
+extra_css:
+  - stylesheets/extra.css
+extra_javascript:
+  - javascripts/extra.js
+
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - minify:
+      minify_html: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+
+nav:
+  - Home: overview.md
+  - Getting Started: getting-started.md
+  - Learning Roadmap: LEARN.md
+
+  - User Guide:
+    - user-guide/README.md
+    - Core Concepts: user-guide/core-concepts.md
+    - Configuration Basics: user-guide/configuration-basic.md
+    - Configuration Binding: user-guide/configuration-binding.md
+    - Scopes & Lifecycle: user-guide/scopes-lifecycle.md
+    - Qualifiers & Lists: user-guide/qualifiers-lists.md
+    - Testing: user-guide/testing.md
+
+  - Advanced Features:
+    - advanced-features/README.md
+    - Async Resolution: advanced-features/async-resolution.md
+    - AOP & Interceptors: advanced-features/aop-interceptors.md
+    - Event Bus: advanced-features/event-bus.md
+    - Conditional Binding: advanced-features/conditional-binding.md
+    - Health Checks: advanced-features/health-checks.md
+
+  - Observability:
+    - observability/README.md
+    - Container Context: observability/container-context.md
+    - Observers & Metrics: observability/observers-metrics.md
+    - Exporting Graph: observability/exporting-graph.md
+
+  - Cookbook (Patterns):
+    - cookbook/README.md
+    - Multi-Tenant Apps: cookbook/pattern-multi-tenant.md
+    - Hot Reload: cookbook/pattern-hot-reload.md
+    - CLI Applications: cookbook/pattern-cli-app.md
+    - CQRS Command Bus: cookbook/pattern-cqrs.md
+    - Feature Toggles (AOP): cookbook/pattern-aop-feature-toggle.md
+    - Structured Logging (AOP): cookbook/pattern-aop-structured-logging.md
+    - Security Checks (AOP): cookbook/pattern-aop-security.md
+    - Method Profiling (AOP): cookbook/pattern-aop-profiling.md
+    - Config Overrides: cookbook/pattern-config-overrides.md
+
+  - Architecture:
+    - architecture/README.md
+    - Design Principles: architecture/design-principles.md
+    - Comparison: architecture/comparison.md
+    - Internals: architecture/internals.md
+    - ADRs:
+      - adr/README.md
+      - ADR-001 Async Native: adr/adr-0001-async-native.md
+      - ADR-002 Tree Config: adr/adr-0002-tree-based-configuration.md
+      - ADR-003 Context Scopes: adr/adr-0003-context-aware-scopes.md
+      - ADR-004 Observability: adr/adr-0004-observability.md
+      - ADR-005 AOP: adr/adr-0005-aop.md
+      - ADR-006 Eager Validation: adr/adr-0006-eager-validation.md
+      - ADR-007 Event Bus: adr/adr-0007-event_bus.md
+      - ADR-008 Circular Dependencies: adr/adr-0008-circular-dependencies.md
+      - ADR-009 Flexible Provides: adr/adr-0009-flexible-provides.md
+      - ADR-010 Unified Configuration: adr/adr-0010-unified-configuration.md
+
+  - API Reference:
+    - api-reference/README.md
+    - Glossary: api-reference/glossary.md
+    - Decorators: api-reference/decorators.md
+    - Container API: api-reference/container.md
+    - Protocols: api-reference/protocols.md
+    - EventBus API: api-reference/event_bus.md
+

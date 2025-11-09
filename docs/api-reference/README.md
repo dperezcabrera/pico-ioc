@@ -11,4 +11,3 @@ This section provides a concise summary of all public APIs, designed for quick l
 * [3. `PicoContainer` API](./container.md)
 * [4. Protocols (`MethodInterceptor`, etc.)](./protocols.md)
 * [5. `EventBus` API](./event_bus.md)
-

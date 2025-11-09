@@ -1,243 +1,338 @@
 # Core Concepts: @component, @factory, @provides
 
-To inject an object (a "component"), `pico-ioc` first needs to know how to create it. This is called **registration**.
+To inject an object (a “component”), pico-ioc first needs to know how to create it. This is called registration.
 
-There are two primary ways to register a component. Your choice depends on one simple question: **"Do I own the code for this class?"**
+There are two primary ways to register a component. Your choice depends on one simple question: “Do I own the code for this class?”
 
-1.  **`@component`**: The default choice. You use this decorator **on your own classes**.
-2.  **`@provides`**: The flexible provider pattern. You use this to register **third-party classes** (which you can't decorate) or for any object that requires complex creation logic.
+1. @component: The default choice. You use this decorator on your own classes.
+2. @provides: The flexible provider pattern. You use this to register third‑party classes (which you can't decorate) or for any object that requires complex creation logic.
 
 ---
 
 ## 1. `@component`: The Default Choice
 
-This is the decorator you learned in the "Getting Started" guide. You should use it for **90% of your application's code**.
+This is the decorator you learned in the Getting Started guide. You should use it for most of your application’s code.
 
-Placing `@component` on a class tells `pico-ioc`: "This class is part of the system. Scan its `__init__` method to find its dependencies, and make it available for injection into other components."
+Placing `@component` on a class tells pico-ioc: “This class is part of the system. Scan its `__init__` method to find its dependencies, and make it available for injection into other components.”
 
 ### Example
 
-`@component` is the *only* thing you need. `pico-ioc` handles the rest.
+`@component` is the only thing you need. pico-ioc handles the rest.
 
 ```python
-# database.py
-from pico_ioc import component # Assuming pico_ioc import
+# app/database.py
+from pico_ioc import component
 
 @component
 class Database:
-    """A simple component with no dependencies."""
-    def query(self, sql: str) -> dict:
-        # ... logic to run query
-        print(f"DB: Executing query: {sql}")
-        return {"data": "..."}
+    """A simple component with no dependencies."""
+    def query(self, sql: str) -> dict:
+        # ... logic to run query
+        return {"data": "..."}
+```
 
-# user_service.py
-# from pico_ioc import component # Assuming pico_ioc import
-# from .database import Database # Assuming relative import
+```python
+# app/user_service.py
+from pico_ioc import component
+from app.database import Database
 
 @component
 class UserService:
-    """This component *depends* on the Database."""
-    
-    # pico-ioc will automatically inject the Database instance
-    def __init__(self, db: Database):
-        self.db = db
+    """This component depends on the Database."""
 
-    def get_user(self, user_id: int) -> dict:
-        return self.db.query(f"SELECT * FROM users WHERE id = {user_id}")
+    # pico-ioc will automatically inject the Database instance
+    def __init__(self, db: Database):
+        self.db = db
 
-# Example Usage (in main.py or similar)
-# from pico_ioc import init
-# container = init(modules=['database', 'user_service'])
-# user_svc = container.get(UserService)
-# user_data = user_svc.get_user(1)
-# print(user_data)
+    def get_user(self, user_id: int) -> dict:
+        return self.db.query(f"SELECT * FROM users WHERE id = {user_id}")
 ```
 
-**When to use `@component`:**
+```python
+# main.py
+from pico_ioc import init
+from app.user_service import UserService
 
-  * It's a class you wrote and can modify.
-  * The `__init__` method is all that's needed to create a valid instance.
+# Scan specific modules (strings are importable module paths)
+container = init(modules=['app.database', 'app.user_service'])
+
+user_svc = container.get(UserService)
+user_data = user_svc.get_user(1)
+print(user_data)
+```
+
+When to use `@component`:
+- It’s a class you wrote and can modify.
+- The `__init__` method is all that’s needed to create a valid instance.
 
 -----
 
-## 2\. When `@component` Isn't Enough
+## 2. When `@component` Isn’t Enough
 
-You **cannot** use `@component` when:
+You cannot use `@component` when:
+- You don’t own the class: You can’t add `@component` to `redis.Redis` from redis-py or `BaseClient` from botocore/boto3.
+- Creation logic is complex: You can’t just call the constructor. You need to call a factory (like `redis.Redis.from_url(...)`) or run conditional logic.
+- You are implementing a Protocol or abstract type: You want to register a concrete class as the provider for an abstract protocol or interface.
 
-1.  **You don't own the class:** You can't add `@component` to `redis.Redis` from `redis-py` or `S3Client` from `boto3`.
-2.  **Creation logic is complex:** You can't just call the constructor. You need to call a static method (like `redis.Redis.from_url(...)`) or run `if/else` logic first.
-3.  **You are implementing a Protocol:** You want to register a *concrete class* as the provider for an *abstract protocol*.
-
-For all these cases, you use the **Provider Pattern** with `@provides`.
+For all these cases, use the Provider Pattern with `@provides`.
 
 -----
 
-## 3\. `@provides`: The Provider Pattern
+## 3. `@provides`: The Provider Pattern
 
-`@provides(SomeType)` decorates a *function* that acts as a "recipe" for building `SomeType`. `pico-ioc` offers three flexible ways to use it, ordered from simplest to most complex.
+`@provides(SomeType)` decorates a function or method that acts as a recipe for building `SomeType`. pico-ioc offers three flexible ways to use it, ordered from simplest to most complex.
 
-(The following examples assume you have a `config.py` module defining configuration dataclasses, as seen in the configuration guides).
+The following examples assume a `config.py` module defining configuration dataclasses (see the configuration guides).
 
 ### Pattern 1: Module-Level `@provides` (Simplest)
 
-This is the simplest, lightest, and often-preferred method for registering a single third-party object or a component with complex logic.
-
-You just write a function in any scanned module and decorate it.
+This is a simple, lightweight method for registering a single third‑party object or a component with complex logic. You write a function in any scanned module and decorate it.
 
 ```python
-# factories.py or clients.py
+# app/clients.py
 import redis
-from pico_ioc import provides
-# Assume RedisConfig is a @configured dataclass defined elsewhere
-from .config import RedisConfig
+from pico_ioc import provides, configured
+from dataclasses import dataclass
 
-# No factory class needed!
+@configured(prefix="REDIS_")
+@dataclass
+class RedisConfig:
+    URL: str = "redis://localhost:6379/0"
+
 # This function is the "recipe" for building a redis.Redis client.
 @provides(redis.Redis)
 def build_redis_client(config: RedisConfig) -> redis.Redis:
-    # Dependencies (RedisConfig) are injected into the function's arguments
-    print(f"Connecting to Redis at {config.URL} from module function...")
-    # Assume RedisConfig has a URL attribute
-    return redis.Redis.from_url(config.URL)
+    # Dependencies (RedisConfig) are injected into the function's arguments
+    return redis.Redis.from_url(config.URL)
 ```
 
-### Pattern 2: `staticmethod` or `classmethod` in a `@factory` (Grouping)
+Scan the module containing the provider:
+```python
+from pico_ioc import init
+import redis
+from app.clients import build_redis_client
 
-If you have *many* stateless providers, you can group them logically inside a class decorated with `@factory`. Using `@staticmethod` or `@classmethod` tells `pico-ioc` that it doesn't need to create an *instance* of the factory class itself.
+container = init(modules=['app.clients'])
+redis_client = container.get(redis.Redis)
+```
+
+### Pattern 2: Group providers with `@factory` (Static or Class methods)
+
+If you have many stateless providers, group them inside a class decorated with `@factory`. Use `@staticmethod` or `@classmethod` when the provider does not need factory instance state.
+
+Important: apply `@provides(...)` before `@staticmethod`/`@classmethod` so pico-ioc sees the underlying function.
 
 ```python
-# factories.py
+# app/factories.py
 import redis
-import boto3 # Assuming boto3 library
-from pico_ioc import factory, provides
-# Assume RedisConfig and S3Config are @configured dataclasses
-from .config import RedisConfig, S3Config
+import botocore.client
+import boto3
+from pico_ioc import factory, provides, configured
+from dataclasses import dataclass
 
-# Assume S3Config has KEY and SECRET attributes
-# Assume RedisConfig has URL attribute
+@configured(prefix="REDIS_")
+@dataclass
+class RedisConfig:
+    URL: str = "redis://localhost:6379/0"
+
+@configured(prefix="AWS_")
+@dataclass
+class S3Config:
+    ACCESS_KEY_ID: str
+    SECRET_ACCESS_KEY: str
+    REGION: str = "us-east-1"
 
 @factory
 class ExternalClientsFactory:
-    # No __init__ needed, as methods are static
+    # Stateless providers
 
-    @staticmethod
-    @provides(redis.Redis)
-    def build_redis(config: RedisConfig) -> redis.Redis:
-        print("Building Redis client from static method...")
-        return redis.Redis.from_url(config.URL)
+    @provides(redis.Redis)
+    @staticmethod
+    def build_redis(config: RedisConfig) -> redis.Redis:
+        return redis.Redis.from_url(config.URL)
 
-    @classmethod
-    @provides(boto3.client) # Providing the generic client function result
-    def build_s3(cls, config: S3Config) -> 'boto3.client': # Type hint might need quotes or specific client type
-        print(f"Building S3 client from class method {cls.__name__}...")
-        # Example using boto3 client factory
-        s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=config.KEY,
-            aws_secret_access_key=config.SECRET # Assuming SECRET attribute exists
-        )
-        return s3_client
+    @provides(botocore.client.BaseClient)
+    @classmethod
+    def build_s3(cls, config: S3Config) -> botocore.client.BaseClient:
+        return boto3.client(
+            "s3",
+            aws_access_key_id=config.ACCESS_KEY_ID,
+            aws_secret_access_key=config.SECRET_ACCESS_KEY,
+            region_name=config.REGION,
+        )
 ```
 
-### Pattern 3: `@factory` Instance Method (Stateful)
+Scan the factory module:
+```python
+from pico_ioc import init
+import redis
+import botocore.client
 
-Use this pattern when your providers need to share a common state or resource, such as a connection pool managed by the factory instance.
+container = init(modules=['app.factories'])
 
-Here, the `@factory` class *is* instantiated, and its `__init__` dependencies are injected. The `@provides` methods can then use `self` to access that shared state.
+cache = container.get(redis.Redis)
+s3 = container.get(botocore.client.BaseClient)
+```
+
+### Pattern 3: `@factory` Instance Methods (Stateful)
+
+Use this pattern when providers need to share common state or resources, such as a connection pool managed by the factory instance. The `@factory` class is instantiated, its `__init__` dependencies are injected, and `@provides` methods can use `self`.
 
 ```python
-# factories.py
-from pico_ioc import factory, provides
-# Assume PoolConfig is a @configured dataclass
-from .config import PoolConfig
+# app/db_factory.py
+from pico_ioc import factory, provides, configured
+from dataclasses import dataclass
 
-# Assume these classes exist and share a pool
 class ConnectionPool:
-    @staticmethod
-    def create(config):
-        print(f"Pool created with config: {config}")
-        return ConnectionPool() # Return instance
-    def get_connection(self):
-        print("Getting connection from pool")
-        return "fake_connection"
+    @staticmethod
+    def create(config) -> "ConnectionPool":
+        return ConnectionPool()
+
+    def get_connection(self):
+        return object()  # placeholder
 
 class UserClient:
-    def __init__(self, pool): self.pool = pool; print("UserClient created")
-    def do_user_stuff(self): conn = self.pool.get_connection(); print(f"UserClient using {conn}")
+    def __init__(self, pool: ConnectionPool):
+        self.pool = pool
 
 class AdminClient:
-    def __init__(self, pool): self.pool = pool; print("AdminClient created")
-    def do_admin_stuff(self): conn = self.pool.get_connection(); print(f"AdminClient using {conn}")
+    def __init__(self, pool: ConnectionPool):
+        self.pool = pool
+
+@configured(prefix="DB_POOL_")
+@dataclass
+class PoolConfig:
+    MAX_SIZE: int = 10
 
 @factory
 class DatabaseClientFactory:
-    # This factory IS stateful. It creates one pool
-    # and shares it with all clients it builds.
-    def __init__(self, config: PoolConfig):
-        print("Creating shared ConnectionPool...")
-        # State (the pool) is stored on 'self'
-        self.pool = ConnectionPool.create(config)
+    # This factory is stateful. It creates one pool and
+    # shares it with all clients it builds.
 
-    @provides(UserClient)
-    def build_user_client(self) -> UserClient:
-        # Uses the shared state from 'self.pool'
-        return UserClient(self.pool)
+    def __init__(self, config: PoolConfig):
+        self.pool = ConnectionPool.create(config)
 
-    @provides(AdminClient)
-    def build_admin_client(self) -> AdminClient:
-        # Also uses the shared state from 'self.pool'
-        return AdminClient(self.pool)
+    @provides(UserClient)
+    def build_user_client(self) -> UserClient:
+        return UserClient(self.pool)
 
-# Example Config Dataclass (needed for the above)
-# from dataclasses import dataclass
-# from pico_ioc import configured
-# @configured(prefix="DB_POOL_")
-# @dataclass
-# class PoolConfig:
-#    MAX_SIZE: int = 10
+    @provides(AdminClient)
+    def build_admin_client(self) -> AdminClient:
+        return AdminClient(self.pool)
+```
+
+Scan the module containing the factory:
+```python
+from pico_ioc import init
+from app.db_factory import UserClient, AdminClient
+
+container = init(modules=['app.db_factory'])
+user_client = container.get(UserClient)
+admin_client = container.get(AdminClient)
 ```
 
 -----
 
-## 4\. Using the Injected Component
+## 4. Using the Injected Component
 
-The best part: your consumer classes **do not care** how a component was registered (`@component` or `@provides`). They just ask for the type they need via constructor injection.
-
-This decouples your business logic (the "what") from the creation logic (the "how").
+Your consumer classes do not care how a component was registered (`@component` or `@provides`). They just ask for the type they need via constructor injection. This decouples your business logic (the “what”) from the creation logic (the “how”).
 
 ```python
-# cache_service.py
+# app/cache_service.py
 import redis
 from pico_ioc import component
 
 @component
 class CacheService:
-    # pico-ioc knows it needs a 'redis.Redis' instance.
-    # It will find your 'build_redis_client' (from Pattern 1 or 2)
-    # run it (injecting its dependencies like RedisConfig),
-    # and inject the resulting redis.Redis instance here.
-    def __init__(self, redis_client: redis.Redis):
-        self.redis_client = redis_client
-        print(f"CacheService initialized with Redis client: {redis_client}")
+    # pico-ioc knows it needs a `redis.Redis` instance.
+    # It will find your provider (module-level or factory),
+    # run it (injecting its dependencies like RedisConfig),
+    # and inject the resulting redis.Redis instance here.
+    def __init__(self, redis_client: redis.Redis):
+        self.redis = redis_client
 
-    def set_value(self, key: str, value: str):
-        print(f"CacheService: Setting '{key}' to '{value}'")
-        self.redis_client.set(key, value) # Assuming redis-py API
+    def set_value(self, key: str, value: str):
+        self.redis.set(key, value)
 ```
+
+```python
+# main.py
+from pico_ioc import init
+from app.cache_service import CacheService
+
+container = init(modules=['app.clients', 'app.cache_service'])
+cache = container.get(CacheService)
+cache.set_value("greeting", "hello")
+```
+
+-----
+
+## 5. Protocols and Abstract Types
+
+Often you want to depend on an abstract type (interface) and provide a concrete implementation. Use Python’s `Protocol` or abstract base classes for the consumer, and register a provider for the concrete type or for the abstract type directly.
+
+```python
+# app/ports.py
+from typing import Protocol
+
+class Clock(Protocol):
+    def now(self) -> float: ...
+```
+
+```python
+# app/impl.py
+import time
+from pico_ioc import component, provides
+from app.ports import Clock
+
+@component
+class SystemClock:
+    def now(self) -> float:
+        return time.time()
+
+# Option A: Consumers depend on the concrete type (SystemClock), no extra work needed.
+# Option B: Register SystemClock as the provider for the abstract Clock type:
+@provides(Clock)
+def provide_clock() -> Clock:
+    return SystemClock()
+```
+
+```python
+# app/service.py
+from pico_ioc import component
+from app.ports import Clock
+
+@component
+class JobService:
+    def __init__(self, clock: Clock):
+        self.clock = clock
+
+    def run(self):
+        started_at = self.clock.now()
+        # ...
+        return started_at
+```
+
+Scan modules that include either the concrete `@component` or the `@provides(Clock)` provider.
 
 -----
 
 ## Summary: When to Use What
 
-| Feature        | `@component`                                | `@provides` (Module, Static, or Instance)s       |
-| :------------- | :------------------------------------------ | :----------------------------------------------- |
-| **What is it?**| A decorator **for a class**.                | A decorator **for a "recipe" function/method**.  |
-| **Use Case** | **Your own classes** that you can modify. Simple `__init__`. | **Third-party classes** or complex creation logic. |
-| **Styles** | N/A                                         | Simple: Module function.<br>Grouped: `staticmethod` or `classmethod` on `@factory`.<br>Stateful: Instance method on `@factory`. |
-| **Example** | `@component`<br>`class UserService:`        | `@provides(redis.Redis)`<br>`def build_redis(...):` |
+- @component
+  - Decorator for a class you own.
+  - Use when the `__init__` is sufficient to construct the instance.
+  - Best for most of your application code.
 
-**Rule of Thumb:** Always default to `@component`. When you can't, use the simplest `@provides` pattern that fits your needs (start with module-level functions).
+- @provides
+  - Decorator for a recipe function or method that constructs a target type.
+  - Use for third‑party classes, complex creation logic, or mapping concrete implementations to abstract protocols.
+  - Styles:
+    - Module function (simplest).
+    - Grouped in a `@factory` via `@staticmethod`/`@classmethod` (stateless).
+    - Instance methods on a `@factory` (stateful, shared resources).
+
+Rule of thumb: Default to `@component`. When you can’t, use the simplest `@provides` pattern that fits your needs (start with a module‑level function).
 
 -----
 
@@ -245,6 +340,5 @@ class CacheService:
 
 Now that you understand how to register components, the next logical step is to learn how to configure them using the unified configuration system.
 
-  * **[Configuration: Basic Concepts](./configuration-basic.md)**: Learn about the `configuration(...)` builder and how `pico-ioc` handles different sources.
-
-
+- Configuration: Basic Concepts: Learn about the configuration builder and how pico-ioc handles different sources.
+  See: ./configuration-basic.md
