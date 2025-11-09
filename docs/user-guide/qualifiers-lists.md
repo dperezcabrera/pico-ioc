@@ -8,7 +8,7 @@ But what about a one-to-many relationship? This is a very common scenario:
 * You have one `PaymentProvider` protocol, but two implementations: `StripeProvider` and `PayPalProvider`.
 
 This creates two problems:
-1.  If a component just asks for `Sender`, how does the container know which one to inject? (This is solved by [`primary=True`](./conditional-binding.md)).
+1.  If a component just asks for `Sender`, how does the container know which one to inject? (This is solved by [`primary=True`](../advanced-features/conditional-binding.md)).
 2.  What if a component (like a `NotificationService`) needs all `Sender` implementations?
 
 This guide solves the second problem using Qualifiers. Qualifiers are "tags" you attach to your components, allowing you to inject specific lists of implementations.

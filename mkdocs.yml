@@ -1,7 +1,6 @@
 site_name: Pico-IoC Documentation
 site_description: Lightweight, async-native dependency injection container for Python
-site_author: Pico-IoC Team
-site_url: https://<dperezcabrera.github.io/pico-ioc/
+site_url: https://dperezcabrera.github.io/pico-ioc/
 
 repo_name: dperezcabrera/pico-ioc
 repo_url: https://github.com/dperezcabrera/pico-ioc
