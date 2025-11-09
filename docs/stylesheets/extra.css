@@ -1,0 +1,32 @@
+/* Custom styles for pico-ioc documentation */
+
+:root {
+  --md-primary-fg-color: #3f51b5;
+  --md-accent-fg-color: #ff4081;
+}
+
+/* Code block improvements */
+.md-typeset pre > code {
+  border-radius: 4px;
+}
+
+/* Admonition styling */
+.md-typeset .admonition {
+  border-radius: 4px;
+}
+
+/* Navigation improvements */
+.md-nav__item--active > .md-nav__link {
+  font-weight: 600;
+}
+
+/* Table improvements */
+.md-typeset table:not([class]) {
+  display: table;
+  border-collapse: collapse;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--md-default-fg-color--lightest);
+  font-weight: 700;
+}

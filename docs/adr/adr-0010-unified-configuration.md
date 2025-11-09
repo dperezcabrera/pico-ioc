@@ -14,7 +14,7 @@ Inconsistent ordering, normalization, and documentation made the developer exper
 Since adoption of v2.0.0 was still limited, we took the opportunity to introduce a breaking but cleaner unification, simplifying the configuration model for the long term.
 
 **Rationale for `Value`:**
-During testing and real-world deployments, we observed recurring cases where a few configuration fields needed to be *statically fixed* regardless of the environment (e.g., embedded secrets in CI, non-configurable defaults, or deterministic test fixtures).
+During testing and real-world deployments, we observed recurring cases where a few configuration fields needed to be statically fixed regardless of the environment (e.g., embedded secrets in CI, non-configurable defaults, or deterministic test fixtures).
 The previous system required extra patching or post-processing.
 Introducing `Annotated[..., Value(...)]` provides an explicit, type-safe, and framework-agnostic mechanism to declare immutable constants inside `@configured` classes, ensuring reproducibility and clarity while still coexisting with dynamic configuration sources.
 
@@ -24,10 +24,10 @@ Introducing `Annotated[..., Value(...)]` provides an explicit, type-safe, and fr
 
 Configuration is unified around a single decorator (`@configured`) and a single runtime entry point (`configuration(...) → ContextConfig → init(config=...)`).
 
-1. **Remove `@configuration`.**
+1. Remove `@configuration`.
    Only `@configured` remains.
 
-2. **Enhance `@configured`:**
+2. Enhance `@configured`:
 
    * Signature:
 
@@ -40,29 +40,29 @@ Configuration is unified around a single decorator (`@configured`) and a single 
      * If all fields are primitives (`str`, `int`, `float`, `bool`) → treat as `flat`.
      * Explicit `mapping` always overrides auto-detection.
 
-3. **Introduce `configuration(...)` → `ContextConfig`:**
+3. Introduce `configuration(...)` → `ContextConfig`:
 
    * Accepts an ordered list of configuration sources (environment, YAML, JSON, dicts, CLI adapters, etc.).
    * Supports `overrides` and explicit values for final patching.
    * Defines deterministic precedence:
-     **`Value(...)` > `overrides` > sources (left to right).**
+     `Value(...)` > `overrides` > sources (left to right).
 
-4. **Normalize casing and key mapping:**
+4. Normalize casing and key mapping:
 
    * Internal attributes use `snake_case`.
    * Environment variables use `UPPER_CASE`.
    * Tree mapping uses `__` as a path separator (e.g., `APP_DB__HOST`).
    * Flat mapping uses `PREFIX_FIELD`.
 
-5. **Unify coercion and discriminator logic** across flat and tree modes via `config_runtime`.
+5. Unify coercion and discriminator logic across flat and tree modes via `config_runtime`.
 
-6. **Add Inline Field Overrides via `Annotated[..., Value(...)]`:**
+6. Add Inline Field Overrides via `Annotated[..., Value(...)]`:
 
    * `Value` can be applied as metadata to any field to force a constant value.
-   * When present, it *short-circuits lookup*, bypassing all configuration sources.
+   * When present, it short-circuits lookup, bypassing all configuration sources.
    * Used for secrets templating in tests, static defaults, or environment-independent fallbacks.
 
-7. **Single entry point:**
+7. Single entry point:
 
    ```python
    init(modules=[...], config=ContextConfig(...))
@@ -72,47 +72,47 @@ Configuration is unified around a single decorator (`@configured`) and a single 
 
 ## Consequences
 
-### Positive ✅
+### Positive
 
-* **Cleaner Mental Model:**
+* Cleaner Mental Model:
   One decorator (`@configured`) and one initialization path (`configuration(...) → ContextConfig`) for all configuration types.
 
-* **Deterministic Configuration:**
+* Deterministic Configuration:
   Explicit, documented precedence across heterogeneous sources, with `Value(...)` providing the top-level override.
 
-* **Inline Overrides:**
+* Inline Overrides:
   `Annotated[..., Value(...)]` offers a standard Pythonic way to hard-code constants or test values without relying on environment setup.
 
-* **First-Class ENV Integration:**
+* First-Class ENV Integration:
   Environment sources remain intuitive, with predictable normalization rules (`APP_DB_URL` → `app.db.url`).
 
-* **Unified Mapping Strategy:**
+* Unified Mapping Strategy:
   Flat vs. tree behavior becomes a runtime mode, not a separate decorator, reducing conceptual duplication.
 
-* **Improved Testability:**
+* Improved Testability:
   The immutable, preprocessed `ContextConfig` makes configuration deterministic and easy to mock or inspect.
 
-### Negative ⚠️
+### Negative
 
-* **Breaking Change:**
+* Breaking Change:
   Removes `@configuration` and the old `config` argument from `init()`. Users must migrate to the unified model.
 
-* **Migration Effort:**
+* Migration Effort:
   Existing classes must adopt `@configured`, update field names to match conventions, and use the `configuration(...)` builder.
 
-* **Learning Curve:**
+* Learning Curve:
   Developers must understand the `mapping` modes, `ContextConfig`, and the new `Annotated[..., Value(...)]` mechanism.
 
-* **Convention Reliance:**
+* Convention Reliance:
   `"auto"` mode relies on consistent naming and type hints for accurate mapping inference.
 
 ---
 
 ## Alternatives Considered
 
-* **Keep both decorators:** Rejected — duplicates logic and confuses users.
-* **Force tree-mode only:** Rejected — flat ENV/CLI setups would become cumbersome.
-* **Detect mode by field name casing:** Rejected — type-shape inference is more robust.
+* Keep both decorators: Rejected — duplicates logic and confuses users.
+* Force tree-mode only: Rejected — flat ENV/CLI setups would become cumbersome.
+* Detect mode by field name casing: Rejected — type-shape inference is more robust.
 
 ---
 
@@ -178,4 +178,3 @@ class DbCfg:
 ctx = configuration(EnvSource(prefix=""))
 c = init(modules=[__name__], config=ctx)
 ```
-

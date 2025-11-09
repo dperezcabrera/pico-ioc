@@ -173,7 +173,7 @@ You without a container:
 → FINALLY I create `UserService` with all that
 
 You with a container:
-`container.get(UserService)`  \# 🎉 Done\!
+`container.get(UserService)`  # 🎉 Done!
 🎯 Practical Exercise:
 
 1.  Copy the "Improved Code" from above
@@ -226,9 +226,9 @@ Hello, World!
 
 🧠 New concepts:
 
-  * **`@component`**: Marks a class as "manageable by the container"
-  * **`init(modules=[...])`**: Scans modules looking for `@component`
-  * **`container.get(Class)`**: "Give me an instance of Class (with its dependencies)"
+  * `@component`: Marks a class as "manageable by the container"
+  * `init(modules=[...])`: Scans modules looking for `@component`
+  * `container.get(Class)`: "Give me an instance of Class (with its dependencies)"
     🎯 Exercises:
 
 ✏️ Change `Greeter` to greet in Spanish
@@ -250,7 +250,8 @@ def create_redis() -> redis.Redis:
     print("Creating Redis client...")
     return redis.Redis.from_url("redis://localhost")
 
-# 🎯 Option 2: With configuration
+# 🎯 Option 2: With a config component (injected)
+@component
 @dataclass
 class RedisConfig:
     url: str = "redis://localhost"
@@ -278,7 +279,7 @@ cache.set("user:1", "Juan")
 
 🧠 New concepts:
 
-  * **`@provides(Type)`**: Creates a function that "provides" instances of `Type`
+  * `@provides(Type)`: Creates a function that "provides" instances of `Type`
   * `@provides` functions also receive dependency injection
     🎯 Exercises:
 
@@ -574,7 +575,7 @@ DB Password: super_secret
 🏆 Level 3 Checkpoint
 You should be able to:
 
-## ✅ Map ENV vars to dataclasses ✅ Use YAML for hierarchical config ✅ Combine multiple sources ✅ Understand precedence (`Value` \> overrides \> sources)
+## ✅ Map ENV vars to dataclasses ✅ Use YAML for hierarchical config ✅ Combine multiple sources ✅ Understand precedence (`Value` > overrides > sources)
 
 🔄 Level 4: Lifecycles and Scopes
 Step 4.1: Scopes (Singleton vs Prototype)
@@ -665,6 +666,7 @@ async def main():
     db = await container_async.aget(AsyncDatabase)
     await container_async.cleanup_all_async()
 
+import asyncio
 asyncio.run(main())
 ```
 
@@ -1142,7 +1144,7 @@ FastService obtained
 🔍 Now asking for HeavyService...
 ⏳ Initializing heavy service...
 ✅ HeavyService ready
-HeavyService obtained: importante
+HeavyService obtained: important
 ```
 
 🎯 Exercise:
@@ -1237,7 +1239,6 @@ Scenario: An app where each client (tenant) has its own isolated DB and config.
 
 ```python
 # multi_tenant.py
-import uuid
 from dataclasses import dataclass
 from pico_ioc import component, init, PicoContainer
 
@@ -1278,7 +1279,7 @@ class TenantManager:
             # Tenant config (would come from master DB)
             config = TenantConfig(
                 tenant_id=tenant_id,
-                database_url=f"postgres://db-{tenant_id}[.example.com/data](https://.example.com/data)",
+                database_url=f"postgres://db-{tenant_id}.example.com/data",
                 feature_flags={"beta": tenant_id == "acme"}
             )
             
@@ -1320,12 +1321,12 @@ Output:
 ```
 --- Request from ACME Corp ---
 🏗️  Creating container for tenant acme
-🗄️  DB for tenant acme: postgres://[db-acme.example.com/data](https://db-acme.example.com/data)
+🗄️  DB for tenant acme: postgres://db-acme.example.com/data
 [acme] SELECT * FROM users
 
 --- Request from Beta Inc ---
 🏗️  Creating container for tenant beta
-🗄️  DB for tenant beta: postgres://[db-beta.example.com/data](https://db-beta.example.com/data)
+🗄️  DB for tenant beta: postgres://db-beta.example.com/data
 [beta] SELECT * FROM users
 
 --- Request from ACME Corp again ---
@@ -1546,7 +1547,7 @@ Result: None
 ✏️ Implement gradual rollout (e.g., only 20% of users)
 Step 7.4: Hot Reload (Dev Server)
 
-> **Note:** This requires `watchdog` (`pip install watchdog`) and a file structure.
+> Note: This requires `watchdog` (`pip install watchdog`) and a file structure.
 > Create a folder `app` with `__init__.py` and `service.py`.
 > `app/service.py`:
 
@@ -1570,7 +1571,7 @@ import sys
 import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from pico_ioc import init, PicoContainer
+from pico_ioc import init
 
 # 🎯 Watcher that reloads the container
 class ReloadHandler(FileSystemEventHandler):
@@ -1598,7 +1599,7 @@ def reload_container():
         # Shutdown the old one
         old = container
         container = new_container
-        old.shutdown()
+        old.cleanup_all()
         
         print("✅ Container reloaded successfully\n")
         
@@ -1624,7 +1625,7 @@ try:
         time.sleep(2)
 except KeyboardInterrupt:
     observer.stop()
-    container.shutdown()
+    container.cleanup_all()
     
 observer.join()
 ```
@@ -1634,13 +1635,13 @@ Flow:
 1.  Run the script
 2.  Edit `app/service.py` and change `VERSION = "2.0"`
 3.  Save the file
-4.  The container reloads automatically without restarting\!
+4.  The container reloads automatically without restarting!
     🎯 Exercise:
 
 ✏️ Integrate with Flask/FastAPI (see Cookbook)
 Step 7.5: CLI App (Typer Integration)
 
-> **Note:** Requires `typer` (`pip install typer`)
+> Note: Requires `typer` (`pip install typer`)
 
 ```python
 # cli_app.py
@@ -1654,7 +1655,7 @@ from pico_ioc import component, configured, configuration, EnvSource, init
 @dataclass
 class AppConfig:
     API_KEY: str
-    API_URL: str = "[https://api.example.com](https://api.example.com)"
+    API_URL: str = "https://api.example.com"
 
 # 🎯 Service with logic
 @component
@@ -1693,7 +1694,7 @@ def health():
 if __name__ == "__main__":
     # Setup for demo
     os.environ["APP_API_KEY"] = "sk-12345678"
-    os.environ["APP_API_URL"] = "[https://dev.api.com](https://dev.api.com)"
+    os.environ["APP_API_URL"] = "https://dev.api.com"
     
     app()
 ```
@@ -1702,14 +1703,14 @@ Run:
 
 ```bash
 $ python cli_app.py create-user alice
-🔌 API Client connected to [https://dev.api.com](https://dev.api.com)
-📡 POST [https://dev.api.com/users](https://dev.api.com/users)
+🔌 API Client connected to https://dev.api.com
+📡 POST https://dev.api.com/users
 🔑 API Key: sk-1...
 ✅ User 'alice' created
 ✅ User ID: 123
 
 $ python cli_app.py health
-🔌 API Client connected to [https://dev.api.com](https://dev.api.com)
+🔌 API Client connected to https://dev.api.com
 📊 Container: c68a1f2b
 ⏱️  Uptime: 0.05s
 ```
@@ -1739,7 +1740,7 @@ Technical Requirements:
 🔧 Scopes: `singleton` (services), `request` (HTTP context)
 🔧 `EventBus` for notifications
 🔧 AOP for logging all operations
-🔧 Tests with mocks (coverage \>80%)
+🔧 Tests with mocks (coverage >80%)
 🔧 Health check endpoint
 Suggested Architecture:
 
@@ -1772,24 +1773,24 @@ Bonus Points:
 
 📚 Additional Resources
 
-  * **Official Documentation**
-      * [Getting Started](https://pico-ioc.readthedocs.io/en/latest/getting_started.html)
-      * [User Guide](https://pico-ioc.readthedocs.io/en/latest/user_guide.html)
-      * [Advanced Features](https://pico-ioc.readthedocs.io/en/latest/advanced.html)
-      * [Cookbook](https://pico-ioc.readthedocs.io/en/latest/cookbook.html)
-      * [API Reference](https://pico-ioc.readthedocs.io/en/latest/api.html)
-  * **Comparisons**
-      * [vs dependency-injector](https://pico-ioc.readthedocs.io/en/latest/comparison.html#vs-dependency-injector)
-      * [vs Spring Framework](https://pico-ioc.readthedocs.io/en/latest/comparison.html#vs-spring-framework)
-  * **Real-world Examples**
-      * [FastAPI Integration](https://pico-ioc.readthedocs.io/en/latest/cookbook.html#fastapi-integration)
-      * [Flask Integration](https://pico-ioc.readthedocs.io/en/latest/cookbook.html#flask-integration)
-      * [LangChain Integration](https://pico-ioc.readthedocs.io/en/latest/cookbook.html#langchain-chatbot)
+  * Official Documentation
+      * Getting Started: https://pico-ioc.readthedocs.io/en/latest/getting_started.html
+      * User Guide: https://pico-ioc.readthedocs.io/en/latest/user_guide.html
+      * Advanced Features: https://pico-ioc.readthedocs.io/en/latest/advanced.html
+      * Cookbook: https://pico-ioc.readthedocs.io/en/latest/cookbook.html
+      * API Reference: https://pico-ioc.readthedocs.io/en/latest/api.html
+  * Comparisons
+      * vs dependency-injector: https://pico-ioc.readthedocs.io/en/latest/comparison.html#vs-dependency-injector
+      * vs Spring Framework: https://pico-ioc.readthedocs.io/en/latest/comparison.html#vs-spring-framework
+  * Real-world Examples
+      * FastAPI Integration: https://pico-ioc.readthedocs.io/en/latest/cookbook.html#fastapi-integration
+      * Flask Integration: https://pico-ioc.readthedocs.io/en/latest/cookbook.html#flask-integration
+      * LangChain Integration: https://pico-ioc.readthedocs.io/en/latest/cookbook.html#langchain-chatbot
 
 -----
 
 ✅ Mastery Checklist
-**Beginner Level (1-2 weeks)**
+Beginner Level (1-2 weeks)
 
   * [ ] Understand what DI is and why it exists
   * [ ] Use `@component` for your classes
@@ -1797,7 +1798,7 @@ Bonus Points:
   * [ ] Resolve with `container.get()`
   * [ ] Configure with simple ENV vars
 
-**Intermediate Level (2-4 weeks)**
+Intermediate Level (2-4 weeks)
 
   * [ ] Use complex YAML config
   * [ ] Manage scopes (`singleton`, `prototype`, `request`)
@@ -1805,7 +1806,7 @@ Bonus Points:
   * [ ] Use `profiles` for environments
   * [ ] Implement `@configure` and `@cleanup`
 
-**Advanced Level (1-2 months)**
+Advanced Level (1-2 months)
 
   * [ ] Create custom interceptors
   * [ ] Use `EventBus` to decouple services
@@ -1813,8 +1814,3 @@ Bonus Points:
   * [ ] Optimize startup with `lazy=True`
   * [ ] Implement advanced patterns (CQRS, Multi-tenant)
   * [ ] Understand the full container lifecycle
-
-<!-- end list -->
-
-```
-```

@@ -1,0 +1,99 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r docs/requirements.txt
+      - name: Validate documentation build
+        run: mkdocs build --strict
+      - name: Check for broken links (best-effort)
+        run: |
+          pip install linkchecker
+          python -m http.server --directory site 8000 &
+          sleep 3
+          linkchecker http://127.0.0.1:8000 --check-extern || true
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('docs/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r docs/requirements.txt
+      - name: Build documentation
+        run: |
+          mkdocs build --strict --verbose
+          echo "Built on $(date -u)" > site/build-info.txt
+          echo "Commit: ${{ github.sha }}" >> site/build-info.txt
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: './site'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Comment on commit (optional)
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `✅ Documentation deployed successfully!\n\n📚 View at: ${'${{ steps.deployment.outputs.page_url }}'}`
+            })
+

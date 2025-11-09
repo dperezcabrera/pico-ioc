@@ -2,8 +2,8 @@
 
 `pico-ioc` provides two levels of insight into your container's performance:
 
-1.  **Built-in Metrics (`container.stats()`)**: A simple method that returns a dictionary of key performance indicators (KPIs) like cache hit rate and component count.
-2.  **Observers (`ContainerObserver`)**: An advanced protocol you can implement to receive low-level events (like `"on_resolve"`) for real-time integration with tracing tools like OpenTelemetry.
+1. Built-in Metrics (`container.stats()`): A simple method that returns a dictionary of key performance indicators (KPIs) like cache hit rate and component count.
+2. Observers (`ContainerObserver`): An advanced protocol you can implement to receive low-level events (like `on_resolve`) for real-time integration with tracing tools like OpenTelemetry.
 
 ---
 
@@ -22,17 +22,17 @@ class MyService: ...
 container = init(modules=[__name__], profiles=("prod",))
 
 # --- Simulate some activity ---
-service = container.get(MyService) # This is a "resolve"
-service = container.get(MyService) # This is a "cache hit"
+service = container.get(MyService)  # This is a "resolve"
+service = container.get(MyService)  # This is a "cache hit"
 
 # --- Get the stats ---
 stats_report = container.stats()
 
 import json
 print(json.dumps(stats_report, indent=2))
-````
+```
 
-**Example Output:**
+Example Output:
 
 ```json
 {
@@ -50,19 +50,21 @@ print(json.dumps(stats_report, indent=2))
 
 This dictionary is lightweight and can be easily exposed via a `/stats` endpoint or fed into a metrics-gathering system like Prometheus.
 
-  * **`total_resolves`**: The number of times the container had to *create* a new component. (Lower is often better).
-  * **`cache_hits`**: The number of times `get()` was called for a component that was already in the cache.
-  * **`cache_hit_rate`**: The ratio of hits to total requests. A high cache hit rate is a sign of a healthy singleton-based application.
+- total_resolves: The number of times the container had to create a new component. (Lower is often better).
+- cache_hits: The number of times `get()` was called for a component that was already in the cache.
+- cache_hit_rate: The ratio of cache hits to total requests (hits + resolves). A high cache hit rate is a sign of a healthy singleton-based application.
+- registered_components: The number of components discovered and registered in the container.
+- uptime_seconds: Time since the container was initialized.
 
 -----
 
-## 2\. Advanced: `ContainerObserver` Protocol
+## 2. Advanced: `ContainerObserver` Protocol
 
 For deep, real-time tracing, you can implement the `ContainerObserver` protocol.
 
-An observer is a class that "listens" to the container's internal events. You can pass a list of observers to `init()`, and the container will notify them when key events happen.
+An observer is a class that listens to the container's internal events. You can pass a list of observers to `init()`, and the container will notify them when key events happen.
 
-This is the perfect integration point for tools like **OpenTelemetry**, allowing you to create a "span" for every component resolution.
+This is the perfect integration point for tools like OpenTelemetry, allowing you to create a span for every component resolution.
 
 ### Step 1: Define Your Observer
 
@@ -75,10 +77,10 @@ from pico_ioc import ContainerObserver, KeyT
 
 # A simple observer that just logs events
 class MyTracer(ContainerObserver):
-    
     def on_resolve(self, key: KeyT, took_ms: float):
         """
-        Called *after* a component is successfully created.
+        Called after a component is successfully created.
+        took_ms is the measured resolution time.
         """
         print(f"[TRACE] RESOLVED: {key} (took {took_ms:.2f} ms)")
 
@@ -108,12 +110,13 @@ class MyTracer(ContainerObserver):
 
 ### Step 2: Register Your Observer
 
-`ContainerObserver` is **not** a component. You cannot register it with `@component`.
+`ContainerObserver` is not a component. You cannot register it with `@component`.
 
-Instead, you must instantiate it yourself and pass it to the `init()` function.
+Instead, instantiate it yourself and pass it to the `init()` function.
 
 ```python
 # main.py
+import time
 from pico_ioc import init, component
 from tracing import MyTracer
 
@@ -134,7 +137,7 @@ tracer = MyTracer()
 # 2. Pass it to init()
 container = init(
     modules=[__name__],
-    observers=[tracer] # <-- Register it here
+    observers=[tracer]  # <-- Register it here
 )
 
 print("--- First call (resolving) ---")
@@ -144,7 +147,7 @@ print("\n--- Second call (cached) ---")
 b_cached = container.get(ServiceB)
 ```
 
-**Example Output:**
+Example Output:
 
 ```
 --- First call (resolving) ---
@@ -157,11 +160,26 @@ b_cached = container.get(ServiceB)
 
 This gives you a powerful, low-level hook to monitor the container's behavior and performance in real-time.
 
+### Multiple Observers
+
+You can register multiple observers. They will be called in the order provided.
+
+```python
+container = init(
+    modules=[__name__],
+    observers=[MyTracer(), OpenTelemetryObserver()]
+)
+```
+
+### Performance Considerations
+
+- Observers run synchronously with container events. Keep callbacks lightweight to avoid adding latency to resolutions.
+- Prefer batching or asynchronous export in your observer implementations when integrating with external systems.
+
 -----
 
 ## Next Steps
 
-Now that you can get metrics and trace events, what if the problem isn't performance, but the *structure* of your application?
+Now that you can get metrics and trace events, what if the problem isn't performance, but the structure of your application?
 
-  * **[Exporting the Dependency Graph](./exporting-graph.md)**: Learn how to generate a visual diagram of your entire application's dependency graph to hunt down bugs or simplify your architecture.
-
+- Exporting the Dependency Graph: Learn how to generate a visual diagram of your entire application's dependency graph to hunt down bugs or simplify your architecture. See ./exporting-graph.md.
