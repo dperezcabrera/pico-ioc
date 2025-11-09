@@ -1,22 +1,22 @@
 # Cookbook: Pattern: Feature Toggles with AOP
 
-**Goal:** Implement a "Feature Toggle" or "Feature Flag" system. This allows enabling or disabling specific functionality (methods) at runtime (e.g., via environment variables) without changing the code or redeploying.
+Goal: Implement a "Feature Toggle" or "Feature Flag" system. This allows enabling or disabling specific functionality (methods) at runtime (e.g., via environment variables) without changing the code or redeploying.
 
-**Key `pico-ioc` Feature:** **Aspect-Oriented Programming (AOP)** using `MethodInterceptor` and `@intercepted_by`. We'll create a custom decorator (`@feature_toggle`) to mark methods and an interceptor that checks if the feature is enabled before allowing the method call to proceed.
+Key pico-ioc Feature: Aspect-Oriented Programming (AOP) using MethodInterceptor and @intercepted_by. We’ll create a simple decorator (@feature_toggle) to mark methods and an interceptor that checks if the feature is enabled before allowing the method call to proceed.
 
 ---
 
 ## The Pattern
 
-1.  **Metadata Decorator (`@feature_toggle`):** A simple decorator that attaches metadata (the feature name and behavior-on-disable) to a function. It does *not* wrap the function directly.
-2.  **Toggle Registry (`FeatureToggleRegistry`):** A `@component` that knows the current state (enabled/disabled) of all features, typically by reading environment variables or a configuration source.
-3.  **Interceptor (`FeatureToggleInterceptor`):** A `@component` implementing `MethodInterceptor`. Its `invoke` method:
-    * Checks if the called method has `@feature_toggle` metadata.
-    * If yes, asks the `FeatureToggleRegistry` if the feature is enabled.
-    * If enabled, calls `call_next(ctx)` to proceed with the original method.
-    * If disabled, takes action based on the metadata (e.g., raises an exception or returns `None`).
-4.  **Application:** Components apply the `@feature_toggle` decorator to methods and the `@intercepted_by(FeatureToggleInterceptor)` decorator *once* (usually on the class or methods needing toggles) to activate the interception.
-5.  **Bootstrap:** `init()` scans modules containing the components, registry, interceptor, and decorator.
+1.  Metadata Decorator (@feature_toggle): A lightweight decorator that attaches metadata (feature name and behavior-on-disable) to a function. It does not wrap the function.
+2.  Toggle Registry (FeatureToggleRegistry): A @component that knows the current state (enabled/disabled) of all features, typically by reading environment variables or a configuration source.
+3.  Interceptor (FeatureToggleInterceptor): A @component implementing MethodInterceptor. Its invoke method:
+    - Checks if the called method has @feature_toggle metadata.
+    - If yes, asks the FeatureToggleRegistry if the feature is enabled.
+    - If enabled, calls call_next(ctx) to proceed with the original method.
+    - If disabled, takes action based on the metadata (e.g., raises an exception or returns None).
+4.  Application: Components apply the @feature_toggle decorator to methods and the @intercepted_by(FeatureToggleInterceptor) decorator once (usually on the class or methods needing toggles) to activate the interception.
+5.  Bootstrap: init() scans modules containing the components, registry, interceptor, and decorator.
 
 ---
 
@@ -25,74 +25,61 @@
 ### 1. Project Structure
 
 ```
-
 .
-├── feature\_toggle\_lib/
-│   ├── **init**.py
-│   ├── decorator.py   \<-- @feature\_toggle and Mode
-│   ├── interceptor.py \<-- FeatureToggleInterceptor
-│   └── registry.py    \<-- FeatureToggleRegistry
-├── my\_app/
-│   ├── **init**.py
-│   └── services.py    \<-- Example service using the toggle
-└── main.py              \<-- Application entrypoint
-
+├── feature_toggle_lib/
+│   ├── __init__.py
+│   ├── decorator.py   <-- @feature_toggle and Mode
+│   ├── interceptor.py <-- FeatureToggleInterceptor
+│   └── registry.py    <-- FeatureToggleRegistry
+├── my_app/
+│   ├── __init__.py
+│   └── services.py    <-- Example service using the toggle
+└── main.py              <-- Application entrypoint
 ```
 
-### 2. Feature Toggle Library (`feature_toggle_lib/`)
+### 2. Feature Toggle Library (feature_toggle_lib/)
 
-#### Decorator (`decorator.py`)
+#### Decorator (decorator.py)
 
 ```python
 # feature_toggle_lib/decorator.py
-import functools
 from enum import Enum
 from typing import Callable
 
-# Metadata key
+# Metadata key used to store toggle info on functions
 FEATURE_TOGGLE_META = "_pico_feature_toggle_meta"
 
 class Mode(str, Enum):
     """Behavior when the feature is disabled."""
-    EXCEPTION = "exception" # Raise RuntimeError
-    RETURN_NONE = "return_none" # Return None silently
+    EXCEPTION = "exception"      # Raise RuntimeError
+    RETURN_NONE = "return_none"  # Return None silently
 
-def feature_toggle(*, name: str, mode: Mode = Mode.RETURN_NONE):
-    """Decorator to mark a method as controlled by a feature toggle."""
+def feature_toggle(*, name: str, mode: Mode = Mode.RETURN_NONE) -> Callable[[Callable], Callable]:
+    """Decorator to mark a method as controlled by a feature toggle.
+    It attaches metadata to the function without wrapping it.
+    """
     def decorator(func: Callable) -> Callable:
-        metadata = {"name": name, "mode": mode}
-        setattr(func, FEATURE_TOGGLE_META, metadata)
-        
-        # We need functools.wraps to preserve metadata for pico-ioc AOP
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            # This wrapper isn't strictly needed for pico-ioc AOP,
-            # but is good practice if the decorator might be used alone.
-            # The interceptor will re-check the logic.
-            return func(*args, **kwargs)
-        
-        # Ensure metadata is on the wrapper too if needed
-        setattr(wrapper, FEATURE_TOGGLE_META, metadata)
-        return wrapper
+        setattr(func, FEATURE_TOGGLE_META, {"name": name, "mode": mode})
+        return func
     return decorator
 ```
 
-#### Registry (`registry.py`)
+#### Registry (registry.py)
 
 ```python
 # feature_toggle_lib/registry.py
 import os
 from pico_ioc import component
 
-@component # <-- The registry is a component
+@component
 class FeatureToggleRegistry:
     """Checks if features are enabled, typically via environment variables."""
     def __init__(self):
         # Read a comma-separated list of DISABLED features
         disabled_str = os.environ.get("PICO_FEATURES_DISABLED", "")
         self._disabled_set = {
-            feature.strip().lower() 
-            for feature in disabled_str.split(",") 
+            feature.strip().lower()
+            for feature in disabled_str.split(",")
             if feature.strip()
         }
         print(f"[Registry] Disabled features: {self._disabled_set}")
@@ -102,7 +89,7 @@ class FeatureToggleRegistry:
         return feature_name.lower() not in self._disabled_set
 ```
 
-#### Interceptor (`interceptor.py`)
+#### Interceptor (interceptor.py)
 
 ```python
 # feature_toggle_lib/interceptor.py
@@ -111,7 +98,7 @@ from pico_ioc import component, MethodInterceptor, MethodCtx
 from .registry import FeatureToggleRegistry
 from .decorator import FEATURE_TOGGLE_META, Mode
 
-@component # <-- The interceptor is also a component
+@component
 class FeatureToggleInterceptor(MethodInterceptor):
     def __init__(self, registry: FeatureToggleRegistry):
         # Inject the registry
@@ -119,21 +106,23 @@ class FeatureToggleInterceptor(MethodInterceptor):
         print("[Interceptor] FeatureToggleInterceptor initialized.")
 
     def invoke(self, ctx: MethodCtx, call_next: Callable[[MethodCtx], Any]) -> Any:
-        # Check the *original* method for metadata
-        # ctx.method might be already wrapped by other interceptors
-        try:
-            # Access the unbound function via the class to read decorators reliably
-            original_func = getattr(ctx.cls, ctx.name)
-            toggle_meta = getattr(original_func, FEATURE_TOGGLE_META, None)
-        except AttributeError:
-            toggle_meta = None # Method not found on class (unlikely case)
+        # Try to read metadata directly from the current method
+        toggle_meta = getattr(ctx.method, FEATURE_TOGGLE_META, None)
+
+        # Fallback: read from the attribute on the declaring class, if present
+        if not toggle_meta:
+            try:
+                original_func = getattr(ctx.cls, ctx.name)
+                toggle_meta = getattr(original_func, FEATURE_TOGGLE_META, None)
+            except AttributeError:
+                toggle_meta = None
 
         if not toggle_meta:
-            # This method isn't feature-toggled, proceed normally
+            # This method isn't feature-toggled; proceed normally
             return call_next(ctx)
 
         feature_name = toggle_meta["name"]
-        
+
         if self.registry.is_enabled(feature_name):
             # Feature is ON, proceed with the original call
             print(f"[Interceptor] Feature '{feature_name}' is ENABLED. Proceeding.")
@@ -144,11 +133,11 @@ class FeatureToggleInterceptor(MethodInterceptor):
             mode = toggle_meta["mode"]
             if mode == Mode.EXCEPTION:
                 raise RuntimeError(f"Feature '{feature_name}' is currently disabled.")
-            else: # Mode.RETURN_NONE
+            else:  # Mode.RETURN_NONE
                 return None
 ```
 
-#### Library `__init__.py`
+#### Library __init__.py
 
 ```python
 # feature_toggle_lib/__init__.py
@@ -157,14 +146,12 @@ from .registry import FeatureToggleRegistry
 from .interceptor import FeatureToggleInterceptor
 
 __all__ = [
-    "feature_toggle", "Mode", 
-    "FeatureToggleRegistry", "FeatureToggleInterceptor"
+    "feature_toggle", "Mode",
+    "FeatureToggleRegistry", "FeatureToggleInterceptor",
 ]
 ```
 
-### 3\. Application Code (`my_app/services.py`)
-
-Here's how you use the library in your application.
+### 3. Application Code (my_app/services.py)
 
 ```python
 # my_app/services.py
@@ -175,10 +162,10 @@ from feature_toggle_lib import (
 
 @component
 class MyService:
-    
+
     # Apply the toggle decorator AND the interceptor
     @feature_toggle(name="new-reporting", mode=Mode.EXCEPTION)
-    @intercepted_by(FeatureToggleInterceptor) 
+    @intercepted_by(FeatureToggleInterceptor)
     def generate_report(self, user_id: int) -> dict:
         print("[MyService] Generating complex new report...")
         # ... actual reporting logic ...
@@ -206,9 +193,7 @@ class MyService:
 #     def method2(...): ... # Interceptor runs, finds no metadata, proceeds
 ```
 
-### 4\. Main Application (`main.py`)
-
-Initialize the container, ensuring it scans both your app and the library.
+### 4. Main Application (main.py)
 
 ```python
 # main.py
@@ -245,7 +230,7 @@ if __name__ == "__main__":
     print("RUN 1: ALL FEATURES ENABLED")
     print("="*30)
     # Ensure no features are disabled
-    os.environ.pop("PICO_FEATURES_DISABLED", None) 
+    os.environ.pop("PICO_FEATURES_DISABLED", None)
     run_app()
 
     print("\n" + "="*30)
@@ -263,15 +248,14 @@ if __name__ == "__main__":
     run_app()
 ```
 
------
+---
 
-## 5\. Benefits
+## Benefits
 
-  * **Clean Business Logic:** Your `MyService` methods contain only business logic, completely unaware of the toggle mechanism.
-  * **Centralized Control:** The enable/disable logic is centralized in `FeatureToggleRegistry`.
-  * **Reusable:** The `FeatureToggleInterceptor` can be applied to any method in any component.
-  * **Declarative:** Features are clearly marked with `@feature_toggle`.
-  * **Testable:** `FeatureToggleRegistry` and `FeatureToggleInterceptor` can be unit-tested. Services can be tested by overriding the registry or simply testing without the interceptor active.
+- Clean Business Logic: Your MyService methods contain only business logic, completely unaware of the toggle mechanism.
+- Centralized Control: The enable/disable logic is centralized in FeatureToggleRegistry.
+- Reusable: The FeatureToggleInterceptor can be applied to any method in any component.
+- Declarative: Features are clearly marked with @feature_toggle.
+- Testable: FeatureToggleRegistry and FeatureToggleInterceptor can be unit-tested. Services can be tested by overriding the registry or simply testing without the interceptor active.
 
-This pattern demonstrates how `pico-ioc`'s AOP allows you to cleanly implement sophisticated cross-cutting concerns like feature toggles.
-
+This pattern demonstrates how pico-ioc’s AOP allows you to cleanly implement sophisticated cross-cutting concerns like feature toggles.

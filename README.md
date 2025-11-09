@@ -11,47 +11,47 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/pico-ioc?period=monthly&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=Monthly+downloads)](https://pepy.tech/projects/pico-ioc)
 
 **Pico-IoC** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
-It brings *Inversion of Control* and *dependency injection* to Python in a deterministic, modern, and framework-agnostic way.
+It brings Inversion of Control and dependency injection to Python in a deterministic, modern, and framework-agnostic way.
 
-> 🐍 Requires **Python 3.10+**
+> 🐍 Requires Python 3.10+
 
 ---
 
 ## ⚖️ Core Principles
 
-- **Single Purpose** – Do one thing: dependency management.
-- **Declarative** – Use simple decorators (`@component`, `@factory`, `@provides`, `@configured`) instead of complex config files.
-- **Deterministic** – No hidden scanning or side-effects; everything flows from an explicit `init()`.
-- **Async-Native** – Fully supports async providers, async lifecycle hooks (`__ainit__`), and async interceptors.
-- **Fail-Fast** – Detects missing bindings and circular dependencies at bootstrap (`init()`).
-- **Testable by Design** – Use `overrides` and `profiles` to swap components instantly.
-- **Zero Core Dependencies** – Built entirely on the Python standard library. Optional features may require external packages (see Installation).
+- Single Purpose – Do one thing: dependency management.
+- Declarative – Use simple decorators (`@component`, `@factory`, `@provides`, `@configured`) instead of complex config files.
+- Deterministic – No hidden scanning or side-effects; everything flows from an explicit `init()`.
+- Async-Native – Fully supports async providers, async lifecycle hooks (`__ainit__`), and async interceptors.
+- Fail-Fast – Detects missing bindings and circular dependencies at bootstrap (`init()`).
+- Testable by Design – Use `overrides` and `profiles` to swap components instantly.
+- Zero Core Dependencies – Built entirely on the Python standard library. Optional features may require external packages (see Installation).
 
 ---
 
 ## 🚀 Why Pico-IoC?
 
 As Python systems evolve, wiring dependencies by hand becomes fragile and unmaintainable.
-**Pico-IoC** eliminates that friction by letting you declare how components relate — not how they’re created.
+Pico-IoC eliminates that friction by letting you declare how components relate — not how they’re created.
 
-| Feature         | Manual Wiring              | With Pico-IoC                     |
-| :-------------- | :------------------------- | :-------------------------------- |
-| Object creation | `svc = Service(Repo(Config()))` | `svc = container.get(Service)`    |
-| Replacing deps  | Monkey-patch               | `overrides={Repo: FakeRepo()}`    |
-| Coupling        | Tight                      | Loose                             |
-| Testing         | Painful                    | Instant                           |
-| Async support   | Manual                     | Built-in (`aget`, `__ainit__`, ...) |
+| Feature         | Manual Wiring                  | With Pico-IoC                   |
+| :-------------- | :----------------------------- | :------------------------------ |
+| Object creation | `svc = Service(Repo(Config()))` | `svc = container.get(Service)`  |
+| Replacing deps  | Monkey-patch                   | `overrides={Repo: FakeRepo()}`  |
+| Coupling        | Tight                          | Loose                           |
+| Testing         | Painful                        | Instant                         |
+| Async support   | Manual                         | Built-in (`aget`, `__ainit__`)  |
 
 ---
 
 ## 🧩 Highlights (v2.0+)
 
-- **Unified Configuration:** Use `@configured` to bind both **flat** (ENV-like) and **tree** (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
-- **Async-aware AOP system:** Method interceptors via `@intercepted_by`.
-- **Scoped resolution:** singleton, prototype, request, session, transaction, and custom scopes.
-- **`UnifiedComponentProxy`:** Transparent `lazy=True` and AOP proxy supporting serialization.
-- **Tree-based configuration runtime:** Advanced mapping with reusable adapters and discriminators (`Annotated[Union[...], Discriminator(...)]`).
-- **Observable container context:** Built-in stats, health checks (`@health`), observer hooks (`ContainerObserver`), dependency graph export (`export_graph`), and async cleanup.
+- Unified Configuration: Use `@configured` to bind both flat (ENV-like) and tree (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
+- Async-aware AOP system: Method interceptors via `@intercepted_by`.
+- Scoped resolution: singleton, prototype, request, session, transaction, and custom scopes.
+- `UnifiedComponentProxy`: Transparent `lazy=True` and AOP proxy supporting serialization.
+- Tree-based configuration runtime: Advanced mapping with reusable adapters and discriminators (`Annotated[Union[...], Discriminator(...)]`).
+- Observable container context: Built-in stats, health checks (`@health`), observer hooks (`ContainerObserver`), dependency graph export (`export_graph`), and async cleanup.
 
 ---
 
@@ -59,26 +59,15 @@ As Python systems evolve, wiring dependencies by hand becomes fragile and unmain
 
 ```bash
 pip install pico-ioc
-````
+```
 
-For optional features, you can install extras:
+Optional extras:
 
-  * **YAML Configuration:**
+- YAML configuration support (requires PyYAML)
 
-    ```bash
-    pip install pico-ioc[yaml]
-    ```
-
-    (Requires `PyYAML`)
-
-  * **Dependency Graph Export (Rendering):**
-
-    ```bash
-    # You still need Graphviz command-line tools installed separately
-    # This extra is currently not required by the code,
-    # as export_graph generates the .dot file content directly.
-    # pip install pico-ioc[graphviz] # Consider removing if not used by code
-    ```
+  ```bash
+  pip install pico-ioc[yaml]
+  ```
 
 -----
 
@@ -90,7 +79,7 @@ from dataclasses import dataclass
 from pico_ioc import component, configured, configuration, init, EnvSource
 
 # 1. Define configuration with @configured
-@configured(prefix="APP_", mapping="auto") # Auto-detects flat mapping
+@configured(prefix="APP_", mapping="auto")  # Auto-detects flat mapping
 @dataclass
 class Config:
     db_url: str = "sqlite:///demo.db"
@@ -98,14 +87,14 @@ class Config:
 # 2. Define components
 @component
 class Repo:
-    def __init__(self, cfg: Config): # Inject config
+    def __init__(self, cfg: Config):  # Inject config
         self.cfg = cfg
     def fetch(self):
         return f"fetching from {self.cfg.db_url}"
 
 @component
 class Service:
-    def __init__(self, repo: Repo): # Inject Repo
+    def __init__(self, repo: Repo):  # Inject Repo
         self.repo = repo
     def run(self):
         return self.repo.fetch()
@@ -115,11 +104,11 @@ os.environ['APP_DB_URL'] = 'postgresql://user:pass@host/db'
 
 # 3. Build configuration context
 config_ctx = configuration(
-    EnvSource(prefix="") # Read APP_DB_URL from environment
+    EnvSource(prefix="")  # Read APP_DB_URL from environment
 )
 
 # 4. Initialize container
-container = init(modules=[__name__], config=config_ctx) # Pass context via 'config'
+container = init(modules=[__name__], config=config_ctx)  # Pass context via 'config'
 
 # 5. Get and use the service
 svc = container.get(Service)
@@ -129,7 +118,7 @@ print(svc.run())
 del os.environ['APP_DB_URL']
 ```
 
-**Output:**
+Output:
 
 ```
 fetching from postgresql://user:pass@host/db
@@ -150,7 +139,7 @@ test_config_ctx = configuration()
 container = init(
     modules=[__name__],
     config=test_config_ctx,
-    overrides={Repo: FakeRepo()} # Replace Repo with FakeRepo
+    overrides={Repo: FakeRepo()}  # Replace Repo with FakeRepo
 )
 
 svc = container.get(Service)
@@ -159,10 +148,56 @@ assert svc.run() == "fake-data"
 
 -----
 
+## 🧰 Profiles
+
+Use profiles to enable/disable components or configuration branches conditionally.
+
+```python
+# Enable "test" profile when bootstrapping the container
+container = init(
+    modules=[__name__],
+    profiles=["test"]
+)
+```
+
+Profiles are typically referenced in decorators or configuration mappings to include/exclude components and bindings.
+
+-----
+
+## ⚡ Async Components
+
+Pico-IoC supports async lifecycle and resolution.
+
+```python
+import asyncio
+from pico_ioc import component, init
+
+@component
+class AsyncRepo:
+    async def __ainit__(self):
+        # e.g., open async connections
+        self.ready = True
+
+    async def fetch(self):
+        return "async-data"
+
+async def main():
+    container = init(modules=[__name__])
+    repo = await container.aget(AsyncRepo)   # Async resolution
+    print(await repo.fetch())
+
+asyncio.run(main())
+```
+
+- `__ainit__` runs after construction if defined.
+- Use `container.aget(Type)` to resolve components that require async initialization or whose providers are async.
+
+-----
+
 ## 🩺 Lifecycle & AOP
 
 ```python
-import time # For example
+import time
 from pico_ioc import component, init, intercepted_by, MethodInterceptor, MethodCtx
 
 # Define an interceptor component
@@ -183,7 +218,7 @@ class LogInterceptor(MethodInterceptor):
 
 @component
 class Demo:
-    @intercepted_by(LogInterceptor) # Apply the interceptor
+    @intercepted_by(LogInterceptor)  # Apply the interceptor
     def work(self):
         print("   Working...")
         time.sleep(0.01)
@@ -195,7 +230,7 @@ result = c.get(Demo).work()
 print(f"Result: {result}")
 ```
 
-**Output:**
+Output:
 
 ```
 → calling Demo.work
@@ -206,19 +241,42 @@ Result: ok
 
 -----
 
+## 👁️ Observability & Cleanup
+
+- Export a dependency graph in DOT format:
+
+  ```python
+  c = init(modules=[...])
+  dot = c.export_graph()  # Returns DOT graph as a string
+  with open("dependencies.dot", "w") as f:
+      f.write(dot)
+  ```
+
+- Health checks:
+  - Annotate health probes inside components with `@health` for container-level reporting.
+  - The container exposes health information that can be queried in observability tooling.
+
+- Container cleanup:
+  - For sync components: `container.close()`
+  - For async components/resources: `await container.aclose()`
+
+Use cleanup in application shutdown hooks to release resources deterministically.
+
+-----
+
 ## 📖 Documentation
 
 The full documentation is available within the `docs/` directory of the project repository. Start with `docs/README.md` for navigation.
 
-  * **Getting Started:** `docs/getting-started.md`
-  * **User Guide:** `docs/user-guide/README.md`
-  * **Advanced Features:** `docs/advanced-features/README.md`
-  * **Observability:** `docs/observability/README.md`
-  * **Integrations:** `docs/integrations/README.md`
-  * **Cookbook (Patterns):** `docs/cookbook/README.md`
-  * **Architecture:** `docs/architecture/README.md`
-  * **API Reference:** `docs/api-reference/README.md`
-  * **ADR Index:** `docs/adr/README.md`
+- Getting Started: `docs/getting-started.md`
+- User Guide: `docs/user-guide/README.md`
+- Advanced Features: `docs/advanced-features/README.md`
+- Observability: `docs/observability/README.md`
+- Integrations: `docs/integrations/README.md`
+- Cookbook (Patterns): `docs/cookbook/README.md`
+- Architecture: `docs/architecture/README.md`
+- API Reference: `docs/api-reference/README.md`
+- ADR Index: `docs/adr/README.md`
 
 -----
 
@@ -233,11 +291,10 @@ tox
 
 ## 🧾 Changelog
 
-See [CHANGELOG.md](./CHANGELOG.md) — *Significant redesigns and features in v2.0+.*
+See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
 -----
 
 ## 📜 License
 
 MIT — [LICENSE](https://opensource.org/licenses/MIT)
-

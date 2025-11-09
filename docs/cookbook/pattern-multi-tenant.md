@@ -1,21 +1,21 @@
 # Cookbook: Pattern: Multi-Tenant Applications
 
-**Goal:** Build a single application that serves multiple customers (tenants), where each tenant has its own isolated configuration, services, and data.
+Goal: Build a single application that serves multiple customers (tenants), where each tenant has its own isolated configuration, services, and data.
 
-This is a common pattern for SaaS (Software as a Service) applications. The key requirement is **isolation**: Tenant A should *never* be able to access Tenant B's data or services.
+This is a common pattern for SaaS (Software as a Service) applications. The key requirement is isolation: Tenant A should never be able to access Tenant B's data or services.
 
-`pico-ioc` solves this by leveraging its [Container Context](./observability/container-context.md) system. Instead of one global container, you create a **container-per-tenant**.
+pico-ioc solves this by leveraging its Container Context system. Instead of one global container, you create a container-per-tenant.
 
 ## The Pattern
 
-1.  **Base Components:** Define your components (`UserService`, `DatabaseClient`) as usual.
-2.  **Tenant Configuration:** Define a `TenantConfig` component that holds tenant-specific settings (like their database URL or API key).
-3.  **Tenant Manager:** Create a singleton service, `TenantManager`, whose job is to `init()` a *new, isolated* `PicoContainer` for each tenant. It uses `init(overrides={...})` to inject that tenant's specific `TenantConfig`.
-4.  **Middleware:** Write web middleware that:
-    * Reads a tenant identifier from the request (e.g., `X-Tenant-ID` header).
-    * Asks the `TenantManager` for that tenant's specific container.
-    * Activates that container using `with container.as_current()`.
-5.  **Route:** Your route/view code remains simple. It just calls `PicoContainer.get_current().get(UserService)` and automatically receives the correct, isolated service for the current tenant.
+1.  Base Components: Define your components (`TenantService`, `TenantDatabase`) as usual.
+2.  Tenant Configuration: Define a `TenantConfig` component that holds tenant-specific settings (like their database URL, API key, and plan type).
+3.  Tenant Manager: Create a singleton service, `TenantManager`, whose job is to init() a new, isolated PicoContainer for each tenant. It uses `init(overrides={...})` to inject that tenant's specific `TenantConfig`.
+4.  Middleware: Write web middleware that:
+    - Reads a tenant identifier from the request (e.g., `X-Tenant-ID` header).
+    - Asks the `TenantManager` for that tenant's specific container.
+    - Activates that container using `with container.as_current()`.
+5.  Route: Your route/view code remains simple. It just calls `PicoContainer.get_current().get(TenantService)` and automatically receives the correct, isolated service for the current tenant.
 
 ---
 
@@ -26,16 +26,19 @@ This example uses FastAPI to simulate the web layer, but the core logic (`Tenant
 ```python
 # multi_tenant_app.py
 import uvicorn
-import uuid
 from fastapi import FastAPI, Request, Depends
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Dict, Type
+from typing import Dict, Type, Callable, TypeVar
 
 from pico_ioc import (
-    init, PicoContainer, component, 
-    PicoError, configure, cleanup
+    init, PicoContainer, component,
+    PicoError, cleanup
 )
+
+# Generic type for the DI bridge
+T = TypeVar("T")
 
 # --- 1. Define Tenant-Specific Components ---
 
@@ -44,6 +47,7 @@ class TenantConfig:
     """Holds the unique configuration for a single tenant."""
     tenant_id: str
     database_url: str
+    plan_type: str  # e.g., "free" or "pro"
 
 @component
 class TenantDatabase:
@@ -80,7 +84,7 @@ class TenantService:
 @component
 class TenantManager:
     """
-    A *global singleton* responsible for creating,
+    A global singleton responsible for creating,
     caching, and retrieving the container for each tenant.
     """
     def __init__(self):
@@ -94,23 +98,23 @@ class TenantManager:
         """
         if tenant_id not in self.tenant_containers:
             print(f"[TenantManager] Creating new container for {tenant_id}")
-            
+
             # Look up the tenant's config (e.g., from a master DB)
             config = self._load_config_for_tenant(tenant_id)
-            
+
             # Create a new, isolated container for this tenant
             tenant_container = init(
-                modules=[__name__], # Scan this file for components
-                profiles=(config.plan_type,), # e.g., "free" or "pro"
+                modules=[__name__],  # Scan this file for components
+                profiles=(config.plan_type,),  # e.g., "free" or "pro"
                 container_id=f"tenant-{tenant_id}",
                 overrides={
-                    # **THE KEY**: We override TenantConfig
+                    # THE KEY: We override TenantConfig
                     # with this tenant's specific instance.
                     TenantConfig: config
                 }
             )
             self.tenant_containers[tenant_id] = tenant_container
-        
+
         return self.tenant_containers[tenant_id]
 
     def _load_config_for_tenant(self, tenant_id: str) -> TenantConfig:
@@ -121,13 +125,13 @@ class TenantManager:
         }
         if tenant_id not in db_urls:
             raise PicoError(f"Unknown tenant: {tenant_id}")
-        
+
         return TenantConfig(
             tenant_id=tenant_id,
             database_url=db_urls[tenant_id],
             plan_type="pro" if tenant_id == "tenant-2" else "free"
         )
-    
+
     @cleanup
     def shutdown_all_tenants(self):
         """On app shutdown, clean up all tenant containers."""
@@ -162,7 +166,7 @@ async def lifespan(app: FastAPI):
         container_id="root"
     )
     yield
-    await root_container.cleanup_all_async()
+    # Trigger cleanup for all components and tenant containers
     root_container.shutdown()
 
 app = FastAPI(lifespan=lifespan)
@@ -175,36 +179,36 @@ async def tenant_context_middleware(request: Request, call_next):
     """
     tenant_id = request.headers.get("X-Tenant-ID")
     if not tenant_id:
-        return {"error": "X-Tenant-ID header is required"}, 400
-    
+        return JSONResponse({"error": "X-Tenant-ID header is required"}, status_code=400)
+
     try:
         manager = get_tenant_manager()
         tenant_container = manager.get_container_for_tenant(tenant_id)
-        
-        # **THE KEY**: Activate this tenant's container
+
+        # THE KEY: Activate this tenant's container
         # for the duration of this request.
         with tenant_container.as_current():
             response = await call_next(request)
-            
+
         return response
     except Exception as e:
-        return {"error": str(e)}, 500
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 # --- 5. The Application Route ---
 
-def get_service(service_type: Type[T]) -> Callable[..., T]:
-    """DI bridge to get a service from the *active* container."""
-    async def _dependency() -> T:
+def get_service(service_type: Type[T]) -> Callable[[], T]:
+    """DI bridge to get a service from the active container."""
+    def _dependency() -> T:
         # PicoContainer.get_current() will return the
         # container activated by the middleware.
         container = PicoContainer.get_current()
         if not container:
             raise RuntimeError("No active PicoContainer context!")
-        return await container.aget(service_type)
+        return container.get(service_type)
     return _dependency
 
 @app.get("/work")
-async def do_work(
+def do_work(
     # This automatically injects the correct, isolated
     # TenantService for the user making the request.
     service: TenantService = Depends(get_service(TenantService))
@@ -217,16 +221,21 @@ async def do_work(
 
 if __name__ == "__main__":
     print("--- To test, run the following ---")
-    print('curl [http://127.0.0.1:8000/work](http://127.0.0.1:8000/work) -H "X-Tenant-ID: tenant-1"')
-    print('curl [http://127.0.0.1:8000/work](http://127.0.0.1:8000/work) -H "X-Tenant-ID: tenant-2"')
+    print('curl http://127.0.0.1:8000/work -H "X-Tenant-ID: tenant-1"')
+    print('curl http://127.0.0.1:8000/work -H "X-Tenant-ID: tenant-2"')
     uvicorn.run(app, host="127.0.0.1", port=8000)
-````
+```
 
 -----
+
+## Operational Notes
+
+- Container Context: See Container Context for how `PicoContainer.get_current()` and `container.as_current()` ensure request-scoped isolation.
+- Profiles: Using `profiles=(config.plan_type,)` lets you vary components per plan (e.g., "free" vs "pro").
+- Cleanup: Use the `@cleanup` decorator on components that hold resources (DB connections, clients). `container.shutdown()` will call cleanup handlers for all live components.
 
 ## Next Steps
 
 This pattern is extremely powerful for building secure, scalable, and isolated multi-tenant systems.
 
-  * **[Pattern: Hot Reload (Dev Server)](./pattern-hot-reload.md)**: Learn another pattern that uses `container.shutdown()` and `init()` to automatically reload your application on code changes.
-
+- Pattern: Hot Reload (Dev Server): Learn another pattern that uses `container.shutdown()` and `init()` to automatically reload your application on code changes.

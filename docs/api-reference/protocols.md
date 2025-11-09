@@ -4,24 +4,24 @@ This page describes the Python protocols (`typing.Protocol`) used by `pico-ioc` 
 
 ---
 
-## **`MethodInterceptor`** 
+## `MethodInterceptor`
 
 Used for implementing Aspect-Oriented Programming (AOP). Classes implementing this protocol can be applied to component methods using the `@intercepted_by` decorator.
 
 ```python
-from typing import Any, Callable, Protocol, Dict # Added Dict
+from typing import Any, Callable, Protocol, Dict
 
 class MethodCtx:
     """Context object passed to the interceptor."""
-    instance: object      # The component instance being called
-    cls: type             # The class of the component instance
-    method: Callable      # The original bound method being intercepted
-    name: str             # The name of the method being called
-    args: tuple           # Positional arguments passed to the method
-    kwargs: dict          # Keyword arguments passed to the method
-    container: Any        # The PicoContainer instance (type hint might need PicoContainer)
-    local: Dict[str, Any] # A dict for interceptors to share state during one call
-    request_key: Any | None # The current request scope ID, if applicable
+    instance: object         # The component instance being called
+    cls: type                # The class of the component instance
+    method: Callable         # The original bound method being intercepted
+    name: str                # The name of the method being called
+    args: tuple              # Positional arguments passed to the method
+    kwargs: dict             # Keyword arguments passed to the method
+    container: Any           # The PicoContainer instance
+    local: Dict[str, Any]    # A dict for interceptors to share state during one call
+    request_key: Any | None  # The current request scope ID, if applicable
 
 class MethodInterceptor(Protocol):
     def invoke(
@@ -35,19 +35,19 @@ class MethodInterceptor(Protocol):
         Args:
             ctx: The MethodCtx providing call information.
             call_next: A callable that proceeds to the next interceptor
-                       or the original method. You *must* call this.
+                       or the original method. You must call this.
 
         Returns:
             The result of the original method, potentially modified.
         """
-        ... # Your logic before/after call_next(ctx)
+        ...
 ```
 
-**Note:** The `invoke` method can be `async def` if the intercepted method is `async`. `pico-ioc` will handle `await`ing `call_next(ctx)` correctly.
+Note: The `invoke` method can be `async def` if the intercepted method is `async`. `pico-ioc` will handle awaiting `call_next(ctx)` correctly.
 
------
+---
 
-## **`ContainerObserver`** 👀
+## `ContainerObserver`
 
 Used for monitoring container events. Instances are passed to `init(observers=[...])`.
 
@@ -59,7 +59,7 @@ KeyT = Union[str, type]
 class ContainerObserver(Protocol):
     def on_resolve(self, key: KeyT, took_ms: float):
         """
-        Called *after* a component is successfully created and cached.
+        Called after a component is successfully created and cached.
         Not called for prototype scope or cache hits.
 
         Args:
@@ -79,11 +79,11 @@ class ContainerObserver(Protocol):
         ...
 ```
 
------
+---
 
-## **`ScopeProtocol`** 
+## `ScopeProtocol`
 
-Used for defining custom **Scopes**. Instances are passed to `init(custom_scopes={...})`.
+Used for defining custom scopes. Instances are passed to `init(custom_scopes={...})`.
 
 ```python
 from typing import Any, Protocol, Optional
@@ -92,7 +92,7 @@ import contextvars
 class ScopeProtocol(Protocol):
     def get_id(self) -> Any | None:
         """
-        Returns the *current* unique ID for this scope in the active context.
+        Returns the current unique ID for this scope in the active context.
         If the scope is not active, should return None.
         Used by ScopedCaches to find the correct cache instance.
         """
@@ -103,13 +103,13 @@ class ScopeProtocol(Protocol):
     # def deactivate(self, token: Optional[contextvars.Token]) -> None: ...
 ```
 
-**Note:** `pico-ioc` provides `ContextVarScope` as a standard implementation based on `contextvars`.
+Note: `pico-ioc` provides `ContextVarScope` as a standard implementation based on `contextvars`.
 
------
+---
 
-## **`ConfigSource`** (Basic Config - *Internal Usage*) 
+## `ConfigSource` (Basic Config - Internal Usage)
 
-Defines the interface for sources providing **flat key-value** configuration. Implementations (like `EnvSource`, `FlatDictSource`) are passed to the **`configuration(...)` builder function**, not directly to `init()`.
+Defines the interface for sources providing flat key-value configuration. Implementations (like `EnvSource`, `FlatDictSource`) are passed to the `configuration(...)` builder function, not directly to `init()`.
 
 ```python
 from typing import Optional, Protocol
@@ -128,13 +128,13 @@ class ConfigSource(Protocol):
         ...
 ```
 
-**Provided Implementations (for `configuration(...)`):** `EnvSource`, `FileSource` (legacy, less common now), `FlatDictSource`.
+Provided Implementations (for `configuration(...)`): `EnvSource`, `FileSource` (legacy), `FlatDictSource`.
 
------
+---
 
-## **`TreeSource`** (Tree Config - *Internal Usage*) 
+## `TreeSource` (Tree Config - Internal Usage)
 
-Defines the interface for sources providing **nested tree-based** configuration. Implementations (like `JsonTreeSource`, `YamlTreeSource`, `DictSource`) are passed to the **`configuration(...)` builder function**, not directly to `init()`.
+Defines the interface for sources providing nested tree-based configuration. Implementations (like `JsonTreeSource`, `YamlTreeSource`, `DictSource`) are passed to the `configuration(...)` builder function, not directly to `init()`.
 
 ```python
 from typing import Mapping, Any, Protocol
@@ -151,5 +151,4 @@ class TreeSource(Protocol):
         ...
 ```
 
-**Provided Implementations (for `configuration(...)`):** `JsonTreeSource`, `YamlTreeSource`, `DictSource`.
-
+Provided Implementations (for `configuration(...)`): `JsonTreeSource`, `YamlTreeSource`, `DictSource`.
