@@ -21,7 +21,6 @@ This documentation site guides you from your first component to building complex
 | 2. User Guide | Core concepts, configuration, scopes, and testing. | [User Guide Overview](./user-guide/README.md) |
 | 3. Advanced Features | Async, AOP, Event Bus, and conditional logic. | [Advanced Features Overview](./advanced-features/README.md) |
 | 4. Observability | Context, metrics, tracing, and graph export. | [Observability Overview](./observability/README.md) |
-| 5. Integrations | FastAPI, Flask, Django, and AI/LangChain recipes. | [Integrations Overview](./integrations/README.md) |
 | 6. Cookbook (Patterns) | Full architectural solutions (Multi-tenant, Hot-reload, CQRS). | [Cookbook Overview](./cookbook/README.md) |
 | 7. Architecture | Design principles and internal deep-dive. | [Architecture Overview](./architecture/README.md) |
 | 8. API Reference | Glossary and decorator/method cheatsheets. | [API Reference Overview](./api-reference/README.md) |
