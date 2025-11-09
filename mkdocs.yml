@@ -62,7 +62,7 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/pico-ioc/pico-ioc
+      link: https://github.com/dperezcabrera/pico-ioc
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/pico-ioc/
   analytics:
@@ -73,7 +73,6 @@ extra_css:
   - stylesheets/extra.css
 extra_javascript:
   - javascripts/extra.js
-
 
 markdown_extensions:
   - abbr

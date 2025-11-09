@@ -30,3 +30,26 @@
   background-color: var(--md-default-fg-color--lightest);
   font-weight: 700;
 }
+
+
+.md-typeset pre > code {
+  white-space: pre;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.md-typeset code:not(pre code) {
+  white-space: break-spaces;
+}
+
+
+.md-typeset h1 + p,
+.md-typeset h2 + p {
+  margin-top: .2rem;
+}
+
+
+.md-typeset .mermaid {
+  overflow: auto;
+}
+
