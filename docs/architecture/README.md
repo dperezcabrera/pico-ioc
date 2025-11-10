@@ -28,7 +28,7 @@ This section focuses on the "Why" and the "How" of pico-ioc—intended for contr
 - 1. Design Principles (The "Why"): ./design-principles.md
 - 2. Comparison to Other Libraries: ./comparison.md
 - 3. Internals Deep-Dive (The "How"): ./internals.md
-- 4. Architecture Decision Records (ADR Index): ./adr/README.md
+- 4. Architecture Decision Records (ADR Index): ../adr/README.md
 
 ## Conventions Used in This Section
 
@@ -44,7 +44,7 @@ This section focuses on the "Why" and the "How" of pico-ioc—intended for contr
 - Internal details may evolve; prefer ADRs for context and rationale behind changes.
 - Public-facing APIs should be documented separately and may have different stability guarantees than internals.
 - When proposing changes affecting architecture:
-  - Open an ADR (see ./adr/README.md for workflow).
+  - Open an ADR (see ../adr/README.md for workflow).
   - Reference impacted sections in design-principles.md and internals.md.
 
 ## How to Use This Section

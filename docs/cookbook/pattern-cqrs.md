@@ -2,41 +2,31 @@
 
 Goal: Implement a Command Bus pattern, common in CQRS (Command Query Responsibility Segregation) architectures, using pico-ioc. The bus should automatically discover and route commands to their respective handlers without tight coupling.
 
-Key pico-ioc Feature: List Injection by Type. The CommandBus will simply request List[CommandHandler] in its constructor, and pico-ioc will automatically inject all registered components that implement the CommandHandler protocol.
+Key pico-ioc Feature: List Injection (`List[CommandHandler]`) or Dictionary Injection (`Dict[Type, CommandHandler]`).
 
 ---
 
 ## The Pattern
 
-1. Contracts (Protocol): Define Command (a marker) and CommandHandler (an interface specifying command_type and handle method).
-2. Commands: Simple data classes inheriting from Command (e.g., CreateUserCommand).
-3. Handlers: Implement CommandHandler for each command. Decorate them with @component so pico-ioc finds them.
-4. Command Bus: A central @component that:
-   - Injects List[CommandHandler] (the magic part ✨).
-   - Creates a dictionary mapping command types to handlers in its __init__.
-   - Provides a dispatch(command) method that looks up the correct handler and executes it.
-5. Bootstrap: Use init() to scan all modules containing commands, handlers, and the bus. get() the CommandBus and use it.
+1.  **Contracts (Protocol):** Define `Command` (a marker) and `CommandHandler` (an interface).
+2.  **Commands:** Simple data classes inheriting from `Command` (e.g., `CreateUserCommand`).
+3.  **Handlers:** Implement `CommandHandler` for each command. Decorate them with `@component`.
+4.  **Command Bus:** A central `@component` that discovers all handlers.
+5.  **Bootstrap:** Use `init()` to scan all modules. `pico-ioc` automatically injects all found handlers into the bus.
+
+We will explore two ways to build the `CommandBus`:
+* **Pattern 1 (Manual Mapping):** Injects `List[CommandHandler]` and builds the map manually.
+* **Pattern 2 (Automatic Mapping):** Injects `Dict[Type, CommandHandler]` directly (requires `pico-ioc` v2.x+).
 
 ---
 
-## Full, Runnable Example
+## Full Example (Pattern 1: Manual Mapping)
 
-### 1. Project Structure
+This pattern works on all versions of `pico-ioc` and is very explicit.
 
-```
-.
-├── cqrs_app/
-│   ├── __init__.py
-│   ├── bus.py           <-- The CommandBus component
-│   ├── commands.py      <-- Command definitions
-│   ├── contracts.py     <-- Protocol definitions
-│   └── handlers.py      <-- CommandHandler implementations
-└── main.py              <-- Application entrypoint
-```
+### 1. Contracts (cqrs_app/contracts.py)
 
-### 2. Contracts (cqrs_app/contracts.py)
-
-Define the common language using typing.Protocol.
+Define the common language using `typing.Protocol`.
 
 ```python
 # cqrs_app/contracts.py
@@ -46,12 +36,12 @@ from typing import Protocol, Type, TypeVar
 class Command:
     pass
 
-C = TypeVar("C", bound=Command)
+C = TypeVar("C", bound=Command, contravariant=True)
 
 # Protocol for all command handlers
 class CommandHandler(Protocol[C]):
     @property
-    def command_type(self) -> Type[C]:
+    def command_type(self) -> Type[Command]:
         """The specific Command type this handler deals with."""
         ...
 
@@ -60,9 +50,7 @@ class CommandHandler(Protocol[C]):
         ...
 ```
 
-### 3. Commands (cqrs_app/commands.py)
-
-Define simple data classes for commands.
+### 2\. Commands (cqrs\_app/commands.py)
 
 ```python
 # cqrs_app/commands.py
@@ -73,23 +61,19 @@ from .contracts import Command
 class CreateUserCommand(Command):
     username: str
     email: str
-
-@dataclass(frozen=True)
-class DeactivateUserCommand(Command):
-    user_id: int
 ```
 
-### 4. Handlers (cqrs_app/handlers.py)
+### 3\. Handlers (cqrs\_app/handlers.py)
 
-Implement the business logic for each command. Crucially, decorate each handler with @component.
+Implement the business logic, decorated with `@component`.
 
 ```python
 # cqrs_app/handlers.py
 from pico_ioc import component
 from .contracts import CommandHandler
-from .commands import CreateUserCommand, DeactivateUserCommand
+from .commands import CreateUserCommand
 
-@component  # <-- Make it discoverable by pico-ioc
+@component # <-- Make it discoverable by pico-ioc
 class CreateUserHandler(CommandHandler[CreateUserCommand]):
     @property
     def command_type(self) -> type[CreateUserCommand]:
@@ -100,26 +84,12 @@ class CreateUserHandler(CommandHandler[CreateUserCommand]):
             f"[HANDLER] Creating user '{command.username}' "
             f"with email '{command.email}'..."
         )
-        # ... actual database logic would go here ...
         print("[HANDLER] User created successfully.")
-
-@component  # <-- Make it discoverable by pico-ioc
-class DeactivateUserHandler(CommandHandler[DeactivateUserCommand]):
-    @property
-    def command_type(self) -> type[DeactivateUserCommand]:
-        return DeactivateUserCommand
-
-    def handle(self, command: DeactivateUserCommand) -> None:
-        print(f"[HANDLER] Deactivating user with ID '{command.user_id}'...")
-        # ... actual database logic would go here ...
-        print("[HANDLER] User deactivated.")
-
-# Add more handlers here by just creating new @component classes!
 ```
 
-### 5. Command Bus (cqrs_app/bus.py)
+### 4\. Command Bus (cqrs\_app/bus.py)
 
-This component injects all known handlers automatically.
+This component injects `List[CommandHandler]` automatically.
 
 ```python
 # cqrs_app/bus.py
@@ -127,54 +97,123 @@ from typing import List, Dict, Type
 from pico_ioc import component
 from .contracts import Command, CommandHandler
 
-@component  # <-- The CommandBus is also a component
+@component # <-- The CommandBus is also a component
 class CommandBus:
     def __init__(self, handlers: List[CommandHandler]):
         """
         Injects ALL registered components that implement CommandHandler.
-        This is the core of the pattern's decoupling.
         """
         print(f"[BUS] Initializing with {len(handlers)} handlers.")
-
+        
         handler_map: Dict[Type[Command], CommandHandler] = {}
         for h in handlers:
             cmd_type = h.command_type
             if cmd_type in handler_map:
-                raise ValueError(
-                    f"Duplicate handler detected for command type: {cmd_type.__name__}"
-                )
+                raise ValueError(f"Duplicate handler for {cmd_type.__name__}")
             handler_map[cmd_type] = h
-
+            
         self._handler_map = handler_map
         print(f"[BUS] Registered handlers for: {', '.join(t.__name__ for t in self._handler_map.keys())}")
 
     def dispatch(self, command: Command) -> None:
-        """Finds the appropriate handler and executes it."""
         handler = self._handler_map.get(type(command))
         if not handler:
-            raise ValueError(
-                f"No handler registered for command type: {type(command).__name__}"
-            )
-
+            raise ValueError(f"No handler for {type(command).__name__}")
+        
         print(f"\n[BUS] Dispatching command '{type(command).__name__}'...")
-        try:
-            handler.handle(command)
-            print(f"[BUS] Command '{type(command).__name__}' handled successfully.")
-        except Exception as e:
-            print(f"[BUS] Error handling command '{type(command).__name__}': {e}")
-            # Add proper error handling/logging here
-            raise
+        handler.handle(command)
 ```
 
-### 6. Main Application (main.py)
+-----
 
-Initialize the container and run the application.
+## Pattern 2: Automatic Dictionary Injection
+
+If your project supports dictionary injection, you can simplify the `CommandBus` significantly. This pattern requires handlers to be registered with their `Type` as a key.
+
+*(Note: This requires `CommandHandler` to be a `class`, not a `Protocol`, if you are using generic subclass detection. For this example, we assume `pico-ioc`'s `Dict[Type, T]` injection uses the component's concrete class type as the key).*
+
+### 1\. Contracts & Commands
+
+(Same as Pattern 1)
+
+### 2\. Handlers
+
+The handlers are the same, just ensure they are registered as components.
+
+```python
+# cqrs_app/handlers.py
+from pico_ioc import component
+from .contracts import CommandHandler
+from .commands import CreateUserCommand
+
+@component
+class CreateUserHandler(CommandHandler[CreateUserCommand]):
+    # ... (implementation same as pattern 1) ...
+    @property
+    def command_type(self) -> type[CreateUserCommand]:
+        return CreateUserCommand
+
+    def handle(self, command: CreateUserCommand):
+        print(f"[HANDLER] Creating user '{command.username}'...")
+```
+
+### 3\. Command Bus (Automatic Map)
+
+The `CommandBus` `__init__` becomes much simpler.
+
+```python
+# cqrs_app/bus_auto.py
+from typing import Dict, Type
+from pico_ioc import component
+from .contracts import Command, CommandHandler
+from .commands import CreateUserCommand # Import command types
+from .handlers import CreateUserHandler # Import handler types
+
+@component
+class CommandBusAuto:
+    def __init__(
+        self,
+        # Asks pico-ioc to build a map of {HandlerType: HandlerInstance}
+        handler_instances_map: Dict[Type, CommandHandler]
+    ):
+        """
+        Injects a map of {ComponentType: ComponentInstance} for all
+        components implementing CommandHandler.
+        """
+        print(f"[BUS-AUTO] Initializing with {len(handler_instances_map)} handlers.")
+        
+        # We must invert this map to be {CommandType: HandlerInstance}
+        handler_map: Dict[Type[Command], CommandHandler] = {}
+        for h_type, h_instance in handler_instances_map.items():
+            cmd_type = h_instance.command_type
+            if cmd_type in handler_map:
+                raise ValueError(f"Duplicate handler for {cmd_type.__name__}")
+            handler_map[cmd_type] = h_instance
+            
+        self._handler_map = handler_map
+        print(f"[BUS-AUTO] Registered handlers for: {', '.join(t.__name__ for t in self._handler_map.keys())}")
+
+    def dispatch(self, command: Command) -> None:
+        handler = self._handler_map.get(type(command))
+        if not handler:
+            raise ValueError(f"No handler for {type(command).__name__}")
+        
+        print(f"\n[BUS-AUTO] Dispatching command '{type(command).__name__}'...")
+        handler.handle(command)
+```
+
+**Note on Dictionary Injection:** The `Dict[Type, T]` injection provides a map of `{ComponentClass: ComponentInstance}`. We still need the `command_type` property to build the final `dispatch` map, as the key we need is the `Command` type, not the `Handler` type.
+
+-----
+
+## 4\. Main Application (main.py)
 
 ```python
 # main.py
 from pico_ioc import init
-from cqrs_app.bus import CommandBus
-from cqrs_app.commands import CreateUserCommand, DeactivateUserCommand
+from cqrs_app.bus import CommandBus # Using Pattern 1
+# from cqrs_app.bus_auto import CommandBusAuto # Using Pattern 2
+from cqrs_app.commands import CreateUserCommand
 
 def run_app():
     print("--- Initializing Container ---")
@@ -182,17 +221,12 @@ def run_app():
     container = init(modules=["cqrs_app"])
     print("--- Container Initialized ---")
 
-    # Get the fully wired CommandBus
     command_bus = container.get(CommandBus)
-
-    # Dispatch commands
+    
     try:
         command_bus.dispatch(
             CreateUserCommand(username="Alice", email="alice@example.com")
         )
-        command_bus.dispatch(DeactivateUserCommand(user_id=123))
-        # Add a new command just by creating a new handler!
-        # command_bus.dispatch(SomeOtherCommand(...))
     except ValueError as e:
         print(f"Dispatch Error: {e}")
 
@@ -200,20 +234,12 @@ if __name__ == "__main__":
     run_app()
 ```
 
----
+-----
 
-## 7. Benefits
+## 5\. Benefits
 
-- Decoupled: The CommandBus doesn't know about specific handlers. Handlers don't know about the bus or each other. Adding a new command+handler requires zero changes to existing code.
-- Simple: Relies on standard Python features (Protocol, List) and pico-ioc's core DI mechanism.
-- Testable: Handlers can be unit-tested in isolation. The CommandBus itself has minimal logic.
-- Explicit: The flow is clear: dispatch -> find handler -> handle.
+  * **Decoupled:** The `CommandBus` doesn't know about specific handlers. Handlers don't know about the bus. Adding a new command+handler requires zero changes to existing code.
+  * **Simple:** Relies on standard Python features and `pico-ioc`'s core DI mechanism.
+  * **Testable:** Handlers can be unit-tested in isolation.
 
----
-
-## 8. Tips and Troubleshooting
-
-- Ensure discovery: The package/module containing your @component classes must be included in init(modules=[...]).
-- One handler per command: This example enforces a single handler per command type. If multiple are registered, CommandBus.__init__ raises a ValueError.
-- Structural typing: Classes don't have to inherit from CommandHandler to be discovered by type; they just need to provide the command_type property and handle method with compatible signatures. Inheriting from CommandHandler[...] helps static type checking.
-- Testing: You can unit-test CommandBus by instantiating it with a manual list of fake handlers (bypassing the container), or by initializing a minimal container and registering test components.
+<!-- end list -->

@@ -1,192 +1,216 @@
-# Qualifiers & List Injection
+# Injecting Collections: Lists, Sets & Dictionaries
 
-In the guides so far, we've assumed a simple, one-to-one relationship: you ask for `Database`, you get one `Database`.
+In the guides so far, we've mostly assumed a one-to-one relationship: you ask for `Database`, you get one `Database`.
 
 But what about a one-to-many relationship? This is a very common scenario:
-
 * You have one `Sender` interface, but multiple implementations: `EmailSender`, `SmsSender`, and `PushNotificationSender`.
-* You have one `PaymentProvider` protocol, but two implementations: `StripeProvider` and `PayPalProvider`.
+* A `NotificationService` needs to get *all* of them.
+* A `CommandBus` needs a *map* of all `CommandHandlers`.
 
-This creates two problems:
-1.  If a component just asks for `Sender`, how does the container know which one to inject? (This is solved by [`primary=True`](../advanced-features/conditional-binding.md)).
-2.  What if a component (like a `NotificationService`) needs all `Sender` implementations?
-
-This guide solves the second problem using Qualifiers. Qualifiers are "tags" you attach to your components, allowing you to inject specific lists of implementations.
+`pico-ioc` handles all of these scenarios automatically by recognizing collection types in your `__init__` constructor.
 
 ---
 
-## 1. The Concept: Tag and Request
+## 1. Automatic List/Collection Injection
 
-The pattern is simple:
+If you ask for a list or set of an interface (like `List[Sender]`, `Set[Sender]`, or `Iterable[Sender]`), `pico-ioc` will:
+1.  Find all components that implement or inherit from that interface (`Sender`).
+2.  Create an instance of each one.
+3.  Inject them as a `list` (regardless of whether you asked for a `List`, `Set`, or `Iterable`).
 
-1.  Define a Tag: You create a `Qualifier` instance. This is your tag.
+### Step 1: Define Components
+
+Define multiple components that implement the same interface (`IService` in this case).
+
+```python
+# app/services.py
+from typing import Protocol
+from pico_ioc import component
+
+class IService(Protocol):
+    def serve(self) -> str: ...
+
+@component
+class ServiceA(IService):
+    def serve(self) -> str:
+        return "A"
+
+@component
+class ServiceB(IService):
+    def serve(self) -> str:
+        return "B"
+```
+
+### Step 2: Inject the Collection
+
+Your consumer component simply requests `List[IService]`, `Set[IService]`, or `Iterable[IService]`.
+
+```python
+# app/consumer.py
+from typing import List, Set, Iterable
+from pico_ioc import component
+from app.services import IService
+
+@component
+class Consumer:
+    def __init__(
+        self,
+        services_list: List[IService],
+        services_set: Set[IService]
+    ):
+        # This will be [ServiceA(), ServiceB()]
+        self.services = services_list
+        
+        # This will ALSO be [ServiceA(), ServiceB()]
+        self.services_set_as_list = services_set
+        print(f"Loaded {len(self.services)} services.")
+
+# --- main.py ---
+from pico_ioc import init
+from app.consumer import Consumer
+
+container = init(modules=["app.services", "app.consumer"])
+consumer = container.get(Consumer) # Output: Loaded 2 services.
+```
+
+-----
+
+## 2\. Automatic Dictionary Injection
+
+This is a powerful feature for patterns like CQRS or strategy maps. `pico-ioc` can build a dictionary of components, using either **strings** or **types** as the dictionary keys.
+
+### `Dict[str, T]` (Keyed by Name)
+
+If you request `Dict[str, IService]`, `pico-ioc` will inject a dictionary where:
+
+  * **Keys** are the component's registered `name` (from `@component(name=...)`).
+  * **Values** are the component instances.
+
+<!-- end list -->
+
+```python
+# app/services.py
+from pico_ioc import component
+
+@component(name="serviceA") # <-- Registered name
+class ServiceA(IService):
+    ...
+
+@component(name="serviceB") # <-- Registered name
+class ServiceB(IService):
+    ...
+
+# app/consumer.py
+from typing import Dict
+from app.services import IService
+
+@component
+class DictConsumer:
+    def __init__(self, service_map: Dict[str, IService]):
+        # service_map will be:
+        # {
+        #   "serviceA": ServiceA(),
+        #   "serviceB": ServiceB()
+        # }
+        self.service_map = service_map
+
+    def call_a(self):
+        return self.service_map["serviceA"].serve()
+```
+
+### `Dict[Type, T]` (Keyed by Type)
+
+If you request `Dict[Type, IService]`, `pico-ioc` will inject a dictionary where:
+
+  * **Keys** are the *class types* of the components (e.g., `ServiceA`, `ServiceB`).
+  * **Values** are the component instances.
+
+This is extremely useful for building dispatch maps in patterns like CQRS.
+
+```python
+# app/consumer.py
+from typing import Dict, Type
+from app.services import IService, ServiceA, ServiceB
+
+@component
+class TypeDictConsumer:
+    def __init__(self, service_map: Dict[Type, IService]):
+        # service_map will be:
+        # {
+        #   ServiceA: ServiceA(),
+        #   ServiceB: ServiceB()
+        # }
+        self.service_map = service_map
+
+    def call_a(self):
+        return self.service_map[ServiceA].serve()
+```
+
+-----
+
+## 3\. Using Qualifiers to Filter Collections
+
+What if you don't want *all* services, just a specific subset? This is where `Qualifiers` are used. Qualifiers act as **filters** for list and dictionary injections.
+
+1.  **Define a Qualifier:**
+
     ```python
     from pico_ioc import Qualifier
 
-    NOTIFICATION = Qualifier("notification")
-    PAYMENT = Qualifier("payment")
+    FAST_SERVICES = Qualifier("fast")
+    SLOW_SERVICES = Qualifier("slow")
     ```
-2.  Tag Your Components: You use the `qualifiers=[...]` parameter within the `@component` (or `@provides`) decorator to apply one or more tags to your components.
+
+2.  **Tag Your Components:**
+
     ```python
-    from pico_ioc import component
-    # Assume NOTIFICATION and PAYMENT are Qualifier instances
+    @component(name="serviceA", qualifiers=[FAST_SERVICES])
+    class ServiceA(IService): ...
 
-    @component(qualifiers=[NOTIFICATION])  # <-- Pass qualifiers as a list/tuple
-    class EmailSender(Sender): ...
+    @component(name="serviceB", qualifiers=[FAST_SERVICES, SLOW_SERVICES])
+    class ServiceB(IService): ...
 
-    @component(qualifiers=[NOTIFICATION])
-    class SmsSender(Sender): ...
-
-    @component(qualifiers=[PAYMENT])
-    class StripeProvider(PaymentProvider): ...
+    @component(name="serviceC", qualifiers=[SLOW_SERVICES])
+    class ServiceC(IService): ...
     ```
-3.  Request a Tagged List: In your service, you use `typing.Annotated` to request a `List` of all components that match a specific `Qualifier`.
+
+3.  **Request a Filtered Collection:**
+    You use `typing.Annotated` to combine the collection type with the `Qualifier` tag.
+
     ```python
-    from typing import List, Annotated
+    from typing import List, Dict, Annotated
 
     @component
-    class NotificationService:
+    class FilteredConsumer:
         def __init__(
             self,
-            senders: Annotated[List[Sender], NOTIFICATION]
+            # Gets [ServiceA(), ServiceB()]
+            fast_list: Annotated[List[IService], FAST_SERVICES],
+            
+            # Gets [ServiceB(), ServiceC()]
+            slow_list: Annotated[List[IService], SLOW_SERVICES],
+
+            # Gets {"serviceA": ServiceA(), "serviceB": ServiceB()}
+            fast_map: Annotated[Dict[str, IService], FAST_SERVICES]
         ):
-            # self.senders will be [EmailSender(), SmsSender()]
-            self.senders = senders
+            ...
     ```
 
-Notes:
-- The injected list includes components that match both the requested type and the qualifier.
-- You can attach multiple qualifiers to the same component; it will appear in lists for each qualifier requested.
+### Summary: Injection Rules
 
----
-
-## 2. Step-by-Step Example
-
-Let's build a complete example. We'll create a `PaymentService` that needs to process a payment with all available payment providers.
-
-### Step 1: Define the Interface (Protocol)
-
-First, we define the common interface. A `Protocol` is perfect for this.
-
-```python
-# providers.py
-from typing import Protocol
-
-class PaymentProvider(Protocol):
-    """The common interface for all payment providers."""
-    def process_payment(self, amount: float) -> str: ...
-```
-
-### Step 2: Define the Qualifiers
-
-We'll create a `Qualifier` to tag all our payment providers.
-
-```python
-# providers.py
-from pico_ioc import Qualifier
-
-PAYMENT = Qualifier("payment")
-```
-
-### Step 3: Tag the Implementations
-
-Now, we create our concrete classes. We decorate them with `@component` as usual, but we also add the `qualifiers=[PAYMENT]` parameter.
-
-```python
-# providers.py
-from pico_ioc import component
-
-@component(qualifiers=[PAYMENT])  # <-- Pass the qualifier here
-class StripeProvider(PaymentProvider):
-    def process_payment(self, amount: float) -> str:
-        print(f"Processing ${amount} with Stripe...")
-        return "stripe_tx_123"
-
-@component(qualifiers=[PAYMENT])  # <-- Pass the qualifier here
-class PayPalProvider(PaymentProvider):
-    def process_payment(self, amount: float) -> str:
-        print(f"Processing ${amount} with PayPal...")
-        return "paypal_tx_abc"
-
-@component
-class SomeOtherComponent:
-    """This component is NOT a payment provider and won't be injected."""
-    pass
-```
-
-### Step 4: Inject the Tagged List
-
-Finally, we create our `PaymentService`. Its constructor asks for a `List[PaymentProvider]` that is `Annotated` with our `PAYMENT` tag.
-
-```python
-# services.py
-from typing import List, Annotated
-from pico_ioc import component
-from .providers import PaymentProvider, PAYMENT
-
-@component
-class PaymentService:
-    def __init__(
-        self,
-        providers: Annotated[List[PaymentProvider], PAYMENT]
-    ):
-        # pico-ioc injects a list of all components
-        # tagged with qualifiers=[PAYMENT]
-        self.providers = providers
-        print(f"PaymentService loaded with {len(self.providers)} providers.")
-
-    def charge(self, amount: float):
-        for provider in self.providers:
-            provider.process_payment(amount)
-```
-
-### Step 5: Run It
-
-When we initialize the container and get the `PaymentService`, it will automatically have the correct list injected.
-
-```python
-# main.py
-from pico_ioc import init
-from services import PaymentService
-
-# We must tell init() to scan both modules
-container = init(modules=["providers", "services"])
-
-service = container.get(PaymentService)
-service.charge(100.00)
-
-# Output:
-# PaymentService loaded with 2 providers.
-# Processing $100.00 with Stripe...
-# Processing $100.00 with PayPal...
-```
-
-The list `service.providers` contains instances of `StripeProvider` and `PayPalProvider`, but not `SomeOtherComponent`.
-
------
-
-## Tips and Common Pitfalls
-
-- Always import `Annotated` from `typing` when requesting qualified lists.
-- Pass qualifiers as a sequence in the decorator: `qualifiers=[TAG1, TAG2]`.
-- If no components match the requested qualifier and type, the injected list will be empty.
-- Components can have multiple qualifiers and will be included in each matching list request.
-- Qualifier identity is based on the `Qualifier` instance, not just the string name—re-use the same instance when tagging and requesting.
-
------
-
-## Summary
-
-Qualifiers are the standard way to manage one-to-many dependencies in `pico-ioc`.
-
-- `Qualifier("name")` creates a unique tag instance (e.g., `PAYMENT = Qualifier("payment")`).
-- `@component(qualifiers=[TAG, ...])` (or `@provides`) applies tags to a component.
-- `Annotated[List[Interface], TAG]` requests a list of all components that have been tagged with `TAG`.
+  * `List[T]`: Injects a `list` of all components implementing `T`.
+  * `Dict[str, T]`: Injects a `dict` mapping component `name` to the instance.
+  * `Dict[Type, T]`: Injects a `dict` mapping component `type` to the instance.
+  * `Annotated[List[T], Q("tag")]`: Injects a `list` of all `T` components *filtered* by the "tag".
+  * `Annotated[Dict[...], Q("tag")]`: Injects a `dict` of all `T` components *filtered* by the "tag".
 
 -----
 
 ## Next Steps
 
-You now know how to register components, configure them, control their lifecycle, and inject specific lists. The final piece of the core user guide is learning how to test your application.
+You now know how to register components, configure them, control their lifecycle, and inject specific lists or dictionaries. The final piece of the core user guide is learning how to test your application.
 
-- Testing Applications: Learn how to use `overrides` and `profiles` to mock dependencies and test your services in isolation. See [Testing Applications](./testing.md).
+  * Testing Applications: Learn how to use `overrides` and `profiles` to mock dependencies and test your services in isolation. See [Testing Applications](https://www.google.com/search?q=./testing.md).
+
+<!-- end list -->
+
