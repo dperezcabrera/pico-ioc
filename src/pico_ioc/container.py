@@ -1,9 +1,10 @@
-# src/pico_ioc/container.py
-
 import inspect
 import contextvars
 import functools
-from typing import Any, Dict, List, Optional, Tuple, overload, Union, Callable, Iterable, Set, get_args, get_origin, Annotated, Protocol, Mapping
+from typing import (
+    Any, Dict, List, Optional, Tuple, overload, Union, Callable, 
+    Iterable, Set, get_args, get_origin, Annotated, Protocol, Mapping, Type
+)
 from contextlib import contextmanager
 from .constants import LOGGER, PICO_META
 from .exceptions import ComponentCreationError, ProviderNotFoundError, AsyncResolutionError, ConfigurationError
@@ -433,19 +434,61 @@ class PicoContainer:
             
     def _resolve_args(self, dependencies: Tuple[DependencyRequest, ...]) -> Dict[str, Any]:
         kwargs: Dict[str, Any] = {}
-        if not dependencies:
+        if not dependencies or self._locator is None:
             return kwargs
             
         for dep in dependencies:
             if dep.is_list:
                 keys: Tuple[KeyT, ...] = ()
-                if self._locator is not None and isinstance(dep.key, type):
+                if isinstance(dep.key, type):
                     keys = tuple(self._locator.collect_by_type(dep.key, dep.qualifier))
                 kwargs[dep.parameter_name] = [self.get(k) for k in keys]
                 continue
+            
+            if dep.is_dict:
+                value_type = dep.key
+                key_type = dep.dict_key_type
+                result_map: Dict[Any, Any] = {}
+                
+                keys_to_resolve: Tuple[KeyT, ...] = ()
+                if isinstance(value_type, type):
+                    keys_to_resolve = tuple(self._locator.collect_by_type(value_type, dep.qualifier))
+                
+                for comp_key in keys_to_resolve:
+                    instance = self.get(comp_key)
+                    md = self._locator._metadata.get(comp_key)
+                    if md is None:
+                        continue
+                    
+                    dict_key: Any = None
+                    if key_type is str:
+                        dict_key = md.pico_name
+                        if dict_key is None:
+                            if isinstance(comp_key, str):
+                                dict_key = comp_key
+                            else:
+                                dict_key = getattr(comp_key, "__name__", str(comp_key))
+                    elif key_type is type or key_type is Type:
+                        dict_key = md.concrete_class or md.provided_type
+                    elif key_type is Any:
+                        dict_key = md.pico_name
+                        if dict_key is None:
+                            if isinstance(comp_key, str):
+                                dict_key = comp_key
+                            else:
+                                dict_key = getattr(comp_key, "__name__", str(comp_key))
+                    
+                    if dict_key is not None:
+                        if (key_type is type or key_type is Type) and not isinstance(dict_key, type):
+                            continue
+                        
+                        result_map[dict_key] = instance
+                        
+                kwargs[dep.parameter_name] = result_map
+                continue
 
             primary_key = dep.key
-            if isinstance(primary_key, str) and self._locator is not None:
+            if isinstance(primary_key, str):
                 mapped = self._locator.find_key_by_name(primary_key)
                 primary_key = mapped if mapped is not None else primary_key
             

@@ -80,9 +80,13 @@ class ComponentLocator:
                 return isinstance(inst, proto)
         except Exception:
             pass
+        
         for name, val in proto.__dict__.items():
-            if name.startswith("_") or not callable(val):
+            if name.startswith("_") or not (callable(val) or name in getattr(proto, "__annotations__", {})):
                 continue
+            
+            if not hasattr(typ, name):
+                return False
         return True
         
     def collect_by_type(self, t: type, q: Optional[str]) -> List[KeyT]:
@@ -119,6 +123,10 @@ class ComponentLocator:
         deps: List[KeyT] = []
         for dep in md.dependencies:
             if dep.is_list:
+                if isinstance(dep.key, type):
+                    keys = self.collect_by_type(dep.key, dep.qualifier)
+                    deps.extend(keys)
+            elif dep.is_dict:
                 if isinstance(dep.key, type):
                     keys = self.collect_by_type(dep.key, dep.qualifier)
                     deps.extend(keys)
