@@ -7,6 +7,47 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.1.2] - 2025-11-10
+
+### Added ✨
+
+* **Collection & Mapping Injection:** Constructors can now request collection-like dependencies and dictionaries:
+
+  * Supported collection origins: `List`, `Set`, `Iterable`, `Sequence`, `Collection`, `Deque` (resolved as concrete **lists** at injection time).
+  * Supported mappings: `Dict[K, V]` / `Mapping[K, V]` where `K ∈ {str, type, Any}` and `V` is a component/protocol.
+  * `Annotated[..., Qualifier("q")]` on the element type is honored for both collections and dict values.
+* **Element-type analysis for dicts:** Dependency analysis records the dict key type and value element type for correct resolution.
+
+### Changed
+
+* **Analyzer:** `analyze_callable_dependencies` now recognizes a broader set of `collections.abc` origins for collections and supports dict/mapping shapes, including qualifier propagation from `Annotated` element types.
+* **Container:** Dictionary injection computes keys from component metadata:
+
+  * `Dict[str, V]` → uses `pico_name` (or string key/fallback to class `__name__`).
+  * `Dict[type, V]` → uses the concrete class (or provided type).
+  * `Dict[Any, V]` → chooses sensible defaults (`pico_name` → string key → class name).
+* **Type imports & internals:** Expanded typing/runtime imports to support the new analysis and resolution paths.
+
+### Fixed 🧩
+
+* **Protocol matching:** `ComponentLocator` now checks attribute presence (including annotated attributes), reducing false positives when matching `Protocol` types.
+* **Resolution guard:** `_resolve_args` safely no-ops when the locator is unavailable, avoiding edge-case errors during early initialization.
+
+### Docs 📚
+
+* **README:** Removed the deprecated *Integrations* entry from the docs index.
+* **Architecture:** Corrected ADR links to `../adr/README.md` and references to the ADR workflow.
+
+### Tests 🧪
+
+* **New:** `tests/test_collection_injection.py` covering:
+
+  * Analyzer plans for collections/dicts (including qualifiers).
+  * Container resolution of lists/sets/iterables/sequences/deques as lists.
+  * Dictionary injection for `Dict[str, V]` and `Dict[type, V]`.
+
+---
+
 ## [2.1.1] - 2025-11-02
 
 ### Added
