@@ -275,7 +275,6 @@ The full documentation is available within the `docs/` directory of the project 
 - User Guide: `docs/user-guide/README.md`
 - Advanced Features: `docs/advanced-features/README.md`
 - Observability: `docs/observability/README.md`
-- Integrations: `docs/integrations/README.md`
 - Cookbook (Patterns): `docs/cookbook/README.md`
 - Architecture: `docs/architecture/README.md`
 - API Reference: `docs/api-reference/README.md`

@@ -21,7 +21,8 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 | **Scopes (ContextVar)** | ✅ Built-in | ✅ Yes | ❌ No |
 | **Configuration Binding** | ✅ Unified Tree+Flat | ✅ Basic (KV) | ❌ Manual |
 | **Qualifiers/Tags** | ✅ Yes | ✅ Yes (Providers) | ❌ No |
-| **List Injection** | ✅ Yes (`Annotated`) | ✅ Yes (`List`) | ❌ No |
+| **List Injection** | ✅ Yes (Native) | ✅ Yes (`List`) | ❌ No |
+| **Dictionary Injection** | ✅ Yes (Native) | ✅ Yes (`Dict`) | ❌ No |
 | **Lazy Loading (`lazy`)** | ✅ Built-in | ✅ Yes | ❌ No |
 | **Conditional Binding** | ✅ Full (Profile+) | ✅ Basic (Config) | ❌ No |
 | **Observability (Context)**| ✅ Built-in | ❌ Manual | ❌ Manual |
@@ -48,6 +49,7 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
     * **Async Native:** Seamless integration with `asyncio` across resolution (`aget`), lifecycle, and AOP.
     * **AOP:** Built-in method interception (`@intercepted_by`) for cross-cutting concerns.
     * **Unified Configuration:** Powerful `@configured` binding handling both flat (ENV-like) and tree (YAML/JSON) sources via `configuration(...)` builder, with clear precedence and normalization rules.
+    * **Native Collections:** Injects `List[T]`, `Set[T]`, `Dict[str, T]`, and `Dict[Type, T]` automatically.
     * **Observability:** Designed for monitoring via `stats()`, `ContainerObserver`, and `container_id` context.
 * **Weaknesses:**
     * Requires Python 3.10+.
@@ -96,3 +98,4 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 This concludes the Architecture section. Explore the API Reference for detailed documentation on specific functions and decorators.
 
 * **[API Reference Overview](../api-reference/README.md)**: Quick lookup for all public APIs.
+
