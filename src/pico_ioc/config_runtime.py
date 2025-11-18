@@ -305,8 +305,11 @@ class ObjectGraphBuilder:
         if t is int:
             if isinstance(node, int):
                 return node
-            if isinstance(node, str) and node.strip().isdigit() or (isinstance(node, str) and node.strip().startswith("-") and node.strip()[1:].isdigit()):
-                return int(node)
+            if isinstance(node, str):
+                try:
+                    return int(node.strip())
+                except ValueError:
+                    pass
             raise ConfigurationError(f"Expected int at {'.'.join(path)}")
         if t is float:
             if isinstance(node, (int, float)):

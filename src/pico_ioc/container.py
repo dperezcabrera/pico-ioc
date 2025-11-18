@@ -205,7 +205,11 @@ class PicoContainer:
                 args = self._resolve_args(configure_deps)
                 res = m(**args)
                 if inspect.isawaitable(res):
-                    LOGGER.warning(f"Async configure method {m} called during sync get. Awaitable ignored.")
+                    raise AsyncResolutionError(
+                        f"Component {type(instance).__name__} returned an awaitable from synchronous "
+                        f"@configure method '{m.__name__}'. You must use 'await container.aget()' "
+                        "or make the method synchronous."
+                    )
             return instance
 
         async def runner():
@@ -252,10 +256,12 @@ class PicoContainer:
     async def aget(self, key: KeyT) -> Any:
         instance_or_awaitable, took_ms, was_cached = self._resolve_or_create_internal(key)
 
-        if was_cached:
-            return instance_or_awaitable
-
         instance = instance_or_awaitable
+        if was_cached:
+            if isinstance(instance, UnifiedComponentProxy):
+                await instance._async_init_if_needed()
+            return instance
+
         if inspect.isawaitable(instance_or_awaitable):
             instance = await instance_or_awaitable
 
@@ -269,6 +275,10 @@ class PicoContainer:
                 instance = instance_or_awaitable_configured
 
         final_instance = self._maybe_wrap_with_aspects(key, instance)
+        
+        if isinstance(final_instance, UnifiedComponentProxy):
+             await final_instance._async_init_if_needed()
+             
         cache = self._cache_for(key)
         cache.put(key, final_instance)
         self.context.resolve_count += 1
@@ -282,7 +292,7 @@ class PicoContainer:
         cls = type(instance)
         for _, fn in inspect.getmembers(cls, predicate=lambda m: inspect.isfunction(m) or inspect.ismethod(m) or inspect.iscoroutinefunction(m)):
             if getattr(fn, "_pico_interceptors_", None):
-                return UnifiedComponentProxy(container=self, target=instance)
+                return UnifiedComponentProxy(container=self, target=instance, component_key=key)
         return instance
 
     def _iterate_cleanup_targets(self) -> Iterable[Any]:
@@ -374,7 +384,7 @@ class PicoContainer:
         self.cleanup_all()
         PicoContainer._container_registry.pop(self.container_id, None)
 
-    def build_resolution_graph(self) -> None:
+    def build_resolution_graph(self):
         return _build_resolution_graph(self._locator)
         
     def export_graph(
@@ -424,7 +434,7 @@ class PicoContainer:
             pid = _node_id(parent)
             for child in deps:
                 cid = _node_id(child)
-                lines.append(f"  {pid} -> {cid};")
+                lines.append(f"  {pid} -> {child};")
 
         lines.append("}")
 

@@ -61,8 +61,8 @@ class Registrar:
         for key, md in list(self._metadata.items()):
             if md.lazy:
                 original = self._factory.get(key, origin='lazy')
-                def lazy_proxy_provider(_orig=original, _p=pico):
-                    return UnifiedComponentProxy(container=_p, object_creator=_orig)
+                def lazy_proxy_provider(_orig=original, _p=pico, _k=key):
+                    return UnifiedComponentProxy(container=_p, object_creator=_orig, component_key=_k)
                 self._factory.bind(key, lazy_proxy_provider)
 
 

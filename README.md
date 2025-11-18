@@ -74,6 +74,15 @@ Optional extras:
 
 -----
 
+### ⚠️ Important Note for v2.1.3+
+
+**Breaking Behavior in Custom Integrations:**
+As of version 2.1.3, **Scope LRU Eviction has been removed** to guarantee data integrity under high load.
+* **If you use `pico-fastapi`:** You are safe (the middleware handles cleanup automatically).
+* **If you perform manual scope management:** You **must** explicitly call `container._caches.cleanup_scope("scope_name", scope_id)` when a context ends. Failing to do so will result in a memory leak, as scopes are no longer automatically discarded when the container fills up.
+
+-----
+
 ## ⚙️ Quick Example (Unified Configuration)
 
 ```python

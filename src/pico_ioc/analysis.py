@@ -8,6 +8,7 @@ from typing import (
     Dict, Mapping
 )
 from .decorators import Qualifier
+from .constants import LOGGER
 
 KeyT = Union[str, type]
 
@@ -47,20 +48,18 @@ def _check_optional(ann: Any) -> Tuple[Any, bool]:
 def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[DependencyRequest, ...]:
     try:
         sig = inspect.signature(callable_obj)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        LOGGER.debug(f"Could not analyze dependencies for {callable_obj!r}: {e}")
         return ()
 
     plan: List[DependencyRequest] = []
     
     SUPPORTED_COLLECTION_ORIGINS = (
-        # Runtime types
         list,
         set,
         tuple,
         frozenset,
         collections.deque,
-        
-        # Typing ABCs (from get_origin)
         collections.abc.Iterable,
         collections.abc.Collection,
         collections.abc.Sequence,
