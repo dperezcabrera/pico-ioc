@@ -1,4 +1,3 @@
-# src/pico_ioc/scope.py
 import contextvars
 import inspect
 from typing import Any, Dict, Optional, Tuple
@@ -95,9 +94,10 @@ class ScopeManager:
 class ScopedCaches:
     def __init__(self, max_scopes_per_type: int = 2048) -> None:
         self._singleton = ComponentContainer()
-        self._by_scope: Dict[str, OrderedDict[Any, ComponentContainer]] = {}
+        self._by_scope: Dict[str, Dict[Any, ComponentContainer]] = {}
         self._max = int(max_scopes_per_type)
         self._no_cache = _NoCacheContainer()
+        
     def _cleanup_object(self, obj: Any) -> None:
         try:
             from .constants import PICO_META
@@ -132,15 +132,19 @@ class ScopedCaches:
             return self._singleton
         if scope == "prototype":
             return self._no_cache
+        
         sid = scopes.get_id(scope)
-        bucket = self._by_scope.setdefault(scope, OrderedDict())
+        
+        if sid is None:
+            raise ScopeError(
+                f"Cannot resolve component in scope '{scope}': No active scope ID found. "
+                f"Are you trying to use a {scope}-scoped component outside of its context?"
+            )
+
+        bucket = self._by_scope.setdefault(scope, {})
         if sid in bucket:
-            c = bucket.pop(sid)
-            bucket[sid] = c
-            return c
-        if len(bucket) >= self._max:
-            _, old = bucket.popitem(last=False)
-            self._cleanup_container(old)
+            return bucket[sid]
+        
         c = ComponentContainer()
         bucket[sid] = c
         return c
@@ -159,8 +163,11 @@ class ScopedCaches:
         bucket = self._by_scope.get(scope)
         if not bucket:
             return
-        k = max(0, int(keep))
-        while len(bucket) > k:
-            _, old = bucket.popitem(last=False)
-            self._cleanup_container(old)
-
+        
+        # Manual cleanup if needed, though we rely on explicit cleanup now
+        if len(bucket) > keep:
+            # Simple eviction strategy if forced manually
+            keys_to_remove = list(bucket.keys())[:len(bucket)-keep]
+            for k in keys_to_remove:
+                container = bucket.pop(k)
+                self._cleanup_container(container)

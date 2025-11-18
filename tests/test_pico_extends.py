@@ -70,7 +70,7 @@ class WidgetFactory:
         test_logger.info("Widget_Factory: Creating Widget")
         return Widget()
 
-@component
+@component(lazy=True)
 class ConfiguredComponent:
     def __init__(self):
         self.configured = False
@@ -140,7 +140,7 @@ class MyTestEvent(Event):
     def __init__(self, msg: str):
         self.msg = msg
 
-@component
+@component(lazy=True)
 class MyTestSubscriber(AutoSubscriberMixin):
     def __init__(self):
         self.received: List[str] = []
@@ -239,11 +239,14 @@ def test_factory_and_provides_pattern():
     assert isinstance(widget_instance, Widget)
     assert "Widget_Factory: Creating Widget" in log_capture
 
-def test_configure_lifecycle_method():
+@pytest.mark.asyncio
+async def test_configure_lifecycle_method():
     mod = types.ModuleType("configure_mod")
     for cls in [Widget, WidgetFactory, ConfiguredComponent]:
         setattr(mod, cls.__name__, cls)
     container = init(mod)
+
+    await container.aget(ConfiguredComponent)
 
     assert "ConfiguredComponent: __init__" in log_capture
     assert "Widget_Factory: Creating Widget" in log_capture
@@ -336,7 +339,7 @@ async def test_event_bus_integration_and_shutdown():
         setattr(mod, cls.__name__, cls)
     container = init([mod, pico_ioc.event_bus])
     bus = container.get(EventBus)
-    subscriber = container.get(MyTestSubscriber)
+    subscriber = await container.aget(MyTestSubscriber)
     assert isinstance(bus, EventBus)
     assert len(subscriber.received) == 0
     assert "Event received: Hello" not in log_capture

@@ -1,5 +1,3 @@
-# src/pico_ioc/aop.py
-
 import inspect
 import pickle
 import threading
@@ -75,15 +73,18 @@ def health(fn):
     return fn
 
 class UnifiedComponentProxy:
-    __slots__ = ("_target", "_creator", "_container", "_cache", "_lock")
-    def __init__(self, *, container: Any, target: Any = None, object_creator: Callable[[], Any] | None = None):
+    __slots__ = ("_target", "_creator", "_container", "_cache", "_lock", "_component_key")
+    
+    def __init__(self, *, container: Any, target: Any = None, object_creator: Callable[[], Any] | None = None, component_key: Any = None):
         if container is None:
             raise ValueError("UnifiedComponentProxy requires a non-null container")
         if target is None and object_creator is None:
             raise ValueError("UnifiedComponentProxy requires either a target or an object_creator")
+        
         object.__setattr__(self, "_container", container)
         object.__setattr__(self, "_target", target)
         object.__setattr__(self, "_creator", object_creator)
+        object.__setattr__(self, "_component_key", component_key)
         object.__setattr__(self, "_cache", {})
         object.__setattr__(self, "_lock", threading.RLock())
 
@@ -98,6 +99,7 @@ class UnifiedComponentProxy:
     def __setstate__(self, state):
         object.__setattr__(self, "_container", None)
         object.__setattr__(self, "_creator", None)
+        object.__setattr__(self, "_component_key", None)
         object.__setattr__(self, "_cache", {})
         object.__setattr__(self, "_lock", threading.RLock())
         try:
@@ -110,14 +112,17 @@ class UnifiedComponentProxy:
         tgt = object.__getattribute__(self, "_target")
         if tgt is not None:
             return tgt
+            
         lock = object.__getattribute__(self, "_lock")
         with lock:
             tgt = object.__getattribute__(self, "_target")
             if tgt is not None:
                 return tgt
+                
             creator = object.__getattribute__(self, "_creator")
             if not callable(creator):
                 raise TypeError("UnifiedComponentProxy object_creator must be callable")
+            
             tgt = creator()
             if tgt is None:
                 raise RuntimeError("UnifiedComponentProxy object_creator returned None")
@@ -128,27 +133,51 @@ class UnifiedComponentProxy:
                 if inspect.isawaitable(res):
                     raise AsyncResolutionError(
                         f"Lazy component {type(tgt).__name__} requires async "
-                        "@configure but was resolved via sync get()"
+                        "@configure but was resolved via sync access (proxy __getattr__). "
+                        "Use 'await container.aget(Component)' to force initialization."
                     )
 
             object.__setattr__(self, "_target", tgt)
             return tgt
+
+    async def _async_init_if_needed(self) -> None:
+        if object.__getattribute__(self, "_target") is not None:
+            return
+
+        lock = object.__getattribute__(self, "_lock")
+        tgt = object.__getattribute__(self, "_target")
+        if tgt is not None:
+            return
+
+        creator = object.__getattribute__(self, "_creator")
+        container = object.__getattribute__(self, "_container")
+        
+        tgt = creator() 
+        
+        if container and hasattr(container, "_run_configure_methods"):
+            res = container._run_configure_methods(tgt)
+            if inspect.isawaitable(res):
+                await res
+        
+        with lock:
+            object.__setattr__(self, "_target", tgt)
         
     def _scope_signature(self) -> Tuple[Any, ...]:
         container = object.__getattribute__(self, "_container")
-        target = object.__getattribute__(self, "_target")
+        key = object.__getattribute__(self, "_component_key")
         loc = getattr(container, "_locator", None)
-        if not loc:
+        
+        if not loc or key is None:
             return ()
-        if target is not None:
-            t = type(target)
-            for k, md in loc._metadata.items():
-                typ = md.provided_type or md.concrete_class
-                if isinstance(typ, type) and t is typ:
-                    sc = md.scope
-                    if sc == "singleton":
-                        return ()
-                    return (container.scopes.get_id(sc),)
+            
+        if key in loc._metadata:
+            md = loc._metadata[key]
+            sc = md.scope
+            if sc == "singleton":
+                return ()
+            
+            return (container.scopes.get_id(sc),)
+            
         return ()
         
     def _build_wrapped(self, name: str, bound: Callable[..., Any], interceptors_cls: Tuple[type, ...]):
@@ -212,6 +241,7 @@ class UnifiedComponentProxy:
         lock = object.__getattribute__(self, "_lock")
         with lock:
             cache: Dict[str, Tuple[Tuple[Any, ...], Callable[..., Any], Tuple[type, ...]]] = object.__getattribute__(self, "_cache")
+            
             cur_sig = self._scope_signature()
             cached = cache.get(name)
             
@@ -224,7 +254,12 @@ class UnifiedComponentProxy:
             cache[name] = (sig, wrapped, cls_tuple)
             return wrapped
         
-    def __setattr__(self, name, value): setattr(self._get_real_object(), name, value)
+    def __setattr__(self, name, value):
+        if name in ("_target", "_creator", "_container", "_cache", "_lock", "_component_key"):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._get_real_object(), name, value)
+
     def __delattr__(self, name): delattr(self._get_real_object(), name)
     def __str__(self): return str(self._get_real_object())
     def __repr__(self): return repr(self._get_real_object())
