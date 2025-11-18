@@ -7,6 +7,27 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.1.3] - 2025-11-18
+
+### Fixed
+- **Critical:** Removed unsafe LRU eviction in `ScopedCaches`. Previously, under high concurrency (e.g., >2048 requests/websockets), active scopes could be evicted, causing data loss and premature cleanup. Scopes now persist until explicitly cleaned up.
+- **Critical:** Fixed a race condition in `UnifiedComponentProxy` (AOP) where the underlying object creation wasn't fully thread-safe.
+- **Critical:** Fixed a race condition in `EventBus.post()` where the queue reference could be lost during shutdown.
+- **Critical:** Fixed `ScopeManager` returning a bucket for `None` IDs, which could cause state leakage between threads/tasks outside of an active context. Now raises `ScopeError`.
+- Fixed `AsyncResolutionError` when accessing `lazy=True` components that require asynchronous `@configure` methods. `aget()` now hydrates proxies immediately if needed.
+- Fixed a swallowed exception in `analyze_callable_dependencies` that hid configuration errors. Now logs debug information.
+- Fixed recursion error in `UnifiedComponentProxy.__setattr__` when setting internal attributes.
+
+### Changed
+- **Breaking Behavior:** Users using `pico-fastapi` or manual scope management **must** ensure `container.cleanup_scope(...)` is called at the end of the lifecycle to prevent memory leaks, as the automatic LRU safety net has been removed in favor of data integrity.
+- Improved integer configuration parsing to support formats like `1_000` or scientific notation in `config_runtime.py`.
+- `init()` now fails fast with an `AsyncResolutionError` if a component returns an awaitable from a synchronous `@configure` method, instead of just logging a warning.
+
+### Added
+- Architectural support for asynchronous hydration of lazy proxies via `_async_init_if_needed`.
+
+---
+
 ## [2.1.2] - 2025-11-10
 
 ### Added ✨

@@ -155,25 +155,28 @@ class EventBus:
                 raise EventBusClosedError()
             if self._queue is None:
                 raise EventBusError("Worker queue not initialized. Call start_worker().")
-            loop = self._worker_loop
-            if loop and loop.is_running():
-                try:
-                    current_loop = asyncio.get_running_loop()
-                    if current_loop is loop:
-                        try:
-                            self._queue.put_nowait(event)
-                            return
-                        except asyncio.QueueFull:
-                            raise EventBusQueueFullError()
-                except RuntimeError:
-                    pass
-                try:
-                    loop.call_soon_threadsafe(self._queue.put_nowait, event)
-                    return
-                except asyncio.QueueFull:
-                    raise EventBusQueueFullError()
-            else:
-                raise EventBusError("Worker queue not initialized or loop not running. Call start_worker().")
+            
+            queue_ref = self._queue
+            loop_ref = self._worker_loop
+
+        if loop_ref and loop_ref.is_running():
+            try:
+                current_loop = asyncio.get_running_loop()
+                if current_loop is loop_ref:
+                    try:
+                        queue_ref.put_nowait(event)
+                        return
+                    except asyncio.QueueFull:
+                        raise EventBusQueueFullError()
+            except RuntimeError:
+                pass
+            try:
+                loop_ref.call_soon_threadsafe(queue_ref.put_nowait, event)
+                return
+            except asyncio.QueueFull:
+                raise EventBusQueueFullError()
+        else:
+            raise EventBusError("Worker queue not initialized or loop not running. Call start_worker().")
 
     async def aclose(self) -> None:
         await self.stop_worker()
