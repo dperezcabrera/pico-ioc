@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'pyproject.toml'
+      - '.github/workflows/sync-labels.yml'
   workflow_dispatch:
 
 jobs:
