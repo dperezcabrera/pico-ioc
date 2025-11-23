@@ -22,25 +22,47 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' 
+          python-version: '3.11'
 
       - name: Install TOML parser
         run: pip install toml
 
-      - name: Extract Keywords from pyproject.toml
+      - name: Extract & Format Keywords from pyproject.toml
         id: extract_keywords
         run: |
           python -c "
           import toml
           import json
+
+          COLOR_MAP = {
+              'ioc': '006090',
+              'di': '006090',
+              'python': '3776AB',
+              'async': 'E34848',
+              'minimalistic': 'BFD4F2'
+          }
+
           with open('pyproject.toml', 'r') as f:
               data = toml.load(f)
+          
           keywords = data.get('project', {}).get('keywords', [])
-          print(f'keywords_json={json.dumps(keywords)}')
+          
+          formatted_labels = []
+          for keyword in keywords:
+              color = COLOR_MAP.get(keyword.lower(), 'B6B6B6') 
+              description = f'Automatically synced from pyproject.toml keyword: {keyword}'
+              
+              formatted_labels.append({
+                  'name': keyword,
+                  'color': color,
+                  'description': description
+              })
+          
+          print(f'labels_json={json.dumps(formatted_labels)}')
           " >> $GITHUB_OUTPUT
 
-      - name: Sync Labels to Repository
-        uses: lannonbr/actions-label-sync@v2
+      - name: Sync Labels to Repository (Official Action)
+        uses: actions/label-sync@v2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }} 
-          labels: ${{ steps.extract_keywords.outputs.keywords_json }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          labels: ${{ steps.extract_keywords.outputs.labels_json }}
