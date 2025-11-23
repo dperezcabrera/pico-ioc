@@ -1,0 +1,46 @@
+name: Sync Project Keywords to Repo Labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+jobs:
+  sync_labels:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11' 
+
+      - name: Install TOML parser
+        run: pip install toml
+
+      - name: Extract Keywords from pyproject.toml
+        id: extract_keywords
+        run: |
+          python -c "
+          import toml
+          import json
+          with open('pyproject.toml', 'r') as f:
+              data = toml.load(f)
+          keywords = data.get('project', {}).get('keywords', [])
+          print(f'keywords_json={json.dumps(keywords)}')
+          " >> $GITHUB_OUTPUT
+
+      - name: Sync Labels to Repository
+        uses: lannonbr/actions-label-sync@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }} 
+          labels: ${{ steps.extract_keywords.outputs.keywords_json }}
