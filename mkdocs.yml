@@ -146,10 +146,6 @@ nav:
     - Custom Scanners: advanced-features/custom-scanners.md
     - Self Injection: advanced-features/self-injection.md
 
-  - Integrations:
-    - Overview: integrations.md
-    - Celery: integrations-celery.md
-
   - Observability:
     - observability/README.md
     - Container Context: observability/container-context.md
