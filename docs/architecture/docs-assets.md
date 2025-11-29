@@ -13,7 +13,7 @@ This asset is pure client-side JavaScript that you include via mkdocs.yml. It is
 ## Quick start
 
 1) Add the script to your docs
-- Place the file at docs/javascripts/docs-assets.js (or any path under docs/).
+- Place the file at docs/javascripts/assets.js (or any path under docs/).
 
 2) Register it in mkdocs.yml
 ```yaml
@@ -21,7 +21,7 @@ theme:
   name: material
 
 extra_javascript:
-  - javascripts/docs-assets.js
+  - javascripts/assets.js
 ```
 
 3) (Optional) Provide version metadata for better “old version” notices

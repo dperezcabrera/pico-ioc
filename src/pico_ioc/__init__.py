@@ -1,4 +1,3 @@
-# src/pico_ioc/__init__.py
 from .constants import LOGGER_NAME, LOGGER, PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
 from .exceptions import (
     PicoError,
@@ -31,6 +30,7 @@ from .container import PicoContainer
 from .event_bus import EventBus, ExecPolicy, ErrorPolicy, Event, subscribe, AutoSubscriberMixin
 from .config_runtime import JsonTreeSource, YamlTreeSource, DictSource, Discriminator, Value
 from .analysis import DependencyRequest, analyze_callable_dependencies
+from .component_scanner import CustomScanner
 
 __all__ = [
     "LOGGER_NAME",
@@ -91,4 +91,5 @@ __all__ = [
     "Value",
     "DependencyRequest",
     "analyze_callable_dependencies",
+    "CustomScanner",
 ]

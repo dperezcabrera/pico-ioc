@@ -28,7 +28,8 @@ def init(
     custom_scopes: Optional[Iterable[str]] = None,
     validate_only: bool = False,
     container_id: Optional[str] = None,
-    observers: Optional[List[ContainerObserver]] = None
+    observers: Optional[List[ContainerObserver]] = None,
+    custom_scanners: Optional[List[CustomScanner]] = None,
 ) -> PicoContainer: ...
 ```
 
@@ -43,6 +44,7 @@ def init(
 - validate_only: Default False. If True, performs all scanning and validation steps but returns a container without creating instances or running lifecycle methods. Useful for quick startup checks.
 - container_id: Optional. A specific ID string to assign to this container. If None, a unique ID is automatically generated.
 - observers: Optional. A list of objects implementing the ContainerObserver protocol. Observers receive events such as on_resolve and on_cache_hit for monitoring and tracing.
+- custom_scanners: Optional. A list of objects implementing the CustomScanner protocol. Custom scanners can hook into the module scanning process to discover and register components based on custom rules (e.g., custom decorators, specific base classes not normally tracked by pico-ioc).
 - Returns: A configured PicoContainer instance ready to resolve components.
 
 ---
@@ -148,6 +150,18 @@ Asynchronously calls all methods decorated with @cleanup (including async def me
 Performs a full shutdown:
 1. Calls cleanup_all().
 2. Removes the container from the global registry (making it inaccessible via PicoContainer.get_current() or all_containers()).
+
+---
+
+### ashutdown() -> Awaitable[None]
+
+Asynchronously performs a full shutdown:
+1. Awaits `cleanup_all_async()` to release async resources (DB connections, pools).
+2. Removes the container from the global registry.
+
+**Usage:** Always use this method (instead of `shutdown`) if your application runs on `asyncio`.
+
+- Returns: An awaitable.
 
 ---
 

@@ -60,7 +60,7 @@ include = ["pico_ioc*"]
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "no-local-version"
-fallback_version = "2.0.0"
+fallback_version = "2.2.0"
 write_to = "src/pico_ioc/_version.py"
 write_to_template = "__version__ = '{version}'\n"
 

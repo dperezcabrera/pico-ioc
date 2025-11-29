@@ -15,7 +15,7 @@ from .config_runtime import TreeSource
 from .config_registrar import ConfigurationManager
 from .provider_selector import ProviderSelector
 from .dependency_validator import DependencyValidator
-from .component_scanner import ComponentScanner
+from .component_scanner import ComponentScanner, CustomScanner
 from .analysis import analyze_callable_dependencies, DependencyRequest
 from .container import PicoContainer
 
@@ -49,6 +49,8 @@ class Registrar:
         self._deferred: List[DeferredProvider] = []
         self._provides_functions: Dict[KeyT, Callable[..., Any]] = {}
 
+    def register_custom_scanner(self, scanner: CustomScanner) -> None:
+        self._scanner.register_custom_scanner(scanner)
 
     def locator(self) -> ComponentLocator:
         loc = ComponentLocator(dict(self._metadata), dict(self._indexes))
@@ -65,15 +67,12 @@ class Registrar:
                     return UnifiedComponentProxy(container=_p, object_creator=_orig, component_key=_k)
                 self._factory.bind(key, lazy_proxy_provider)
 
-
     def _bind_if_absent(self, key: KeyT, provider: Provider) -> None:
         if not self._factory.has(key):
             self._factory.bind(key, provider)
 
-
     def register_module(self, module: Any) -> None:
         self._scanner.scan_module(module)
-
 
     def _find_md_for_type(self, t: type) -> Optional[ProviderMetadata]:
         cands: List[ProviderMetadata] = []
@@ -132,7 +131,6 @@ class Registrar:
                 add("infra", md.infra, k)
             if md.pico_name is not None:
                 add("pico_name", md.pico_name, k)
-
 
     def finalize(self, overrides: Optional[Dict[KeyT, Any]], *, pico_instance: PicoContainer) -> None:
         candidates, on_missing, deferred_providers, provides_functions = self._scanner.get_scan_results()

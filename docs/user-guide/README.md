@@ -12,3 +12,4 @@ Welcome to the main User Guide. This section covers the 80% of features you will
 * [4. Scopes, Lifecycle & `lazy`](./scopes-lifecycle.md)
 * [5. Qualifiers & List Injection](./qualifiers-lists.md)
 * [6. Testing Applications](./testing.md)
+* [7. Extending Component Discovery (CustomScanner)](../advanced-features/custom-scanners.md)

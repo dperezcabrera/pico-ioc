@@ -92,10 +92,9 @@ class ScopeManager:
         return self.signature(self.names())
 
 class ScopedCaches:
-    def __init__(self, max_scopes_per_type: int = 2048) -> None:
+    def __init__(self) -> None:
         self._singleton = ComponentContainer()
         self._by_scope: Dict[str, Dict[Any, ComponentContainer]] = {}
-        self._max = int(max_scopes_per_type)
         self._no_cache = _NoCacheContainer()
         
     def _cleanup_object(self, obj: Any) -> None:
