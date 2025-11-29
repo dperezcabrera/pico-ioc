@@ -7,6 +7,23 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.2.0] - 2025-11-29
+
+### Added ✨
+- **Extensible Component Scanning (ADR-0011):** Introduced the `CustomScanner` protocol and `custom_scanners` parameter in `init()`. This opens the discovery phase to third-party extensions, allowing registration of components based on custom decorators or base classes.
+- **Function-First Scanning:** Updated `ComponentScanner` to evaluate `CustomScanner` logic against *all* module members (classes and functions) before applying native logic. This enables extensions to register standalone functions (e.g., `@task`) as components.
+- **Async Shutdown:** Added `container.ashutdown()` (awaitable). This fills a critical gap in the async lifecycle, ensuring that `async def @cleanup` methods are properly awaited during application teardown.
+
+### Changed
+- **Internal Cleanup:** Removed the deprecated `max_scopes_per_type` parameter from `ScopedCaches`, reflecting the removal of LRU eviction in v2.1.3.
+
+### Docs 📚
+- **Major Restructuring:** Rebuilt `mkdocs.yml` navigation to include all available documentation pages.
+- **New Content:** Added missing guides for **Integrations** (Celery), **Advanced Features** (Self-Injection, AOP Proxies, Custom Scanners), and **Architecture** (Runtime Model).
+- **Corrections:** Fixed discrepancies in asset filenames (`extra.js`) and standardized the format of Architecture Decision Records (ADRs).
+
+---
+
 ## [2.1.3] - 2025-11-18
 
 ### Fixed

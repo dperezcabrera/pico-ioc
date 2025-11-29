@@ -12,7 +12,6 @@
 [![Docs](https://img.shields.io/badge/Docs-pico--ioc-blue?style=flat&logo=readthedocs&logoColor=white)](https://dperezcabrera.github.io/pico-ioc/)
 [![Interactive Lab](https://img.shields.io/badge/Learn-online-green?style=flat&logo=python&logoColor=white)](https://dperezcabrera.github.io/learn-pico-ioc/)
 
-
 **Pico-IoC** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
 It brings Inversion of Control and dependency injection to Python in a deterministic, modern, and framework-agnostic way.
 
@@ -47,14 +46,14 @@ Pico-IoC eliminates that friction by letting you declare how components relate �
 
 ---
 
-## 🧩 Highlights (v2.0+)
+## 🧩 Highlights (v2.2+)
 
-- Unified Configuration: Use `@configured` to bind both flat (ENV-like) and tree (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
-- Async-aware AOP system: Method interceptors via `@intercepted_by`.
-- Scoped resolution: singleton, prototype, request, session, transaction, and custom scopes.
-- `UnifiedComponentProxy`: Transparent `lazy=True` and AOP proxy supporting serialization.
-- Tree-based configuration runtime: Advanced mapping with reusable adapters and discriminators (`Annotated[Union[...], Discriminator(...)]`).
-- Observable container context: Built-in stats, health checks (`@health`), observer hooks (`ContainerObserver`), dependency graph export (`export_graph`), and async cleanup.
+- **Unified Configuration**: Use `@configured` to bind both flat (ENV-like) and tree (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
+- **Extensible Scanning**: Use `CustomScanner` to hook into the discovery phase and register functions or custom decorators (ADR-0011).
+- **Async-aware AOP**: Method interceptors via `@intercepted_by`.
+- **Scoped resolution**: singleton, prototype, request, session, transaction, and custom scopes.
+- **Tree-based configuration**: Advanced mapping with reusable adapters (`Annotated[Union[...], Discriminator(...)]`).
+- **Observable context**: Built-in stats, health checks (`@health`), observer hooks (`ContainerObserver`), and dependency graph export.
 
 ---
 
@@ -66,20 +65,21 @@ pip install pico-ioc
 
 Optional extras:
 
-- YAML configuration support (requires PyYAML)
+  - YAML configuration support (requires PyYAML)
 
-  ```bash
-  pip install pico-ioc[yaml]
-  ```
+    ```bash
+    pip install pico-ioc[yaml]
+    ```
 
 -----
 
-### ⚠️ Important Note for v2.1.3+
+### ⚠️ Important Note
 
-**Breaking Behavior in Custom Integrations:**
-As of version 2.1.3, **Scope LRU Eviction has been removed** to guarantee data integrity under high load.
-* **If you use `pico-fastapi`:** You are safe (the middleware handles cleanup automatically).
-* **If you perform manual scope management:** You **must** explicitly call `container._caches.cleanup_scope("scope_name", scope_id)` when a context ends. Failing to do so will result in a memory leak, as scopes are no longer automatically discarded when the container fills up.
+**Breaking Behavior in Scope Management (v2.1.3+):**
+**Scope LRU Eviction has been removed** to guarantee data integrity.
+
+  * **Frameworks (pico-fastapi):** Handled automatically.
+  * **Manual usage:** You **must** explicitly call `container._caches.cleanup_scope("scope_name", scope_id)` when a context ends to prevent memory leaks.
 
 -----
 
@@ -197,12 +197,16 @@ async def main():
     container = init(modules=[__name__])
     repo = await container.aget(AsyncRepo)   # Async resolution
     print(await repo.fetch())
+    
+    # Graceful async shutdown (calls @cleanup async methods)
+    await container.ashutdown()
 
 asyncio.run(main())
 ```
 
-- `__ainit__` runs after construction if defined.
-- Use `container.aget(Type)` to resolve components that require async initialization or whose providers are async.
+  - `__ainit__` runs after construction if defined.
+  - Use `container.aget(Type)` to resolve components that require async initialization.
+  - Use `await container.ashutdown()` to close resources cleanly.
 
 -----
 
@@ -242,35 +246,26 @@ result = c.get(Demo).work()
 print(f"Result: {result}")
 ```
 
-Output:
-
-```
-→ calling Demo.work
-   Working...
-← Demo.work done (10.xxms)
-Result: ok
-```
-
 -----
 
 ## 👁️ Observability & Cleanup
 
-- Export a dependency graph in DOT format:
+  - Export a dependency graph in DOT format:
 
-  ```python
-  c = init(modules=[...])
-  dot = c.export_graph()  # Returns DOT graph as a string
-  with open("dependencies.dot", "w") as f:
-      f.write(dot)
-  ```
+    ```python
+    c = init(modules=[...])
+    c.export_graph("dependencies.dot")  # Writes directly to file
+    ```
 
-- Health checks:
-  - Annotate health probes inside components with `@health` for container-level reporting.
-  - The container exposes health information that can be queried in observability tooling.
+  - Health checks:
 
-- Container cleanup:
-  - For sync components: `container.close()`
-  - For async components/resources: `await container.aclose()`
+      - Annotate health probes inside components with `@health` for container-level reporting.
+      - The container exposes health information that can be queried in observability tooling.
+
+  - Container cleanup:
+
+      - For sync apps: `container.shutdown()`
+      - For async apps: `await container.ashutdown()`
 
 Use cleanup in application shutdown hooks to release resources deterministically.
 
@@ -280,14 +275,14 @@ Use cleanup in application shutdown hooks to release resources deterministically
 
 The full documentation is available within the `docs/` directory of the project repository. Start with `docs/README.md` for navigation.
 
-- Getting Started: `docs/getting-started.md`
-- User Guide: `docs/user-guide/README.md`
-- Advanced Features: `docs/advanced-features/README.md`
-- Observability: `docs/observability/README.md`
-- Cookbook (Patterns): `docs/cookbook/README.md`
-- Architecture: `docs/architecture/README.md`
-- API Reference: `docs/api-reference/README.md`
-- ADR Index: `docs/adr/README.md`
+  - Getting Started: `docs/getting-started.md`
+  - User Guide: `docs/user-guide/README.md`
+  - Advanced Features: `docs/advanced-features/README.md`
+  - Observability: `docs/observability/README.md`
+  - Cookbook (Patterns): `docs/cookbook/README.md`
+  - Architecture: `docs/architecture/README.md`
+  - API Reference: `docs/api-reference/README.md`
+  - ADR Index: `docs/adr/README.md`
 
 -----
 
@@ -302,10 +297,11 @@ tox
 
 ## 🧾 Changelog
 
-See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
+See [CHANGELOG.md](https://www.google.com/search?q=./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
 -----
 
 ## 📜 License
 
 MIT — [LICENSE](https://opensource.org/licenses/MIT)
+

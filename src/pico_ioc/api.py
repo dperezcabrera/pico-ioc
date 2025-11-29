@@ -1,5 +1,3 @@
-# src/pico_ioc/api.py
-
 import importlib
 import pkgutil
 import logging
@@ -13,6 +11,8 @@ from .container import PicoContainer
 from .decorators import component, factory, provides, Qualifier, configure, cleanup, configured
 from .config_builder import ContextConfig, configuration
 from .registrar import Registrar
+from .aop import ContainerObserver
+from .component_scanner import CustomScanner
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
@@ -63,7 +63,8 @@ def init(
     custom_scopes: Optional[Iterable[str]] = None,
     validate_only: bool = False,
     container_id: Optional[str] = None,
-    observers: Optional[List["ContainerObserver"]] = None,
+    observers: Optional[List[ContainerObserver]] = None,
+    custom_scanners: Optional[List[CustomScanner]] = None,
 ) -> PicoContainer:
     active = tuple(p.strip() for p in profiles if p)
     
@@ -82,6 +83,11 @@ def init(
             
     pico = PicoContainer(factory, caches, scopes, container_id=container_id, profiles=active, observers=observers or [])
     registrar = Registrar(factory, profiles=active, environ=environ, logger=logger, config=config)
+    
+    if custom_scanners:
+        for scanner in custom_scanners:
+            registrar.register_custom_scanner(scanner)
+
     for m in _iter_input_modules(modules):
         registrar.register_module(m)
         
