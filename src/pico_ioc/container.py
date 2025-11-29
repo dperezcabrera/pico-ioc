@@ -384,6 +384,10 @@ class PicoContainer:
         self.cleanup_all()
         PicoContainer._container_registry.pop(self.container_id, None)
 
+    async def ashutdown(self) -> None:
+        await self.cleanup_all_async()
+        PicoContainer._container_registry.pop(self.container_id, None)
+        
     def build_resolution_graph(self):
         return _build_resolution_graph(self._locator)
         

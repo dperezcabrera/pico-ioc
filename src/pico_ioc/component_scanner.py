@@ -1,6 +1,6 @@
 import inspect
 import os
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Set
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Set, Protocol
 from .constants import PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
 from .factory import ProviderMetadata, DeferredProvider
 from .decorators import get_return_type
@@ -9,6 +9,10 @@ from .analysis import analyze_callable_dependencies, DependencyRequest
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
+
+class CustomScanner(Protocol):
+    def should_scan(self, obj: Any) -> bool: ...
+    def scan(self, obj: Any) -> Optional[Tuple[KeyT, Provider, ProviderMetadata]]: ...
 
 class ComponentScanner:
     def __init__(self, profiles: Set[str], environ: Dict[str, str], config_manager: ConfigurationManager):
@@ -19,6 +23,10 @@ class ComponentScanner:
         self._on_missing: List[Tuple[int, KeyT, type]] = []
         self._deferred: List[DeferredProvider] = []
         self._provides_functions: Dict[KeyT, Callable[..., Any]] = {}
+        self._custom_scanners: List[CustomScanner] = []
+
+    def register_custom_scanner(self, scanner: CustomScanner) -> None:
+        self._custom_scanners.append(scanner)
 
     def get_scan_results(self) -> Tuple[Dict[KeyT, List[Tuple[bool, Provider, ProviderMetadata]]], List[Tuple[int, KeyT, type]], List[DeferredProvider], Dict[KeyT, Callable[..., Any]]]:
         return self._candidates, self._on_missing, self._deferred, self._provides_functions
@@ -86,7 +94,6 @@ class ComponentScanner:
         if has_instance_provides:
             factory_deps = analyze_callable_dependencies(cls.__init__)
 
-
         for name in dir(cls):
             try:
                 raw = inspect.getattr_static(cls, name)
@@ -140,27 +147,44 @@ class ComponentScanner:
         self._queue(k, provider, md)
         self._provides_functions[k] = fn
 
+    def _try_custom_scanners(self, obj: Any) -> bool:
+        for scanner in self._custom_scanners:
+            if scanner.should_scan(obj):
+                result = scanner.scan(obj)
+                if result:
+                    key, provider, md = result
+                    self._queue(key, provider, md)
+                    if isinstance(provider, DeferredProvider):
+                        self._deferred.append(provider)
+                    return True
+        return False
+
     def scan_module(self, module: Any) -> None:
         for _, obj in inspect.getmembers(module):
-            if inspect.isclass(obj):
-                meta = getattr(obj, PICO_META, {})
-                if "on_missing" in meta:
-                    sel = meta["on_missing"]["selector"]
-                    pr = int(meta["on_missing"].get("priority", 0))
-                    self._on_missing.append((pr, sel, obj))
-                    continue
+            if self._try_custom_scanners(obj):
+                continue
 
-                infra = getattr(obj, PICO_INFRA, None)
-                if infra == "component":
-                    self._register_component_class(obj)
-                elif infra == "factory":
-                    self._register_factory_class(obj)
-                elif infra == "configured":
-                    enabled = self._enabled_by_condition(obj)
-                    reg_data = self._config_manager.register_configured_class(obj, enabled)
-                    if reg_data:
-                        self._queue(reg_data[0], reg_data[1], reg_data[2])
+            if inspect.isclass(obj) or getattr(obj, "_is_protocol", False):
+                if inspect.isclass(obj):
+                    meta = getattr(obj, PICO_META, {})
+                    
+                    if "on_missing" in meta:
+                        sel = meta["on_missing"]["selector"]
+                        pr = int(meta["on_missing"].get("priority", 0))
+                        self._on_missing.append((pr, sel, obj))
+                        continue
 
-        for _, fn in inspect.getmembers(module, predicate=inspect.isfunction):
-            if getattr(fn, PICO_INFRA, None) == "provides":
-                self._register_provides_function(fn)
+                    infra = getattr(obj, PICO_INFRA, None)
+                    if infra == "component":
+                        self._register_component_class(obj)
+                    elif infra == "factory":
+                        self._register_factory_class(obj)
+                    elif infra == "configured":
+                        enabled = self._enabled_by_condition(obj)
+                        reg_data = self._config_manager.register_configured_class(obj, enabled)
+                        if reg_data:
+                            self._queue(reg_data[0], reg_data[1], reg_data[2])
+
+            elif inspect.isfunction(obj):
+                if getattr(obj, PICO_INFRA, None) == "provides":
+                    self._register_provides_function(obj)

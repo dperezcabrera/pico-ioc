@@ -1,6 +1,6 @@
 # Design Principles
 
-Understanding why pico-ioc is built the way it is helps in using it effectively and anticipating its behavior. The framework embodies specific design choices aimed at addressing common challenges in developing maintainable, robust, and scalable Python applications.
+Understanding why pico-ioc is built the way it is helps in using it effectively and anticipating its behavior. The framework embodies specific design choices aimed at addressing common challenges in developing maintain maintainable, robust, and scalable Python applications.
 
 These core principles guided its architecture:
 
@@ -58,6 +58,9 @@ Implementation:
 - Decorator-Driven Registration: Components are registered via explicit decorators.
 - Type Hint Injection: Dependencies are primarily resolved based on constructor/method type hints.
 - Explicit Configuration Binding (ADR-010): The @configured decorator, combined with the configuration(...) builder, requires clear definitions of sources and explicit mapping parameters (prefix, mapping) or relies on predictable auto-detection based on the dataclass structure to bind configuration to objects.
+- **Custom Scanning Extension:** The CustomScanner protocol allows developers to explicitly extend the component discovery mechanism, maintaining explicit control over the IoC graph.
+
+Trade-off: This principle favors clarity over maximum terseness, resulting in more readable and maintainable wiring code.
 
 ---
 

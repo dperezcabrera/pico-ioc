@@ -13,6 +13,7 @@ ADR Index:
 - ADR-008: Explicit Handling of Circular Dependencies — Accepted — ./adr-0008-circular-dependencies.md
 - ADR-009: Flexible @provides for Static and Module-level Functions — Accepted — ./adr-0009-flexible-provides.md
 - ADR-010: Unified Configuration via @configured and ContextConfig — Accepted — ./adr-0010-unified-configuration.md
+- ADR-011: Extensible Component Scanning via Custom Scanners — Accepted — ./adr-0011-custom-scanners.md
 
 Status legend:
 - Proposed: Under discussion, not yet binding.

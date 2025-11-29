@@ -139,15 +139,23 @@ nav:
     - advanced-features/README.md
     - Async Resolution: advanced-features/async-resolution.md
     - AOP & Interceptors: advanced-features/aop-interceptors.md
+    - AOP Proxies: advanced-features/aop-proxies.md
     - Event Bus: advanced-features/event-bus.md
     - Conditional Binding: advanced-features/conditional-binding.md
     - Health Checks: advanced-features/health-checks.md
+    - Custom Scanners: advanced-features/custom-scanners.md
+    - Self Injection: advanced-features/self-injection.md
+
+  - Integrations:
+    - Overview: integrations.md
+    - Celery: integrations-celery.md
 
   - Observability:
     - observability/README.md
     - Container Context: observability/container-context.md
     - Observers & Metrics: observability/observers-metrics.md
     - Exporting Graph: observability/exporting-graph.md
+    - Resolution Graph: observability/resolution-graph.md
 
   - Cookbook (Patterns):
     - cookbook/README.md
@@ -166,6 +174,8 @@ nav:
     - Design Principles: architecture/design-principles.md
     - Comparison: architecture/comparison.md
     - Internals: architecture/internals.md
+    - Runtime Model: architecture/runtime-model-scheduling.md
+    - Docs Assets: architecture/docs-assets.md
     - ADRs:
       - adr/README.md
       - ADR-001 Async Native: adr/adr-0001-async-native.md
@@ -178,12 +188,17 @@ nav:
       - ADR-008 Circular Dependencies: adr/adr-0008-circular-dependencies.md
       - ADR-009 Flexible Provides: adr/adr-0009-flexible-provides.md
       - ADR-010 Unified Configuration: adr/adr-0010-unified-configuration.md
+      - ADR-011 Custom Scanners: adr/adr-0011-custom-scanners.md
 
   - API Reference:
     - api-reference/README.md
+    - Analysis API: api-reference/analysis-api.md
+    - Constants: api-reference/constants.md
     - Glossary: api-reference/glossary.md
     - Decorators: api-reference/decorators.md
     - Container API: api-reference/container.md
+    - Container Context API: api-reference/container-context-api.md
     - Protocols: api-reference/protocols.md
+    - Provider Selector: api-reference/provider-selector.md
     - EventBus API: api-reference/event_bus.md
-
+    - Exceptions: api-reference/exceptions.md

@@ -11,6 +11,6 @@ Welcome to the Advanced Features guide. You've mastered the core concepts. This 
 * [3. The Event Bus: `EventBus`, `@subscribe`](./event-bus.md) 📢
 * [4. Conditional Binding: `primary`, `on_missing_selector`, `conditional_*`](./conditional-binding.md) 🤔
 * [5. Health Checks: `@health`](./health-checks.md) ❤️‍🩹
-
+* [6. Custom Component Scanners](./custom-scanners.md) 🔎
 
 ---
