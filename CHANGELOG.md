@@ -7,6 +7,20 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.2.1] - 2026-02-03
+
+### Fixed 🧩
+
+- **DOT Graph Export**: Fixed incorrect variable reference in `export_graph()` where dependency edges used `{child}` instead of `{cid}`, causing malformed DOT output when visualizing the dependency graph.
+- **Race Condition in Lazy Proxy**: Fixed a race condition in `UnifiedComponentProxy._async_init_if_needed()` where concurrent async access could trigger duplicate object creation. The fix implements proper double-check locking and moves `@configure` execution outside the critical section to prevent deadlocks.
+- **Silent Cleanup Failures**: Replaced silent `except Exception: pass` blocks in `ScopedCaches` cleanup methods with proper logging. Cleanup method failures are now logged at WARNING level, aiding debugging of resource leaks without crashing the application.
+
+### Internal 🔧
+
+- Added `logging` import and `_logger` instance to `scope.py` for structured error reporting during component cleanup.
+
+---
+
 ## [2.2.0] - 2025-11-29
 
 ### Added ✨

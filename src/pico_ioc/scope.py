@@ -1,8 +1,11 @@
 import contextvars
 import inspect
+import logging
 from typing import Any, Dict, Optional, Tuple
 from collections import OrderedDict
 from .exceptions import ScopeError
+
+_logger = logging.getLogger(__name__)
 
 class ScopeProtocol:
     def get_id(self) -> Any | None: ...
@@ -108,10 +111,15 @@ class ScopedCaches:
                 if meta.get("cleanup", False):
                     try:
                         m()
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except Exception as e:
+                        _logger.warning(
+                            "Cleanup method %s.%s failed: %s",
+                            type(obj).__name__,
+                            getattr(m, "__name__", "<unknown>"),
+                            e
+                        )
+        except Exception as e:
+            _logger.debug("Failed to inspect object for cleanup: %s", e)
             
     def cleanup_scope(self, scope_name: str, scope_id: Any) -> None:
         bucket = self._by_scope.get(scope_name)
@@ -123,8 +131,8 @@ class ScopedCaches:
         try:
             for _, obj in container.items():
                 self._cleanup_object(obj)
-        except Exception:
-            pass
+        except Exception as e:
+            _logger.debug("Failed to cleanup container: %s", e)
 
     def for_scope(self, scopes: ScopeManager, scope: str) -> ComponentContainer:
         if scope == "singleton":
