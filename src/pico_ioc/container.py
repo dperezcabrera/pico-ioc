@@ -438,7 +438,7 @@ class PicoContainer:
             pid = _node_id(parent)
             for child in deps:
                 cid = _node_id(child)
-                lines.append(f"  {pid} -> {child};")
+                lines.append(f"  {pid} -> {cid};")
 
         lines.append("}")
 
