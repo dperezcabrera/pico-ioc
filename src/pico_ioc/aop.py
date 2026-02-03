@@ -145,22 +145,24 @@ class UnifiedComponentProxy:
             return
 
         lock = object.__getattribute__(self, "_lock")
-        tgt = object.__getattribute__(self, "_target")
-        if tgt is not None:
-            return
 
-        creator = object.__getattribute__(self, "_creator")
-        container = object.__getattribute__(self, "_container")
-        
-        tgt = creator() 
-        
+        with lock:
+            # Double-check inside lock to prevent race condition
+            tgt = object.__getattribute__(self, "_target")
+            if tgt is not None:
+                return
+
+            creator = object.__getattribute__(self, "_creator")
+            container = object.__getattribute__(self, "_container")
+
+            tgt = creator()
+            object.__setattr__(self, "_target", tgt)
+
+        # Run configure methods outside the lock to avoid blocking
         if container and hasattr(container, "_run_configure_methods"):
             res = container._run_configure_methods(tgt)
             if inspect.isawaitable(res):
                 await res
-        
-        with lock:
-            object.__setattr__(self, "_target", tgt)
         
     def _scope_signature(self) -> Tuple[Any, ...]:
         container = object.__getattribute__(self, "_container")
