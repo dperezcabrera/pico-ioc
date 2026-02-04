@@ -1,154 +1,142 @@
-# Welcome to pico-ioc
+# Pico-IoC Documentation
 
-`pico-ioc` is a powerful, async-native, and observability-first Inversion of Control (IoC) container for Python. It's designed to bring the power of enterprise-grade dependency injection, configuration binding, and AOP (Aspect-Oriented Programming) from frameworks like Spring into the modern Python ecosystem.
-
-This documentation site guides you from your first component to building complex, observable, and testable applications.
-
-## Key Features
-
-* 🚀 Async-Native: Full support for `async`/`await` in component resolution (`aget`), lifecycle methods (`__ainit__`, `@cleanup`), AOP interceptors, and the Event Bus.
-* 🌳 Advanced Unified Configuration: Use `@configured` to map complex YAML/JSON configuration trees or flat key-value sources (like ENV) directly to `dataclass` graphs via the `configuration(...)` builder, with clear precedence rules and normalization.
-* 🔬 Observability-First: Built-in container contexts (`as_current`), stats (`.stats()`), and observer protocols (`ContainerObserver`) to monitor, trace, and debug your application's components.
-* ✨ Powerful AOP: Intercept method calls for cross-cutting concerns (like logging, tracing, or caching) using `@intercepted_by` without modifying your business logic.
-* ✅ Fail-Fast Validation: The container validates all component dependencies at startup (`init()`), preventing `ProviderNotFoundError` exceptions at runtime.
-* 🧩 Rich Lifecycle: Full control over component lifecycles with `scope`, lazy instantiation, `@configure` setup methods, and `@cleanup` teardown hooks.
-
-## Documentation Structure
-
-| Section | Focus | Start Here |
-| :--- | :--- | :--- |
-| 1. Getting Started | Installation and 5-minute quick start. | [Quick Start](./getting-started.md) |
-| 2. User Guide | Core concepts, configuration, scopes, and testing. | [User Guide Overview](./user-guide/README.md) |
-| 3. Advanced Features | Async, AOP, Event Bus, and conditional logic. | [Advanced Features Overview](./advanced-features/README.md) |
-| 4. Observability | Context, metrics, tracing, and graph export. | [Observability Overview](./observability/README.md) |
-| 6. Cookbook (Patterns) | Full architectural solutions (Multi-tenant, Hot-reload, CQRS). | [Cookbook Overview](./cookbook/README.md) |
-| 7. Architecture | Design principles and internal deep-dive. | [Architecture Overview](./architecture/README.md) |
-| 8. API Reference | Glossary and decorator/method cheatsheets. | [API Reference Overview](./api-reference/README.md) |
-
-## Overview
-
-pico-ioc is a Dependency Injection (DI) container for Python that implements advanced enterprise architecture patterns. Its design is inspired by frameworks like Spring (Java) and Guice, adapted for the Python ecosystem.
-
-It provides a robust, type-safe, and testable foundation for complex applications by managing component lifecycles, configuration, and runtime dependencies.
+`pico-ioc` is a lightweight, async-native Inversion of Control (IoC) container for Python 3.10+. It brings enterprise-grade dependency injection, configuration binding, and AOP to the Python ecosystem.
 
 ---
 
-## Core Strengths
-
-The framework is built on specific principles:
-
-* Fail-Fast at Startup: All wiring errors are detected during `init()`, preventing runtime surprises.
-* Async-Native: Full integration of `async`/`await` across the resolution and lifecycle systems.
-* AOP and Observability: Built-in tools for cross-cutting concerns and monitoring runtime behavior.
-
----
-
-## Getting Started
-
-### Installation
+## Quick Install
 
 ```bash
 pip install pico-ioc
-```
 
-### A Simple Example
-
-```python
-from dataclasses import dataclass
-from pico_ioc import component, init
-
-# 1. Define your components
-class Greeter:
-    def say_hello(self) -> str: ...
-
-@component
-class EnglishGreeter(Greeter):
-    def say_hello(self) -> str:
-        return "Hello!"
-
-@component
-class App:
-    # 2. Declare dependencies in the constructor
-    def __init__(self, greeter: Greeter):
-        self.greeter = greeter
-    
-    def run(self):
-        print(self.greeter.say_hello())
-
-# 3. Initialize the container (scans this module for @component)
-container = init(modules=[__name__])
-
-# 4. Get the root component and run
-app = container.get(App)
-app.run()
-
-# Output: Hello!
-```
-
-### Async Quick Peek
-
-```python
-from pico_ioc import component, init
-
-@component
-class AsyncService:
-    async def __ainit__(self):
-        # async initialization logic (e.g., open connections)
-        ...
-
-    async def compute(self) -> int:
-        return 42
-
-container = init(modules=[__name__])
-
-# Resolve asynchronously
-service = await container.aget(AsyncService)
-print(await service.compute())
-```
-
-### Configuration at a Glance
-
-```python
-import os
-from dataclasses import dataclass
-from pico_ioc import component, configured, configuration, init
-
-# Example config dataclass bound from ENV and a YAML file
-@configured(prefix="app")
-@dataclass
-class AppConfig:
-    name: str
-    debug: bool = False
-
-@component
-class ConfiguredApp:
-    def __init__(self, config: AppConfig):
-        self.config = config
-
-# Compose configuration sources with precedence: ENV > file defaults
-config = configuration(
-    files=["./config/app.yaml"],  # YAML/JSON files
-    env=os.environ,               # flat ENV vars (e.g., APP_NAME, APP_DEBUG)
-)
-
-container = init(modules=["my_project.components"], config=config)
-app = container.get(ConfiguredApp)
-print(app.config)
+# Optional: YAML configuration support
+pip install pico-ioc[yaml]
 ```
 
 ---
 
-## Observability Essentials
+## 30-Second Example
 
-* Use `with container.as_current():` to establish a container context for tracing.
-* Access container metrics via `container.stats()`.
-* Implement `ContainerObserver` to react to lifecycle events (component created/cleaned up, resolution timings).
+```python
+from pico_ioc import component, init
+
+@component
+class Database:
+    def query(self) -> str:
+        return "data from DB"
+
+@component
+class UserService:
+    def __init__(self, db: Database):  # Auto-injected
+        self.db = db
+
+    def get_users(self) -> str:
+        return self.db.query()
+
+# Initialize and use
+container = init(modules=[__name__])
+service = container.get(UserService)
+print(service.get_users())  # "data from DB"
+```
+
+---
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Async-Native** | Full `async`/`await` support: `aget()`, `__ainit__`, async `@cleanup` |
+| **Unified Configuration** | `@configured` maps ENV vars or YAML/JSON to dataclasses |
+| **Fail-Fast Validation** | All wiring errors detected at `init()`, not runtime |
+| **AOP Interceptors** | `@intercepted_by` for logging, caching, security |
+| **Scoped Lifecycles** | singleton, prototype, request, session, transaction |
+| **Observable** | Built-in stats, health checks, dependency graph export |
+
+---
+
+## Documentation Structure
+
+| # | Section | Description | Link |
+|---|---------|-------------|------|
+| 1 | **Getting Started** | 5-minute tutorial | [getting-started.md](./getting-started.md) |
+| 2 | **User Guide** | Core concepts, configuration, scopes, testing | [user-guide/](./user-guide/README.md) |
+| 3 | **Advanced Features** | Async, AOP, Event Bus, conditional binding | [advanced-features/](./advanced-features/README.md) |
+| 4 | **Observability** | Metrics, tracing, graph export | [observability/](./observability/README.md) |
+| 5 | **Cookbook** | Real-world patterns (multi-tenant, CQRS, etc.) | [cookbook/](./cookbook/README.md) |
+| 6 | **Architecture** | Design principles, internals | [architecture/](./architecture/README.md) |
+| 7 | **API Reference** | Decorators, exceptions, protocols | [api-reference/](./api-reference/README.md) |
+| 8 | **FAQ** | Common questions and solutions | [faq.md](./faq.md) |
+| 9 | **Examples** | Complete runnable applications | [examples/](./examples/README.md) |
+
+---
+
+## Core APIs at a Glance
+
+### Registration
+
+```python
+from pico_ioc import component, factory, provides
+
+@component                    # Register a class
+class MyService: ...
+
+@factory                      # Group related providers
+class ClientFactory:
+    @provides(RedisClient)    # Provide third-party types
+    def build_redis(self, config: RedisConfig) -> RedisClient:
+        return RedisClient(config.url)
+```
+
+### Configuration
+
+```python
+from dataclasses import dataclass
+from pico_ioc import configured, configuration, init
+
+@configured(prefix="DB_")
+@dataclass
+class DBConfig:
+    host: str = "localhost"
+    port: int = 5432
+
+container = init(
+    modules=[__name__],
+    config=configuration()  # Reads from ENV: DB_HOST, DB_PORT
+)
+```
+
+### Async Support
+
+```python
+@component
+class AsyncService:
+    async def __ainit__(self):
+        self.conn = await open_connection()
+
+    @cleanup
+    async def close(self):
+        await self.conn.close()
+
+# Resolve async components
+service = await container.aget(AsyncService)
+
+# Cleanup
+await container.ashutdown()
+```
+
+### Testing with Overrides
+
+```python
+container = init(
+    modules=[__name__],
+    overrides={Database: FakeDatabase()}  # Replace for tests
+)
+```
 
 ---
 
 ## Next Steps
 
-* Read the Quick Start to build your first app: [Getting Started](./getting-started.md)
-* Explore AOP, async lifecycles, and the Event Bus: [Advanced Features](./advanced-features/README.md)
-* Learn how to bind complex configurations: [User Guide](./user-guide/README.md)
-* See observability in action: [Observability](./observability/README.md)
+1. **New to pico-ioc?** Start with the [Getting Started](./getting-started.md) tutorial
+2. **Coming from Spring/Guice?** Check the [Architecture Comparison](./architecture/comparison.md)
+3. **Building a real app?** See the [Cookbook](./cookbook/README.md) patterns
