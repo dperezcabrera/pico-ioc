@@ -297,7 +297,7 @@ tox
 
 ## 🧾 Changelog
 
-See [CHANGELOG.md](https://www.google.com/search?q=./CHANGELOG.md) — Significant redesigns and features in v2.0+.
+See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
 -----
 
