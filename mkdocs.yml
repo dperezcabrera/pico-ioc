@@ -122,9 +122,14 @@ plugins:
       type: timeago
 
 nav:
-  - Home: overview.md
+  - Home: README.md
   - Getting Started: getting-started.md
+  - FAQ: faq.md
   - Learning Roadmap: LEARN.md
+
+  - Examples:
+    - examples/README.md
+    - FastAPI TODO App: examples/fastapi-todo-app.md
 
   - User Guide:
     - user-guide/README.md
@@ -198,3 +203,4 @@ nav:
     - Provider Selector: api-reference/provider-selector.md
     - EventBus API: api-reference/event_bus.md
     - Exceptions: api-reference/exceptions.md
+
