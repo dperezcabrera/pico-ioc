@@ -6,7 +6,7 @@ from typing import (
     Iterable, Set, get_args, get_origin, Annotated, Protocol, Mapping, Type
 )
 from contextlib import contextmanager
-from .constants import LOGGER, PICO_META
+from .constants import LOGGER, PICO_META, SCOPE_SINGLETON
 from .exceptions import ComponentCreationError, ProviderNotFoundError, AsyncResolutionError, ConfigurationError
 from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
@@ -134,7 +134,7 @@ class PicoContainer:
 
     def _cache_for(self, key: KeyT):
         md = self._locator._metadata.get(key) if self._locator else None
-        sc = (md.scope if md else "singleton")
+        sc = (md.scope if md else SCOPE_SINGLETON)
         return self._caches.for_scope(self.scopes, sc)
 
     def has(self, key: KeyT) -> bool:
@@ -238,8 +238,8 @@ class PicoContainer:
             raise AsyncResolutionError(key)
 
         md = self._locator._metadata.get(key) if self._locator else None
-        scope = (md.scope if md else "singleton")
-        if scope != "singleton":
+        scope = (md.scope if md else SCOPE_SINGLETON)
+        if scope != SCOPE_SINGLETON:
             instance_or_awaitable_configured = self._run_configure_methods(instance)
             if inspect.isawaitable(instance_or_awaitable_configured):
                 raise AsyncResolutionError(key)
@@ -266,8 +266,8 @@ class PicoContainer:
             instance = await instance_or_awaitable
 
         md = self._locator._metadata.get(key) if self._locator else None
-        scope = (md.scope if md else "singleton")
-        if scope != "singleton":
+        scope = (md.scope if md else SCOPE_SINGLETON)
+        if scope != SCOPE_SINGLETON:
             instance_or_awaitable_configured = self._run_configure_methods(instance)
             if inspect.isawaitable(instance_or_awaitable_configured):
                 instance = await instance_or_awaitable_configured

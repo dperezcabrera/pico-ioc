@@ -2,6 +2,7 @@ import inspect
 import pickle
 import threading
 from typing import Any, Callable, Dict, List, Tuple, Protocol, Union
+from .constants import SCOPE_SINGLETON
 from .exceptions import SerializationError, AsyncResolutionError
 
 KeyT = Union[str, type]
@@ -175,7 +176,7 @@ class UnifiedComponentProxy:
         if key in loc._metadata:
             md = loc._metadata[key]
             sc = md.scope
-            if sc == "singleton":
+            if sc == SCOPE_SINGLETON:
                 return ()
             
             return (container.scopes.get_id(sc),)

@@ -1,12 +1,11 @@
-import inspect
 from dataclasses import is_dataclass, fields, MISSING
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, get_args, get_origin, Annotated
-from .constants import PICO_INFRA, PICO_NAME, PICO_META
+from .constants import PICO_META, SCOPE_SINGLETON
 from .exceptions import ConfigurationError
 from .factory import ProviderMetadata, DeferredProvider
 from .config_builder import ContextConfig, ConfigSource, FlatDictSource, Value
 from .config_runtime import ConfigResolver, TypeAdapterRegistry, ObjectGraphBuilder, TreeSource
-from .analysis import analyze_callable_dependencies, DependencyRequest
+from .analysis import analyze_callable_dependencies
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
@@ -160,7 +159,7 @@ class ConfigurationManager:
             
         graph_builder = self._graph
         qset = set(str(q) for q in meta.get("qualifier", ()))
-        sc = meta.get("scope", "singleton")
+        sc = meta.get("scope", SCOPE_SINGLETON)
         
         if mapping == "tree":
             provider = DeferredProvider(lambda pico, loc, t=target, p=prefix, g=graph_builder: g.build_from_prefix(t, p))
