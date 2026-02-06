@@ -1,8 +1,6 @@
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union, get_origin, Annotated, get_args
+from typing import Any, Dict, Iterable, List, Optional, Set, Union
 from .factory import ProviderMetadata
-from .decorators import Qualifier
 import inspect
-from .analysis import DependencyRequest
 
 KeyT = Union[str, type]
 

@@ -2,7 +2,7 @@ import contextvars
 import inspect
 import logging
 from typing import Any, Dict, Optional, Tuple
-from collections import OrderedDict
+from .constants import SCOPE_SINGLETON, SCOPE_PROTOTYPE
 from .exceptions import ScopeError
 
 _logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class ScopeManager:
     def register_scope(self, name: str) -> None:
         if not isinstance(name, str) or not name:
             raise ScopeError("Scope name must be a non-empty string")
-        if name in ("singleton", "prototype"):
+        if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             raise ScopeError(f"Cannot register reserved scope: '{name}'")
         if name in self._scopes:
             return
@@ -64,12 +64,12 @@ class ScopeManager:
         
         
     def get_id(self, name: str) -> Any | None:
-        if name in ("singleton", "prototype"):
+        if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             return None
         impl = self._scopes.get(name)
         return impl.get_id() if impl else None
     def activate(self, name: str, scope_id: Any) -> Optional[contextvars.Token]:
-        if name in ("singleton", "prototype"):
+        if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             return None
         impl = self._scopes.get(name)
         if impl is None:
@@ -79,7 +79,7 @@ class ScopeManager:
             return getattr(impl, "activate")(scope_id)
         return None
     def deactivate(self, name: str, token: Optional[contextvars.Token]) -> None:
-        if name in ("singleton", "prototype"):
+        if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             return
         impl = self._scopes.get(name)
         if impl is None:
@@ -88,7 +88,7 @@ class ScopeManager:
         if token is not None and hasattr(impl, "deactivate"):
             getattr(impl, "deactivate")(token)
     def names(self) -> Tuple[str, ...]:
-        return tuple(n for n in self._scopes.keys() if n not in ("singleton", "prototype"))
+        return tuple(n for n in self._scopes.keys() if n not in (SCOPE_SINGLETON, SCOPE_PROTOTYPE))
     def signature(self, names: Tuple[str, ...]) -> Tuple[Any, ...]:
         return tuple(self.get_id(n) for n in names)
     def signature_all(self) -> Tuple[Any, ...]:
@@ -135,9 +135,9 @@ class ScopedCaches:
             _logger.debug("Failed to cleanup container: %s", e)
 
     def for_scope(self, scopes: ScopeManager, scope: str) -> ComponentContainer:
-        if scope == "singleton":
+        if scope == SCOPE_SINGLETON:
             return self._singleton
-        if scope == "prototype":
+        if scope == SCOPE_PROTOTYPE:
             return self._no_cache
         
         sid = scopes.get_id(scope)
@@ -165,7 +165,7 @@ class ScopedCaches:
                     yield item
 
     def shrink(self, scope: str, keep: int) -> None:
-        if scope in ("singleton", "prototype"):
+        if scope in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             return
         bucket = self._by_scope.get(scope)
         if not bucket:

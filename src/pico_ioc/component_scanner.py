@@ -1,7 +1,7 @@
 import inspect
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Set, Protocol
-from .constants import PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
+from .constants import PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META, SCOPE_SINGLETON
 from .factory import ProviderMetadata, DeferredProvider
 from .decorators import get_return_type
 from .config_registrar import ConfigurationManager
@@ -70,7 +70,7 @@ class ComponentScanner:
             return
         key = getattr(cls, PICO_KEY, cls)
         qset = set(str(q) for q in getattr(cls, PICO_META, {}).get("qualifier", ()))
-        sc = getattr(cls, PICO_META, {}).get("scope", "singleton")
+        sc = getattr(cls, PICO_META, {}).get("scope", SCOPE_SINGLETON)
         deps = analyze_callable_dependencies(cls.__init__)
         provider = DeferredProvider(lambda pico, loc, c=cls, d=deps: pico.build_class(c, loc, d))
         md = ProviderMetadata(key=key, provided_type=cls, concrete_class=cls, factory_class=None, factory_method=None, qualifiers=qset, primary=bool(getattr(cls, PICO_META, {}).get("primary")), lazy=bool(getattr(cls, PICO_META, {}).get("lazy", False)), infra=getattr(cls, PICO_INFRA, None), pico_name=getattr(cls, PICO_NAME, None), scope=sc, dependencies=deps)
@@ -130,7 +130,7 @@ class ComponentScanner:
 
             rt = get_return_type(fn)
             qset = set(str(q) for q in getattr(fn, PICO_META, {}).get("qualifier", ()))
-            sc = getattr(fn, PICO_META, {}).get("scope", getattr(cls, PICO_META, {}).get("scope", "singleton"))
+            sc = getattr(fn, PICO_META, {}).get("scope", getattr(cls, PICO_META, {}).get("scope", SCOPE_SINGLETON))
             md = ProviderMetadata(key=k, provided_type=rt if isinstance(rt, type) else (k if isinstance(k, type) else None), concrete_class=None, factory_class=cls, factory_method=name, qualifiers=qset, primary=bool(getattr(fn, PICO_META, {}).get("primary")), lazy=bool(getattr(fn, PICO_META, {}).get("lazy", False)), infra=getattr(cls, PICO_INFRA, None), pico_name=getattr(fn, PICO_NAME, None), scope=sc, dependencies=deps)
             self._queue(k, provider, md)
 
@@ -142,7 +142,7 @@ class ComponentScanner:
         provider = DeferredProvider(lambda pico, loc, f=fn, d=deps: pico.build_method(f, loc, d))
         rt = get_return_type(fn)
         qset = set(str(q) for q in getattr(fn, PICO_META, {}).get("qualifier", ()))
-        sc = getattr(fn, PICO_META, {}).get("scope", "singleton")
+        sc = getattr(fn, PICO_META, {}).get("scope", SCOPE_SINGLETON)
         md = ProviderMetadata(key=k, provided_type=rt if isinstance(rt, type) else (k if isinstance(k, type) else None), concrete_class=None, factory_class=None, factory_method=getattr(fn, "__name__", None), qualifiers=qset, primary=bool(getattr(fn, PICO_META, {}).get("primary")), lazy=bool(getattr(fn, PICO_META, {}).get("lazy", False)), infra="provides", pico_name=getattr(fn, PICO_NAME, None), scope=sc, dependencies=deps)
         self._queue(k, provider, md)
         self._provides_functions[k] = fn

@@ -1,6 +1,6 @@
 # Pico-IoC Documentation
 
-`pico-ioc` is a lightweight, async-native Inversion of Control (IoC) container for Python 3.10+. It brings enterprise-grade dependency injection, configuration binding, and AOP to the Python ecosystem.
+`pico-ioc` is a lightweight, async-native Inversion of Control (IoC) container for Python 3.11+. It brings enterprise-grade dependency injection, configuration binding, and AOP to the Python ecosystem.
 
 ---
 

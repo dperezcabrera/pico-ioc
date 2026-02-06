@@ -15,7 +15,7 @@
 **Pico-IoC** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
 It brings Inversion of Control and dependency injection to Python in a deterministic, modern, and framework-agnostic way.
 
-> 🐍 Requires Python 3.10+
+> 🐍 Requires Python 3.11+
 
 ---
 
@@ -298,6 +298,19 @@ tox
 ## 🧾 Changelog
 
 See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
+
+-----
+
+## 🤖 Claude Code Skills
+
+This project includes pre-designed skills for [Claude Code](https://claude.ai/claude-code), enabling AI-assisted development with pico-ioc patterns.
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| **Pico Component Creator** | `/pico-component` | Creates components with DI, scopes, factories and interceptors |
+| **Pico Test Generator** | `/pico-tests` | Generates tests for pico-framework components |
+
+See [Skills documentation](docs/skills.md) for full details and installation instructions.
 
 -----
 
