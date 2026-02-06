@@ -191,6 +191,8 @@ nav:
       - ADR-010 Unified Configuration: adr/adr-0010-unified-configuration.md
       - ADR-011 Custom Scanners: adr/adr-0011-custom-scanners.md
 
+  - Claude Code Skills: skills.md
+
   - API Reference:
     - api-reference/README.md
     - Analysis API: api-reference/analysis-api.md

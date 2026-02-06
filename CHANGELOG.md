@@ -7,6 +7,26 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.2.2] - 2026-02-06
+
+### Changed
+
+- **Python Version**: Bumped minimum Python from 3.10 to 3.11 (`requires-python >= 3.11`). Removed Python 3.10 classifier.
+
+### Internal 🔧
+
+- **Scope Constants**: Replaced all hardcoded `"singleton"` and `"prototype"` string literals across `aop.py`, `api.py`, `container.py`, `scope.py`, `registrar.py`, `locator.py`, and `component_scanner.py` with `SCOPE_SINGLETON` and `SCOPE_PROTOTYPE` constants from `constants.py`.
+- Simplified import lists in `registrar.py`, `locator.py`, and `config_registrar.py`.
+
+### Docs 📚
+
+- Added `docs/faq.md` with common questions and troubleshooting.
+- Added `docs/examples/fastapi-todo-app.md` — full FastAPI + pico-ioc tutorial.
+- Added `docs/examples/README.md` index for examples section.
+- Updated `mkdocs.yml` navigation to include FAQ and examples.
+
+---
+
 ## [2.2.1] - 2026-02-03
 
 ### Fixed 🧩

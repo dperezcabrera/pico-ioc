@@ -1,15 +1,10 @@
 import os
-import inspect
 import logging
-import functools
-from dataclasses import is_dataclass, fields, MISSING
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, get_args, get_origin, Iterable
-from .constants import LOGGER, PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
-from .exceptions import ConfigurationError, InvalidBindingError
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from .constants import LOGGER, PICO_INFRA, PICO_NAME, PICO_META, SCOPE_SINGLETON
 from .factory import ComponentFactory, ProviderMetadata, DeferredProvider
 from .locator import ComponentLocator
 from .aop import UnifiedComponentProxy
-from .decorators import Qualifier, get_return_type
 from .config_builder import ContextConfig
 from .config_runtime import TreeSource
 from .config_registrar import ConfigurationManager
@@ -103,15 +98,15 @@ class Registrar:
                 if isinstance(dep_req.key, type):
                     dep_md = self._find_md_for_type(dep_req.key)
 
-            if dep_md and dep_md.scope != "singleton":
+            if dep_md and dep_md.scope != SCOPE_SINGLETON:
                 return dep_md.scope
         return None
 
     def _promote_scopes(self) -> None:
         for k, md in list(self._metadata.items()):
-            if md.scope == "singleton":
+            if md.scope == SCOPE_SINGLETON:
                 ns = self._find_narrower_scope_from_deps(md.dependencies)
-                if ns and ns != "singleton":
+                if ns and ns != SCOPE_SINGLETON:
                     self._metadata[k] = ProviderMetadata(key=md.key, provided_type=md.provided_type, concrete_class=md.concrete_class, factory_class=md.factory_class, factory_method=md.factory_method, qualifiers=md.qualifiers, primary=md.primary, lazy=md.lazy, infra=md.infra, pico_name=md.pico_name, override=md.override, scope=ns, dependencies=md.dependencies)
 
     def _rebuild_indexes(self) -> None:
@@ -156,7 +151,7 @@ class Registrar:
                 infra="component",
                 pico_name="PicoContainer",
                 override=True,
-                scope="singleton",
+                scope=SCOPE_SINGLETON,
                 dependencies=()
             )
 
@@ -171,7 +166,7 @@ class Registrar:
             deps = analyze_callable_dependencies(default_cls.__init__)
             provider = DeferredProvider(lambda pico, loc, c=default_cls, d=deps: pico.build_class(c, loc, d))
             qset = set(str(q) for q in getattr(default_cls, PICO_META, {}).get("qualifier", ()))
-            sc = getattr(default_cls, PICO_META, {}).get("scope", "singleton")
+            sc = getattr(default_cls, PICO_META, {}).get("scope", SCOPE_SINGLETON)
             md = ProviderMetadata(key=key, provided_type=key if isinstance(key, type) else None, concrete_class=default_cls, factory_class=None, factory_method=None, qualifiers=qset, primary=True, lazy=bool(getattr(default_cls, PICO_META, {}).get("lazy", False)), infra=getattr(default_cls, PICO_INFRA, None), pico_name=getattr(default_cls, PICO_NAME, None), override=True, scope=sc, dependencies=deps)
 
             self._bind_if_absent(key, provider)

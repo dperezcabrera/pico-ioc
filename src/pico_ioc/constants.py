@@ -8,3 +8,6 @@ PICO_NAME = "_pico_name"
 PICO_KEY = "_pico_key"
 PICO_META = "_pico_meta"
 
+SCOPE_SINGLETON = "singleton"
+SCOPE_PROTOTYPE = "prototype"
+

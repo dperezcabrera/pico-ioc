@@ -9,6 +9,7 @@ from .locator import ComponentLocator
 from .scope import ScopeManager, ScopedCaches
 from .container import PicoContainer
 from .decorators import component, factory, provides, Qualifier, configure, cleanup, configured
+from .constants import SCOPE_SINGLETON
 from .config_builder import ContextConfig, configuration
 from .registrar import Registrar
 from .aop import ContainerObserver
@@ -111,7 +112,7 @@ def init(
     if not validate_only:
         eager_singletons = []
         for key, md in locator._metadata.items():
-            if md.scope == "singleton" and not md.lazy:
+            if md.scope == SCOPE_SINGLETON and not md.lazy:
                 cache = pico._cache_for(key)
                 instance = cache.get(key)
                 if instance is None:
