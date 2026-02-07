@@ -5,28 +5,24 @@ import asyncio
 import inspect
 import os
 import tempfile
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from pico_ioc import init, component, factory, provides, configure, cleanup
+import pytest
+
+from pico_ioc import cleanup, component, configure, factory, init, provides
+from pico_ioc.aop import ContainerObserver, health
+from pico_ioc.constants import PICO_META
 from pico_ioc.container import (
     PicoContainer,
-    _normalize_callable,
+    _build_resolution_graph,
     _get_signature_safe,
-    _needs_async_configure,
     _iter_configure_methods,
-    _build_resolution_graph
+    _needs_async_configure,
+    _normalize_callable,
 )
-from pico_ioc.constants import PICO_META
-from pico_ioc.exceptions import (
-    ComponentCreationError,
-    ProviderNotFoundError,
-    AsyncResolutionError,
-    ConfigurationError
-)
+from pico_ioc.exceptions import AsyncResolutionError, ComponentCreationError, ConfigurationError, ProviderNotFoundError
 from pico_ioc.factory import ComponentFactory
 from pico_ioc.scope import ScopedCaches, ScopeManager
-from pico_ioc.aop import ContainerObserver, health
 
 
 # Define test components at module level for proper scanning
@@ -341,7 +337,7 @@ class TestContainerExportGraph:
 
             container.export_graph(path)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'digraph Pico' in content
@@ -362,7 +358,7 @@ class TestContainerExportGraph:
 
             container.export_graph(path, title="My Application")
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'My Application' in content
@@ -381,7 +377,7 @@ class TestContainerExportGraph:
 
             container.export_graph(path, include_qualifiers=True)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'digraph Pico' in content
@@ -399,7 +395,7 @@ class TestContainerExportGraph:
 
             container.export_graph(path, rankdir="TB")
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'rankdir="TB"' in content

@@ -1,19 +1,39 @@
-import pytest
-import os
-import types
 import asyncio
-import pickle
 import logging
+import os
+import pickle
+import types
 from dataclasses import dataclass
-from typing import List, Any, Callable, Optional
+from typing import Any, Callable, List, Optional
+
+import pytest
+
 import pico_ioc.event_bus
 from pico_ioc import (
-    init, component, factory, provides, configured, configuration,
-    cleanup, configure, health, intercepted_by,
-    PicoContainer, MethodInterceptor, MethodCtx, ScopeError,
-    InvalidBindingError, ComponentCreationError,
-    ProviderNotFoundError, ConfigurationError, SerializationError,
-    Event, subscribe, AutoSubscriberMixin, EventBus, EventBusClosedError
+    AutoSubscriberMixin,
+    ComponentCreationError,
+    ConfigurationError,
+    Event,
+    EventBus,
+    EventBusClosedError,
+    InvalidBindingError,
+    MethodCtx,
+    MethodInterceptor,
+    PicoContainer,
+    ProviderNotFoundError,
+    ScopeError,
+    SerializationError,
+    cleanup,
+    component,
+    configuration,
+    configure,
+    configured,
+    factory,
+    health,
+    init,
+    intercepted_by,
+    provides,
+    subscribe,
 )
 
 log_capture = []
@@ -352,7 +372,8 @@ async def test_event_bus_integration_and_shutdown():
 
 def test_dependency_graph_dot_export(tmp_path):
     import types
-    from pico_ioc.api import component, provides, init, _format_key
+
+    from pico_ioc.api import _format_key, component, init, provides
 
     class Repo:
         pass
@@ -420,7 +441,8 @@ def test_dependency_graph_dot_export(tmp_path):
 
 def test_dependency_graph_includes_provides_functions():
     import types
-    from pico_ioc.api import component, provides, init
+
+    from pico_ioc.api import component, init, provides
 
     class Repo:
         pass

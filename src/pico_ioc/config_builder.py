@@ -1,10 +1,11 @@
-import os
 import json
+import os
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol, Mapping, List, Tuple, Dict, Union
+from typing import Any, Dict, List, Mapping, Optional, Protocol, Tuple, Union
 
-from .config_runtime import TreeSource, DictSource, JsonTreeSource, YamlTreeSource, Value
+from .config_runtime import DictSource, JsonTreeSource, TreeSource, Value, YamlTreeSource
 from .exceptions import ConfigurationError
+
 
 class ConfigSource(Protocol):
     pass
@@ -19,7 +20,7 @@ class FileSource(ConfigSource):
     def __init__(self, path: str, prefix: str = "") -> None:
         self.prefix = prefix
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 self._data = json.load(f)
         except Exception:
             self._data = {}

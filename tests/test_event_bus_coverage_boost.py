@@ -3,19 +3,24 @@ Additional tests to boost event_bus.py coverage to 90%+.
 Tests edge cases and less common code paths.
 """
 import asyncio
+import logging
 import threading
 import time
-import logging
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 from pico_ioc.event_bus import (
-    EventBus, subscribe, ExecPolicy, ErrorPolicy, Event,
-    AutoSubscriberMixin, PicoEventBusProvider, _Subscriber
+    AutoSubscriberMixin,
+    ErrorPolicy,
+    Event,
+    EventBus,
+    ExecPolicy,
+    PicoEventBusProvider,
+    _Subscriber,
+    subscribe,
 )
-from pico_ioc.exceptions import (
-    EventBusClosedError, EventBusError, EventBusQueueFullError, EventBusHandlerError
-)
+from pico_ioc.exceptions import EventBusClosedError, EventBusError, EventBusHandlerError, EventBusQueueFullError
 
 
 class SampleEvent(Event):

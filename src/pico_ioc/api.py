@@ -1,19 +1,20 @@
 import importlib
-import pkgutil
-import logging
 import inspect
+import logging
+import pkgutil
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
+
+from .aop import ContainerObserver
+from .component_scanner import CustomScanner
+from .config_builder import ContextConfig, configuration
+from .constants import SCOPE_SINGLETON
+from .container import PicoContainer
+from .decorators import Qualifier, cleanup, component, configure, configured, factory, provides
 from .exceptions import ConfigurationError, InvalidBindingError
 from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
-from .scope import ScopeManager, ScopedCaches
-from .container import PicoContainer
-from .decorators import component, factory, provides, Qualifier, configure, cleanup, configured
-from .constants import SCOPE_SINGLETON
-from .config_builder import ContextConfig, configuration
 from .registrar import Registrar
-from .aop import ContainerObserver
-from .component_scanner import CustomScanner
+from .scope import ScopedCaches, ScopeManager
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]

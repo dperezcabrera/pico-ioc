@@ -1,8 +1,9 @@
 # src/pico_ioc/factory.py
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Set, Tuple, Union
-from .exceptions import ProviderNotFoundError
+
 from .analysis import DependencyRequest
+from .exceptions import ProviderNotFoundError
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]

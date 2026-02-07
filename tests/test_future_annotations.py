@@ -6,15 +6,15 @@ strings at runtime. pico-ioc must resolve them via typing.get_type_hints().
 from __future__ import annotations
 
 import types
-import pytest
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import List, Optional
 
-from pico_ioc import component, factory, provides, configure, configured, init, configuration
+import pytest
+
+from pico_ioc import component, configuration, configure, configured, factory, init, provides
 from pico_ioc.analysis import analyze_callable_dependencies
-from pico_ioc.decorators import get_return_type
 from pico_ioc.config_runtime import DictSource
-
+from pico_ioc.decorators import get_return_type
 
 # --- Plain classes (not decorated) for unit tests ---
 

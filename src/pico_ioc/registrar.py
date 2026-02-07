@@ -1,18 +1,19 @@
-import os
 import logging
+import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from .constants import LOGGER, PICO_INFRA, PICO_NAME, PICO_META, SCOPE_SINGLETON
-from .factory import ComponentFactory, ProviderMetadata, DeferredProvider
-from .locator import ComponentLocator
+
+from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import UnifiedComponentProxy
-from .config_builder import ContextConfig
-from .config_runtime import TreeSource
-from .config_registrar import ConfigurationManager
-from .provider_selector import ProviderSelector
-from .dependency_validator import DependencyValidator
 from .component_scanner import ComponentScanner, CustomScanner
-from .analysis import analyze_callable_dependencies, DependencyRequest
+from .config_builder import ContextConfig
+from .config_registrar import ConfigurationManager
+from .config_runtime import TreeSource
+from .constants import LOGGER, PICO_INFRA, PICO_META, PICO_NAME, SCOPE_SINGLETON
 from .container import PicoContainer
+from .dependency_validator import DependencyValidator
+from .factory import ComponentFactory, DeferredProvider, ProviderMetadata
+from .locator import ComponentLocator
+from .provider_selector import ProviderSelector
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]

@@ -1,9 +1,12 @@
 # tests/test_event_bus.py
 import asyncio
 import threading
-import pytest
 from typing import List
-from pico_ioc import EventBus, ExecPolicy, ErrorPolicy, Event, subscribe, AutoSubscriberMixin
+
+import pytest
+
+from pico_ioc import AutoSubscriberMixin, ErrorPolicy, Event, EventBus, ExecPolicy, subscribe
+
 
 class MyEvent(Event):
     def __init__(self, value: int):

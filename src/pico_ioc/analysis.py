@@ -1,15 +1,32 @@
+import collections
+import collections.abc
 import inspect
 import typing
 from dataclasses import dataclass
-import collections
-import collections.abc
 from typing import (
-    Any, Callable, List, Optional, Tuple, Union, get_args, get_origin, Annotated,
-    Iterable, Set, Sequence, Collection, Deque, FrozenSet, MutableSequence, MutableSet,
-    Dict, Mapping
+    Annotated,
+    Any,
+    Callable,
+    Collection,
+    Deque,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    Mapping,
+    MutableSequence,
+    MutableSet,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+    get_args,
+    get_origin,
 )
-from .decorators import Qualifier
+
 from .constants import LOGGER
+from .decorators import Qualifier
 
 KeyT = Union[str, type]
 

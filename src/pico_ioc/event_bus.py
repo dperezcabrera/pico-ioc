@@ -5,8 +5,9 @@ import threading
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple, Type
-from .api import factory, provides, configure, cleanup
-from .exceptions import EventBusClosedError, EventBusError, EventBusQueueFullError, EventBusHandlerError
+
+from .api import cleanup, configure, factory, provides
+from .exceptions import EventBusClosedError, EventBusError, EventBusHandlerError, EventBusQueueFullError
 
 log = logging.getLogger(__name__)
 
