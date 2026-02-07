@@ -4,15 +4,7 @@ from typing import Annotated, Union
 
 import pytest
 
-from pico_ioc import (
-    init,
-    configured,
-    configuration,
-    EnvSource,
-    DictSource,
-    Value,
-    Discriminator
-)
+from pico_ioc import DictSource, Discriminator, EnvSource, Value, configuration, configured, init
 
 
 @configured(prefix="TEST_", mapping="flat", lazy=True)

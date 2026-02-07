@@ -1,6 +1,9 @@
-import pytest
-from pico_ioc import init, component, PicoContainer
 from typing import Protocol, runtime_checkable
+
+import pytest
+
+from pico_ioc import PicoContainer, component, init
+
 
 @runtime_checkable
 class Database(Protocol):

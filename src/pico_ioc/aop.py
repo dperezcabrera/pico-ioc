@@ -1,9 +1,10 @@
 import inspect
 import pickle
 import threading
-from typing import Any, Callable, Dict, List, Tuple, Protocol, Union
+from typing import Any, Callable, Dict, List, Protocol, Tuple, Union
+
 from .constants import SCOPE_SINGLETON
-from .exceptions import SerializationError, AsyncResolutionError
+from .exceptions import AsyncResolutionError, SerializationError
 
 KeyT = Union[str, type]
 

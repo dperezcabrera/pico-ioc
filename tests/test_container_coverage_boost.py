@@ -4,27 +4,27 @@ Tests edge cases and less common code paths.
 """
 import asyncio
 import inspect
-import tempfile
 import os
-import pytest
-from typing import List, Dict, Any, Type
-from unittest.mock import MagicMock, patch, AsyncMock
+import tempfile
+from typing import Any, Dict, List, Type
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from pico_ioc import init, component, factory, provides, configure, cleanup
+import pytest
+
+from pico_ioc import cleanup, component, configure, factory, init, provides
+from pico_ioc.aop import MethodCtx, MethodInterceptor, UnifiedComponentProxy, intercepted_by
+from pico_ioc.constants import PICO_META
 from pico_ioc.container import (
     PicoContainer,
-    _get_signature_safe,
     _build_resolution_graph,
-    _needs_async_configure,
+    _get_signature_safe,
     _iter_configure_methods,
+    _needs_async_configure,
 )
-from pico_ioc.aop import UnifiedComponentProxy, intercepted_by, MethodInterceptor, MethodCtx
-from pico_ioc.scope import ScopedCaches, ScopeManager
+from pico_ioc.exceptions import AsyncResolutionError, ProviderNotFoundError
 from pico_ioc.factory import ComponentFactory, ProviderMetadata
 from pico_ioc.locator import ComponentLocator
-from pico_ioc.exceptions import AsyncResolutionError, ProviderNotFoundError
-from pico_ioc.constants import PICO_META
-
+from pico_ioc.scope import ScopedCaches, ScopeManager
 
 # ============================================================
 # Helper function tests - don't need container
@@ -519,7 +519,7 @@ class TestExportGraphWritesFile:
 
             container.export_graph(path)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'digraph Pico' in content
@@ -536,7 +536,7 @@ class TestExportGraphWritesFile:
 
             container.export_graph(path, title="My App")
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'My App' in content

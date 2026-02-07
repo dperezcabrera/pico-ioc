@@ -1,8 +1,11 @@
-import pytest
 import contextvars
-from pico_ioc.scope import ScopeManager, ScopedCaches, ComponentContainer
-from pico_ioc.exceptions import ScopeError
+
+import pytest
+
 from pico_ioc import cleanup
+from pico_ioc.exceptions import ScopeError
+from pico_ioc.scope import ComponentContainer, ScopedCaches, ScopeManager
+
 
 def test_scope_manager_validation():
     manager = ScopeManager()

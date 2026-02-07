@@ -1,15 +1,18 @@
-import pytest
-import pickle
 import inspect
+import pickle
 import threading
+
+import pytest
+
 from pico_ioc.aop import (
-    UnifiedComponentProxy, 
-    intercepted_by, 
-    MethodInterceptor, 
     MethodCtx,
-    _gather_interceptors_for_method
+    MethodInterceptor,
+    UnifiedComponentProxy,
+    _gather_interceptors_for_method,
+    intercepted_by,
 )
-from pico_ioc.exceptions import SerializationError, AsyncResolutionError
+from pico_ioc.exceptions import AsyncResolutionError, SerializationError
+
 
 def test_intercepted_by_validation():
     with pytest.raises(TypeError, match="requires at least one"):

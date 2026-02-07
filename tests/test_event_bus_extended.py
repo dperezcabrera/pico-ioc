@@ -2,14 +2,13 @@
 Extended tests for event_bus.py to increase coverage.
 """
 import asyncio
-import pytest
-from unittest.mock import MagicMock, patch
-import threading
 import logging
+import threading
+from unittest.mock import MagicMock, patch
 
-from pico_ioc.event_bus import (
-    EventBus, subscribe, ExecPolicy, ErrorPolicy, Event, AutoSubscriberMixin
-)
+import pytest
+
+from pico_ioc.event_bus import AutoSubscriberMixin, ErrorPolicy, Event, EventBus, ExecPolicy, subscribe
 from pico_ioc.exceptions import EventBusClosedError, EventBusError
 
 

@@ -1,7 +1,10 @@
+from typing import Any, Dict, List, Protocol, Union, runtime_checkable
+
 import pytest
-from typing import Protocol, runtime_checkable, List, Dict, Any, Union
-from pico_ioc.locator import ComponentLocator
+
 from pico_ioc.factory import ProviderMetadata
+from pico_ioc.locator import ComponentLocator
+
 
 class MyService:
     pass

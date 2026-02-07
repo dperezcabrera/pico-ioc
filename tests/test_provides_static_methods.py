@@ -1,6 +1,8 @@
 # tests/test_provides_static_methods.py
 import types
-from pico_ioc.api import component, factory, provides, init
+
+from pico_ioc.api import component, factory, init, provides
+
 
 class Service:
     pass

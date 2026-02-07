@@ -1,10 +1,14 @@
-import types
 import random
+import types
 from dataclasses import dataclass
 from typing import List
+
 import pytest
-from hypothesis import given, strategies as st
-from pico_ioc import init, component, InvalidBindingError
+from hypothesis import given
+from hypothesis import strategies as st
+
+from pico_ioc import InvalidBindingError, component, init
+
 
 def _build_module_from_edges(n: int, edges: List[tuple[int, int]]):
     mod = types.ModuleType(f"mod_{n}_{len(edges)}")

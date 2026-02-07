@@ -71,6 +71,12 @@ Optional extras:
     pip install pico-ioc[yaml]
     ```
 
+  - Dependency graph export as DOT/SVG (requires Graphviz)
+
+    ```bash
+    pip install pico-ioc[graphviz]
+    ```
+
 -----
 
 ### ⚠️ Important Note
@@ -316,5 +322,5 @@ See [Skills documentation](docs/skills.md) for full details and installation ins
 
 ## 📜 License
 
-MIT — [LICENSE](https://opensource.org/licenses/MIT)
+MIT — [LICENSE](./LICENSE)
 

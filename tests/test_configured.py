@@ -1,22 +1,24 @@
-import pytest
-import sys
 import json
+import sys
 import types
 from dataclasses import dataclass
-from typing import List, Dict, Union, Annotated, Optional
+from typing import Annotated, Dict, List, Optional, Union
+
+import pytest
 
 from pico_ioc import (
-    init,
-    configured,
-    component,
-    configuration,
-    DictSource,
-    JsonTreeSource,
-    YamlTreeSource,
-    Discriminator,
     ComponentCreationError,
     ConfigurationError,
+    DictSource,
+    Discriminator,
+    JsonTreeSource,
+    YamlTreeSource,
+    component,
+    configuration,
+    configured,
+    init,
 )
+
 
 @dataclass
 class DBSettings:
@@ -393,7 +395,7 @@ def test_string_injection_resolves_by_pico_name_or_classname():
         pass
     @component
     class Needs:
-        def __init__(self, w: "SpecialWidget"):
+        def __init__(self, w: "SpecialWidget"):  # noqa: F821
             self.w = w
             
     mod = types.ModuleType("test_mod")

@@ -1,8 +1,11 @@
-import pytest
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple, Callable
+from typing import Any, Callable, Optional, Tuple
+
+import pytest
+
 from pico_ioc import init
 from pico_ioc.factory import DeferredProvider, ProviderMetadata
+
 
 class PlainService:
     def get_value(self) -> str:

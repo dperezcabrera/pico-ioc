@@ -51,7 +51,7 @@ jobs:
           pip install linkchecker
           python -m http.server --directory site 8000 &
           sleep 3
-          linkchecker http://127.0.0.1:8000 --check-extern || true
+          linkchecker http://127.0.0.1:8000 --check-extern
 
   deploy:
     if: github.event_name != 'pull_request'

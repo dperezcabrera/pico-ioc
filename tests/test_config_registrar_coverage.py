@@ -1,10 +1,13 @@
-import pytest
-from typing import List, Union, Optional
 from dataclasses import dataclass
-from pico_ioc.config_registrar import _coerce, ConfigurationManager
+from typing import List, Optional, Union
+
+import pytest
+
 from pico_ioc.config_builder import ContextConfig, FlatDictSource
+from pico_ioc.config_registrar import ConfigurationManager, _coerce
 from pico_ioc.exceptions import ConfigurationError
 from pico_ioc.factory import ProviderMetadata
+
 
 def test_coerce_edge_cases():
     assert _coerce(None, int) is None
