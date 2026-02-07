@@ -10,12 +10,15 @@ from pico_ioc.exceptions import InvalidBindingError, ProviderNotFoundError
 class Service:
     pass
 
+
 class Dep:
     pass
+
 
 class Impl(Service):
     def __init__(self, dep: Dep) -> None:
         self.dep = dep
+
 
 def build_module_with_module_level_provides():
     m = types.ModuleType("module_level_provides")
@@ -32,6 +35,7 @@ def build_module_with_module_level_provides():
     setattr(m, "build_service", build_service)
     return m
 
+
 def build_module_with_string_key():
     m = types.ModuleType("module_level_string_key")
 
@@ -42,6 +46,7 @@ def build_module_with_string_key():
     setattr(m, "build_cache", build_cache)
     return m
 
+
 def build_module_with_profiles():
     m = types.ModuleType("module_level_profiles")
 
@@ -51,6 +56,7 @@ def build_module_with_profiles():
 
     setattr(m, "build_service_prod_only", build_service_prod_only)
     return m
+
 
 def build_module_with_missing_dependency():
     m = types.ModuleType("module_level_missing_dep")
@@ -66,12 +72,14 @@ def build_module_with_missing_dependency():
     setattr(m, "build_service", build_service)
     return m
 
+
 def test_module_level_provides_binds_and_injects_dependency():
     mod = build_module_with_module_level_provides()
     pico = init(mod)
     s = pico.get(Service)
     assert isinstance(s, Impl)
     assert isinstance(s.dep, Dep)
+
 
 def test_module_level_provides_with_string_key_and_retrieval_by_key():
     mod = build_module_with_string_key()
@@ -80,11 +88,13 @@ def test_module_level_provides_with_string_key_and_retrieval_by_key():
     assert isinstance(c, dict)
     assert c.get("ok") is True
 
+
 def test_module_level_provides_respects_profiles_enabled():
     mod = build_module_with_profiles()
     pico = init(mod, profiles=("prod",))
     s = pico.get(Service)
     assert isinstance(s, Service)
+
 
 def test_module_level_provides_respects_profiles_disabled():
     mod = build_module_with_profiles()
@@ -92,8 +102,8 @@ def test_module_level_provides_respects_profiles_disabled():
     with pytest.raises(ProviderNotFoundError):
         pico.get(Service)
 
+
 def test_module_level_provides_validation_reports_missing_dependencies():
     mod = build_module_with_missing_dependency()
     with pytest.raises(InvalidBindingError):
         init(mod, validate_only=True)
-

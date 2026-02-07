@@ -38,50 +38,61 @@ from pico_ioc import (
 
 log_capture = []
 
+
 class ListLogHandler(logging.Handler):
     def emit(self, record):
         log_capture.append(self.format(record))
+
 
 test_logger = logging.getLogger("TestCoverageLogger")
 test_logger.handlers.clear()
 test_logger.addHandler(ListLogHandler())
 test_logger.setLevel(logging.INFO)
 
+
 @pytest.fixture(autouse=True)
 def reset_logging_capture():
     log_capture.clear()
 
+
 @component
 class MissingDependency:
     pass
+
 
 @component
 class NeedsMissingComponent:
     def __init__(self, missing: MissingDependency):
         self.missing = missing
 
+
 @component
 class CircularA:
     def __init__(self, b: "CircularB"):
         self.b = b
+
 
 @component
 class CircularB:
     def __init__(self, a: CircularA):
         self.a = a
 
+
 @component
 class FailingComponent:
     def __init__(self):
         raise ValueError("Creation failure")
+
 
 @configured(target="self", mapping="auto")
 @dataclass
 class RequiredConfig:
     REQUIRED_KEY: str
 
+
 class Widget:
     pass
+
 
 @factory
 class WidgetFactory:
@@ -90,39 +101,47 @@ class WidgetFactory:
         test_logger.info("Widget_Factory: Creating Widget")
         return Widget()
 
+
 @component(lazy=True)
 class ConfiguredComponent:
     def __init__(self):
         self.configured = False
         self.widget = None
         test_logger.info("ConfiguredComponent: __init__")
+
     @configure
     def setup(self, widget: Widget):
         self.widget = widget
         self.configured = True
         test_logger.info("ConfiguredComponent: @configure called")
 
+
 @component
 class AsyncResource:
     def __init__(self):
         self.closed = False
         test_logger.info("AsyncResource: Created")
+
     @cleanup
     async def async_close(self):
         await asyncio.sleep(0)
         self.closed = True
         test_logger.info("AsyncResource: @cleanup async called")
 
+
 @component(conditional_require_env=("MY_TEST_VAR",))
 class EnvConditionalComponent:
     pass
 
+
 def check_predicate():
     return os.environ.get("PREDICATE_SWITCH") == "ON"
+
 
 @component(conditional_predicate=check_predicate)
 class PredicateConditionalComponent:
     pass
+
 
 @component
 class HealthyComponent:
@@ -130,10 +149,12 @@ class HealthyComponent:
     def check_db(self):
         test_logger.info("Health: check_db OK")
         return True
+
     @health
     def check_api(self):
         test_logger.info("Health: check_api FAILED")
         raise ValueError("API not available")
+
 
 @component
 class AuditInterceptor(MethodInterceptor):
@@ -143,6 +164,7 @@ class AuditInterceptor(MethodInterceptor):
         test_logger.info(f"AUDIT_ASYNC - Exiting: {ctx.name}")
         return res
 
+
 @component
 class AsyncAuditedService:
     @intercepted_by(AuditInterceptor)
@@ -151,14 +173,17 @@ class AsyncAuditedService:
         await asyncio.sleep(0)
         return val * 2
 
+
 @component(lazy=True)
 class MyLazyComponentForPickle:
     def __init__(self):
         self.value = 42
 
+
 class MyTestEvent(Event):
     def __init__(self, msg: str):
         self.msg = msg
+
 
 @component(lazy=True)
 class MyTestSubscriber(AutoSubscriberMixin):
@@ -170,13 +195,27 @@ class MyTestSubscriber(AutoSubscriberMixin):
         test_logger.info(f"Event received: {evt.msg}")
         self.received.append(evt.msg)
 
+
 test_module = types.ModuleType("test_coverage_module")
 all_definitions = [
-    NeedsMissingComponent, MissingDependency, CircularA, CircularB, FailingComponent,
-    RequiredConfig, Widget, WidgetFactory, ConfiguredComponent, AsyncResource,
-    EnvConditionalComponent, PredicateConditionalComponent, HealthyComponent,
-    AuditInterceptor, AsyncAuditedService, MyLazyComponentForPickle,
-    MyTestEvent, MyTestSubscriber
+    NeedsMissingComponent,
+    MissingDependency,
+    CircularA,
+    CircularB,
+    FailingComponent,
+    RequiredConfig,
+    Widget,
+    WidgetFactory,
+    ConfiguredComponent,
+    AsyncResource,
+    EnvConditionalComponent,
+    PredicateConditionalComponent,
+    HealthyComponent,
+    AuditInterceptor,
+    AsyncAuditedService,
+    MyLazyComponentForPickle,
+    MyTestEvent,
+    MyTestSubscriber,
 ]
 for item in all_definitions:
     if hasattr(item, "__name__"):
@@ -192,10 +231,12 @@ def test_invalid_binding_error_on_init():
         init(mod, validate_only=True)
     assert "depends on MissingDependency which is not bound" in str(e.value)
 
+
 def test_circular_dependency_error():
     with pytest.raises(InvalidBindingError) as e:
         init(test_module)
     assert "CircularA -> CircularB -> CircularA" in str(e.value)
+
 
 def test_component_creation_error():
     mod = types.ModuleType("fail_mod2")
@@ -203,52 +244,55 @@ def test_component_creation_error():
         setattr(mod, cls.__name__, cls)
 
     with pytest.raises(ComponentCreationError) as err:
-        init(mod) 
+        init(mod)
 
     assert "FailingComponent" in str(err.value)
     assert "Creation failure" in str(err.value)
+
 
 def test_provider_not_found_error():
     container = init(types.ModuleType("empty_mod"))
     with pytest.raises(ProviderNotFoundError) as e_str:
         container.get("non_existent_key")
     assert "Provider for key 'non_existent_key' not found" in str(e_str.value)
+
     class NonExistentClass:
         pass
+
     with pytest.raises(ProviderNotFoundError) as e_type:
         container.get(NonExistentClass)
     assert "Provider for key 'NonExistentClass' not found" in str(e_type.value)
 
+
 def test_configuration_error_missing_value():
     config_module = types.ModuleType("config_test_mod")
-    
+
     @configured(target="self", mapping="auto")
     @dataclass
     class LocalRequiredConfig:
         REQUIRED_KEY: str
-    
+
     setattr(config_module, LocalRequiredConfig.__name__, LocalRequiredConfig)
-    
+
     with pytest.raises(ComponentCreationError) as e:
         container = init(config_module, config=configuration())
         container.get(LocalRequiredConfig)
     assert isinstance(e.value.cause, ConfigurationError)
     assert "Missing configuration key: REQUIRED_KEY" in str(e.value.cause)
 
+
 def test_configuration_error_disallowed_profile():
     with pytest.raises(ConfigurationError) as e:
-        init(
-            types.ModuleType("empty_mod"),
-            profiles=("dev",),
-            allowed_profiles=("prod", "test")
-        )
+        init(types.ModuleType("empty_mod"), profiles=("dev",), allowed_profiles=("prod", "test"))
     assert "Unknown profiles: ['dev']; allowed: ['prod', 'test']" in str(e.value)
+
 
 def test_scope_error_unknown_scope():
     container = init(types.ModuleType("empty_mod"))
     with pytest.raises(ScopeError) as e:
         container.activate_scope("unreal_scope", "id-123")
     assert "Unknown scope: unreal_scope" in str(e.value)
+
 
 def test_factory_and_provides_pattern():
     mod = types.ModuleType("factory_mod")
@@ -258,6 +302,7 @@ def test_factory_and_provides_pattern():
     widget_instance = container.get(Widget)
     assert isinstance(widget_instance, Widget)
     assert "Widget_Factory: Creating Widget" in log_capture
+
 
 @pytest.mark.asyncio
 async def test_configure_lifecycle_method():
@@ -272,6 +317,7 @@ async def test_configure_lifecycle_method():
     assert "Widget_Factory: Creating Widget" in log_capture
     assert "ConfiguredComponent: @configure called" in log_capture
 
+
 @pytest.mark.asyncio
 async def test_async_cleanup_method():
     mod = types.ModuleType("cleanup_mod")
@@ -285,6 +331,7 @@ async def test_async_cleanup_method():
     assert resource.closed is True
     assert "AsyncResource: @cleanup async called" in log_capture
 
+
 def test_conditional_on_env(monkeypatch):
     mod = types.ModuleType("env_mod")
     setattr(mod, EnvConditionalComponent.__name__, EnvConditionalComponent)
@@ -297,6 +344,7 @@ def test_conditional_on_env(monkeypatch):
     instance = container_with_env.get(EnvConditionalComponent)
     assert isinstance(instance, EnvConditionalComponent)
 
+
 def test_conditional_on_predicate(monkeypatch):
     mod = types.ModuleType("pred_mod")
     setattr(mod, PredicateConditionalComponent.__name__, PredicateConditionalComponent)
@@ -308,6 +356,7 @@ def test_conditional_on_predicate(monkeypatch):
     container_true = init(mod)
     instance = container_true.get(PredicateConditionalComponent)
     assert isinstance(instance, PredicateConditionalComponent)
+
 
 def test_health_check_decorator():
     mod = types.ModuleType("health_mod")
@@ -322,6 +371,7 @@ def test_health_check_decorator():
     assert "Health: check_db OK" in log_capture
     assert "Health: check_api FAILED" in log_capture
 
+
 @pytest.mark.asyncio
 async def test_aop_on_async_method():
     mod = types.ModuleType("aop_mod")
@@ -334,6 +384,7 @@ async def test_aop_on_async_method():
     assert "AUDIT_ASYNC - Entering: do_async_work" in log_capture
     assert "AsyncAuditedService: working..." in log_capture
     assert "AUDIT_ASYNC - Exiting: do_async_work" in log_capture
+
 
 def test_proxy_serialization_pickle():
     mod = types.ModuleType("pickle_mod")
@@ -352,6 +403,7 @@ def test_proxy_serialization_pickle():
     except (pickle.PicklingError, SerializationError) as e:
         pytest.fail(f"Proxy serialization failed: {e}")
 
+
 @pytest.mark.asyncio
 async def test_event_bus_integration_and_shutdown():
     mod = types.ModuleType("event_mod")
@@ -369,6 +421,7 @@ async def test_event_bus_integration_and_shutdown():
     await container.cleanup_all_async()
     with pytest.raises(EventBusClosedError):
         await bus.publish(MyTestEvent("Goodbye"))
+
 
 def test_dependency_graph_dot_export(tmp_path):
     import types
@@ -438,6 +491,7 @@ def test_dependency_graph_dot_export(tmp_path):
     assert "Repo" in dot
     assert "Tool" in dot
     assert "->" in dot
+
 
 def test_dependency_graph_includes_provides_functions():
     import types

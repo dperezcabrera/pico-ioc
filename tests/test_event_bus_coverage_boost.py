@@ -2,6 +2,7 @@
 Additional tests to boost event_bus.py coverage to 90%+.
 Tests edge cases and less common code paths.
 """
+
 import asyncio
 import logging
 import threading
@@ -25,12 +26,14 @@ from pico_ioc.exceptions import EventBusClosedError, EventBusError, EventBusHand
 
 class SampleEvent(Event):
     """Sample event class for tests."""
+
     def __init__(self, data=None):
         self.data = data
 
 
 class AnotherSampleEvent(Event):
     """Another sample event for tests."""
+
     pass
 
 
@@ -327,21 +330,14 @@ class TestSubscriberDataclass:
 
     def test_subscriber_sort_index(self):
         """_Subscriber sort_index is negative priority."""
-        sub = _Subscriber(
-            priority=10,
-            callback=lambda e: None,
-            policy=ExecPolicy.INLINE,
-            once=False
-        )
+        sub = _Subscriber(priority=10, callback=lambda e: None, policy=ExecPolicy.INLINE, once=False)
 
         assert sub.sort_index == -10
 
     def test_subscribers_sort_by_priority(self):
         """Subscribers sort by priority (higher first)."""
-        sub_low = _Subscriber(priority=1, callback=lambda e: None,
-                              policy=ExecPolicy.INLINE, once=False)
-        sub_high = _Subscriber(priority=10, callback=lambda e: None,
-                               policy=ExecPolicy.INLINE, once=False)
+        sub_low = _Subscriber(priority=1, callback=lambda e: None, policy=ExecPolicy.INLINE, once=False)
+        sub_high = _Subscriber(priority=10, callback=lambda e: None, policy=ExecPolicy.INLINE, once=False)
 
         subs = [sub_low, sub_high]
         subs.sort()
