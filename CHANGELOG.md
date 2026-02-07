@@ -7,6 +7,25 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.2.3] - 2026-02-07
+
+### Fixed
+
+- **PEP 563 compatibility**: Modules using `from __future__ import annotations` caused type hints to remain as strings, breaking dependency injection. All annotation resolution points now use `typing.get_type_hints()` with fallback, fixing constructor injection, `@provides` return types, `@configured` dataclasses, and config tree building.
+
+### Changed
+
+- `analysis.py`: `analyze_callable_dependencies()` resolves string annotations via `typing.get_type_hints(callable_obj, include_extras=True)`.
+- `decorators.py`: `get_return_type()` resolves string return annotations via `typing.get_type_hints()`.
+- `config_runtime.py`: `ObjectGraphBuilder._build()` resolves dataclass field types and constructor parameter types via `typing.get_type_hints()`.
+- `config_registrar.py`: `_build_flat_instance()` and `_auto_detect_mapping()` resolve dataclass field types via `typing.get_type_hints()`.
+
+### Added
+
+- `tests/test_future_annotations.py`: 8 tests covering PEP 563 compatibility for dependency analysis, return type extraction, container integration, and configured dataclasses.
+
+---
+
 ## [2.2.2] - 2026-02-06
 
 ### Changed
