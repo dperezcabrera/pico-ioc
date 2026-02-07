@@ -2,7 +2,8 @@ import contextvars
 import inspect
 import logging
 from typing import Any, Dict, Optional, Tuple
-from .constants import SCOPE_SINGLETON, SCOPE_PROTOTYPE
+
+from .constants import SCOPE_PROTOTYPE, SCOPE_SINGLETON
 from .exceptions import ScopeError
 
 _logger = logging.getLogger(__name__)

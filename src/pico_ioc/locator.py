@@ -1,6 +1,7 @@
-from typing import Any, Dict, Iterable, List, Optional, Set, Union
-from .factory import ProviderMetadata
 import inspect
+from typing import Any, Dict, Iterable, List, Optional, Set, Union
+
+from .factory import ProviderMetadata
 
 KeyT = Union[str, type]
 

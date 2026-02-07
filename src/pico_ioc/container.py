@@ -1,18 +1,33 @@
-import inspect
 import contextvars
 import functools
-from typing import (
-    Any, Dict, List, Optional, Tuple, overload, Union, Callable, 
-    Iterable, Set, get_args, get_origin, Annotated, Protocol, Mapping, Type
-)
+import inspect
 from contextlib import contextmanager
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+    overload,
+)
+
+from .analysis import DependencyRequest, analyze_callable_dependencies
+from .aop import ContainerObserver, UnifiedComponentProxy
 from .constants import LOGGER, PICO_META, SCOPE_SINGLETON
-from .exceptions import ComponentCreationError, ProviderNotFoundError, AsyncResolutionError, ConfigurationError
+from .exceptions import AsyncResolutionError, ComponentCreationError, ConfigurationError, ProviderNotFoundError
 from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
 from .scope import ScopedCaches, ScopeManager
-from .aop import UnifiedComponentProxy, ContainerObserver
-from .analysis import analyze_callable_dependencies, DependencyRequest
 
 KeyT = Union[str, type]
 
@@ -99,7 +114,8 @@ class PicoContainer:
 
     @staticmethod
     def _generate_container_id() -> str:
-        import time as _t, random as _r
+        import random as _r
+        import time as _t
         return f"c{_t.time_ns():x}{_r.randrange(1<<16):04x}"
 
     @classmethod
@@ -187,7 +203,7 @@ class PicoContainer:
             provider = self._factory.get(key, origin=requester)
             try:
                 instance_or_awaitable = provider()
-            except ProviderNotFoundError as e:
+            except ProviderNotFoundError:
                 raise
             except Exception as creation_error:
                 raise ComponentCreationError(key, creation_error) from creation_error
@@ -234,7 +250,6 @@ class PicoContainer:
 
         instance = instance_or_awaitable
         if inspect.isawaitable(instance):
-            key_name = getattr(key, '__name__', str(key))
             raise AsyncResolutionError(key)
 
         md = self._locator._metadata.get(key) if self._locator else None
@@ -412,7 +427,7 @@ class PicoContainer:
         lines.append(f'  rankdir="{rankdir}";')
         lines.append("  node [shape=box, fontsize=10];")
         if title:
-            lines.append(f'  labelloc="t";')
+            lines.append('  labelloc="t";')
             lines.append(f'  label="{title}";')
 
         def _node_id(k: KeyT) -> str:

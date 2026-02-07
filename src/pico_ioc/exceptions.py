@@ -1,5 +1,6 @@
 from typing import Any, Iterable
 
+
 class PicoError(Exception):
     pass
 

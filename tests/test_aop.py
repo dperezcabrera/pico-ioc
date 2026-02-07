@@ -1,9 +1,10 @@
-import pytest
 import inspect
-from typing import List, Any, Callable
+from typing import Any, Callable, List
 
-from pico_ioc import init, component
-from pico_ioc.aop import MethodInterceptor, MethodCtx, intercepted_by
+import pytest
+
+from pico_ioc import component, init
+from pico_ioc.aop import MethodCtx, MethodInterceptor, intercepted_by
 
 
 class CallLogger:

@@ -1,8 +1,9 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+
+from .analysis import DependencyRequest
+from .exceptions import InvalidBindingError
 from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
-from .exceptions import InvalidBindingError
-from .analysis import DependencyRequest
 
 KeyT = Union[str, type]
 

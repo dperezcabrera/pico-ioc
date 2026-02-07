@@ -1,8 +1,10 @@
-from typing import Any, Callable, Dict, Iterable, Optional
 import inspect
 import typing
 from dataclasses import MISSING
-from .constants import PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
+from typing import Any, Callable, Dict, Iterable, Optional
+
+from .constants import PICO_INFRA, PICO_KEY, PICO_META, PICO_NAME
+
 
 def _meta_get(obj: Any) -> Dict[str, Any]:
     m = getattr(obj, PICO_META, None)

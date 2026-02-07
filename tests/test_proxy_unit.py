@@ -2,7 +2,6 @@ import pytest
 
 from pico_ioc.aop import UnifiedComponentProxy
 
-
 MockContainer = object()
 
 

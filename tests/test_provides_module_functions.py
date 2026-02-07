@@ -1,8 +1,11 @@
 # tests/test_provides_module_functions.py
 import types
+
 import pytest
-from pico_ioc.api import component, provides, init
-from pico_ioc.exceptions import ProviderNotFoundError, InvalidBindingError
+
+from pico_ioc.api import component, init, provides
+from pico_ioc.exceptions import InvalidBindingError, ProviderNotFoundError
+
 
 class Service:
     pass

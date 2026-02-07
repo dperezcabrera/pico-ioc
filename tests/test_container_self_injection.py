@@ -1,5 +1,7 @@
 import pytest
-from pico_ioc import init, component, PicoContainer, InvalidBindingError
+
+from pico_ioc import InvalidBindingError, PicoContainer, component, init
+
 
 @component
 class ServiceNeedsContainer:

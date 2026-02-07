@@ -1,17 +1,20 @@
-import pytest
 import sys
-from unittest.mock import patch, mock_open
-from typing import Union, List, Dict
 from dataclasses import dataclass
+from typing import Dict, List, Union
+from unittest.mock import mock_open, patch
+
+import pytest
+
 from pico_ioc.config_runtime import (
-    YamlTreeSource, 
-    JsonTreeSource, 
-    _interpolate_string,
-    ObjectGraphBuilder,
     ConfigResolver,
-    TypeAdapterRegistry
+    JsonTreeSource,
+    ObjectGraphBuilder,
+    TypeAdapterRegistry,
+    YamlTreeSource,
+    _interpolate_string,
 )
 from pico_ioc.exceptions import ConfigurationError
+
 
 def test_yaml_source_missing_dependency():
     with patch.dict(sys.modules, {"yaml": None}):
@@ -19,7 +22,7 @@ def test_yaml_source_missing_dependency():
             YamlTreeSource("config.yml").get_tree()
 
 def test_yaml_source_load_error():
-    with patch("builtins.open", side_effect=IOError("Boom")):
+    with patch("builtins.open", side_effect=OSError("Boom")):
         with pytest.raises(ConfigurationError, match="Failed to load YAML"):
             YamlTreeSource("config.yml").get_tree()
 

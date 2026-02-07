@@ -3,16 +3,16 @@ Integrated tests to boost container.py coverage to 95%+.
 These tests use real registered components to cover edge cases.
 """
 import asyncio
-import tempfile
 import os
+import tempfile
+from typing import Any, Dict, List, Protocol, Type
+
 import pytest
-from typing import List, Dict, Any, Type, Protocol
 
-from pico_ioc import init, component, factory, provides, configure, cleanup
+from pico_ioc import cleanup, component, configure, factory, init, provides
+from pico_ioc.aop import MethodCtx, MethodInterceptor, intercepted_by
 from pico_ioc.container import PicoContainer
-from pico_ioc.aop import intercepted_by, MethodInterceptor, MethodCtx
 from pico_ioc.exceptions import AsyncResolutionError, ProviderNotFoundError
-
 
 # ============================================================
 # Module-level components for integrated tests
@@ -130,7 +130,7 @@ class TestExportGraphWithOptions:
 
             container.export_graph(path, include_scopes=True)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'digraph Pico' in content
@@ -150,7 +150,7 @@ class TestExportGraphWithOptions:
 
             container.export_graph(path, include_qualifiers=True)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'digraph Pico' in content
@@ -170,7 +170,7 @@ class TestExportGraphWithOptions:
 
             container.export_graph(path, include_scopes=True, include_qualifiers=True)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 content = f.read()
 
             assert 'digraph Pico' in content

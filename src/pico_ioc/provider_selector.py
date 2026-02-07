@@ -1,6 +1,7 @@
 from typing import Dict, List, Tuple, Union
-from .factory import Provider, ProviderMetadata
+
 from .config_registrar import ConfigurationManager
+from .factory import Provider, ProviderMetadata
 
 KeyT = Union[str, type]
 
@@ -9,7 +10,7 @@ class ProviderSelector:
         self._config_manager = config_manager
 
     def _rank_provider(self, item: Tuple[bool, Provider, ProviderMetadata]) -> Tuple[int, int, int]:
-        provider, md = item[1], item[2]
+        _, md = item[1], item[2]
         
         is_present = 1 if self._config_manager.prefix_exists(md) else 0
         
