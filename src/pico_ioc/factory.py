@@ -8,6 +8,7 @@ from .exceptions import ProviderNotFoundError
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
 
+
 @dataclass(frozen=True)
 class ProviderMetadata:
     key: KeyT
@@ -24,26 +25,33 @@ class ProviderMetadata:
     override: bool = False
     scope: str = "singleton"
 
+
 class ComponentFactory:
     def __init__(self) -> None:
         self._providers: Dict[KeyT, Provider] = {}
+
     def bind(self, key: KeyT, provider: Provider) -> None:
         self._providers[key] = provider
+
     def has(self, key: KeyT) -> bool:
         return key in self._providers
+
     def get(self, key: KeyT, origin: KeyT) -> Provider:
         if key not in self._providers:
             raise ProviderNotFoundError(key, origin)
         return self._providers[key]
+
 
 class DeferredProvider:
     def __init__(self, builder: Callable[[Any, Any], Any]) -> None:
         self._builder = builder
         self._pico: Any = None
         self._locator: Any = None
+
     def attach(self, pico, locator) -> None:
         self._pico = pico
         self._locator = locator
+
     def __call__(self) -> Any:
         if self._pico is None or self._locator is None:
             raise RuntimeError("DeferredProvider must be attached before use")

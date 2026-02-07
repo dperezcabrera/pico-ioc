@@ -30,6 +30,7 @@ from .decorators import Qualifier
 
 KeyT = Union[str, type]
 
+
 @dataclass(frozen=True)
 class DependencyRequest:
     parameter_name: str
@@ -39,6 +40,7 @@ class DependencyRequest:
     is_optional: bool = False
     is_dict: bool = False
     dict_key_type: Any = None
+
 
 def _extract_annotated(ann: Any) -> Tuple[Any, Optional[str]]:
     qualifier = None
@@ -55,6 +57,7 @@ def _extract_annotated(ann: Any) -> Tuple[Any, Optional[str]]:
                 break
     return base, qualifier
 
+
 def _check_optional(ann: Any) -> Tuple[Any, bool]:
     origin = get_origin(ann)
     if origin is Union:
@@ -62,6 +65,7 @@ def _check_optional(ann: Any) -> Tuple[Any, bool]:
         if len(args) == 1:
             return args[0], True
     return ann, False
+
 
 def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[DependencyRequest, ...]:
     try:
@@ -87,11 +91,11 @@ def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[Dep
         collections.abc.Collection,
         collections.abc.Sequence,
         collections.abc.MutableSequence,
-        collections.abc.MutableSet
+        collections.abc.MutableSet,
     )
-    
+
     SUPPORTED_DICT_ORIGINS = (dict, collections.abc.Mapping)
-    
+
     for name, param in sig.parameters.items():
         if name in ("self", "cls"):
             continue
@@ -99,7 +103,7 @@ def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[Dep
             continue
 
         ann = resolved_hints.get(name, param.annotation)
-        
+
         base_type, is_optional = _check_optional(ann)
         base_type, qualifier = _extract_annotated(base_type)
 
@@ -107,9 +111,9 @@ def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[Dep
         is_dict = False
         elem_t = None
         dict_key_t = None
-        
+
         origin = get_origin(base_type)
-        
+
         if origin in SUPPORTED_COLLECTION_ORIGINS:
             is_list = True
             elem_t = get_args(base_type)[0] if get_args(base_type) else Any
@@ -124,10 +128,10 @@ def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[Dep
             elem_t, dict_qualifier = _extract_annotated(elem_t)
             if qualifier is None:
                 qualifier = dict_qualifier
-        
+
         final_key: KeyT
         final_dict_key_type: Any = None
-        
+
         if is_list:
             final_key = elem_t if isinstance(elem_t, type) else Any
         elif is_dict:
@@ -150,8 +154,8 @@ def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[Dep
                 qualifier=qualifier,
                 is_optional=is_optional or (param.default is not inspect._empty),
                 is_dict=is_dict,
-                dict_key_type=final_dict_key_type
+                dict_key_type=final_dict_key_type,
             )
         )
-    
+
     return tuple(plan)

@@ -10,4 +10,3 @@ PICO_META = "_pico_meta"
 
 SCOPE_SINGLETON = "singleton"
 SCOPE_PROTOTYPE = "prototype"
-

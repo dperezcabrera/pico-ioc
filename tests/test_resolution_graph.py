@@ -36,6 +36,7 @@ def _build_module_from_edges(n: int, edges: List[tuple[int, int]]):
         setattr(mod, C.__name__, C)
     return mod, classes
 
+
 def _acyclic_edges(n: int):
     edges = []
     for i in range(n):
@@ -43,6 +44,7 @@ def _acyclic_edges(n: int):
             if random.random() < 0.2:
                 edges.append((j, i))
     return edges
+
 
 @given(st.integers(min_value=3, max_value=15))
 def test_dag_validates_and_resolves(n):
@@ -54,6 +56,7 @@ def test_dag_validates_and_resolves(n):
     target = classes[sinks[-1]] if sinks else classes[-1]
     c.get(target)
 
+
 @given(st.integers(min_value=3, max_value=10))
 def test_cycle_detected(n):
     edges = _acyclic_edges(n)
@@ -64,4 +67,3 @@ def test_cycle_detected(n):
     with pytest.raises(InvalidBindingError) as e:
         init(mod)
     assert "Circular dependency detected" in str(e.value)
-

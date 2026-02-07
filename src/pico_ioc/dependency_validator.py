@@ -7,8 +7,10 @@ from .locator import ComponentLocator
 
 KeyT = Union[str, type]
 
+
 def _fmt(k: KeyT) -> str:
-    return getattr(k, '__name__', str(k))
+    return getattr(k, "__name__", str(k))
+
 
 def _skip_type(t: type) -> bool:
     if t in (str, int, float, bool, bytes):
@@ -18,6 +20,7 @@ def _skip_type(t: type) -> bool:
     if getattr(t, "_is_protocol", False):
         return True
     return False
+
 
 class DependencyValidator:
     def __init__(self, metadata: Dict[KeyT, ProviderMetadata], factory: ComponentFactory, locator: ComponentLocator):
@@ -35,12 +38,12 @@ class DependencyValidator:
                 if issubclass(typ, t):
                     cands.append(md)
             except TypeError:
-                 pass
+                pass
             except Exception:
                 continue
         if not cands:
             if getattr(t, "_is_protocol", False):
-                 for md in self._metadata.values():
+                for md in self._metadata.values():
                     typ = md.provided_type or md.concrete_class
                     if isinstance(typ, type) and ComponentLocator._implements_protocol(typ, t):
                         cands.append(md)
@@ -50,10 +53,8 @@ class DependencyValidator:
         prim = [m for m in cands if m.primary]
         return prim[0] if prim else cands[0]
 
-
     def _find_md_for_name(self, name: str) -> Optional[KeyT]:
-         return self._locator.find_key_by_name(name)
-
+        return self._locator.find_key_by_name(name)
 
     def validate_bindings(self) -> None:
         errors: List[str] = []
@@ -63,10 +64,9 @@ class DependencyValidator:
                 continue
 
             if not md.dependencies and md.infra not in ("configured", "component") and not md.override:
-                 continue
+                continue
             if md.infra == "component" and md.concrete_class and md.concrete_class.__init__ is object.__init__:
-                 continue
-
+                continue
 
             loc_name = f"component {_fmt(k)}"
             if md.factory_method:
@@ -78,8 +78,14 @@ class DependencyValidator:
 
                 if dep.is_list:
                     if dep.qualifier:
-                        if not self._locator.collect_by_type(dep.key, dep.qualifier) and isinstance(dep.key, type) and not _skip_type(dep.key):
-                            errors.append(f"{_fmt(k)} ({loc_name}) expects List[{_fmt(dep.key)}] with qualifier '{dep.qualifier}' but no matching components exist")
+                        if (
+                            not self._locator.collect_by_type(dep.key, dep.qualifier)
+                            and isinstance(dep.key, type)
+                            and not _skip_type(dep.key)
+                        ):
+                            errors.append(
+                                f"{_fmt(k)} ({loc_name}) expects List[{_fmt(dep.key)}] with qualifier '{dep.qualifier}' but no matching components exist"
+                            )
                     continue
 
                 dep_key = dep.key

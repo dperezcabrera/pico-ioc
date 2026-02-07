@@ -2,6 +2,7 @@
 Integrated tests to boost container.py coverage to 95%+.
 These tests use real registered components to cover edge cases.
 """
+
 import asyncio
 import os
 import tempfile
@@ -20,9 +21,11 @@ from pico_ioc.exceptions import AsyncResolutionError, ProviderNotFoundError
 
 # --- Simple services ---
 
+
 @component()
 class SimpleService:
     """Simple service for basic tests."""
+
     def value(self) -> str:
         return "simple"
 
@@ -30,6 +33,7 @@ class SimpleService:
 @component(name="named_alpha")
 class NamedAlpha:
     """Named service A."""
+
     def name(self) -> str:
         return "alpha"
 
@@ -37,15 +41,18 @@ class NamedAlpha:
 @component(name="named_beta")
 class NamedBeta:
     """Named service B."""
+
     def name(self) -> str:
         return "beta"
 
 
 # --- Request-scoped service with sync configure ---
 
+
 @component(scope="request")
 class RequestScopedService:
     """Request-scoped service with sync configure."""
+
     setup_count: int = 0
 
     @configure
@@ -54,6 +61,7 @@ class RequestScopedService:
 
 
 # --- Factory class ---
+
 
 @factory
 class TestServiceFactory:
@@ -66,21 +74,25 @@ class TestServiceFactory:
 
 # --- Service with qualifiers for export_graph tests ---
 
+
 @component(qualifiers={"env:prod"})
 class ProdConfig:
     """Production config with qualifier."""
+
     pass
 
 
 @component(qualifiers={"env:dev"})
 class DevConfig:
     """Development config with qualifier."""
+
     pass
 
 
 # ============================================================
 # Integrated Tests
 # ============================================================
+
 
 class TestRequestScopedWithSyncConfigure:
     """Test request-scoped services with sync configure - covers lines 242-246."""
@@ -125,7 +137,7 @@ class TestExportGraphWithOptions:
         """export_graph includes scope info when include_scopes=True."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path, include_scopes=True)
@@ -133,9 +145,9 @@ class TestExportGraphWithOptions:
             with open(path) as f:
                 content = f.read()
 
-            assert 'digraph Pico' in content
+            assert "digraph Pico" in content
             # Should contain scope info
-            assert 'scope=' in content
+            assert "scope=" in content
 
             os.unlink(path)
         finally:
@@ -145,7 +157,7 @@ class TestExportGraphWithOptions:
         """export_graph includes qualifier info when include_qualifiers=True."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path, include_qualifiers=True)
@@ -153,9 +165,9 @@ class TestExportGraphWithOptions:
             with open(path) as f:
                 content = f.read()
 
-            assert 'digraph Pico' in content
+            assert "digraph Pico" in content
             # Should contain qualifier info for ProdConfig/DevConfig
-            assert 'env' in content.lower() or '⟨' in content
+            assert "env" in content.lower() or "⟨" in content
 
             os.unlink(path)
         finally:
@@ -165,7 +177,7 @@ class TestExportGraphWithOptions:
         """export_graph works with both scopes and qualifiers."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path, include_scopes=True, include_qualifiers=True)
@@ -173,7 +185,7 @@ class TestExportGraphWithOptions:
             with open(path) as f:
                 content = f.read()
 
-            assert 'digraph Pico' in content
+            assert "digraph Pico" in content
 
             os.unlink(path)
         finally:
@@ -210,6 +222,7 @@ class TestResolutionWithNamedKey:
         finally:
             container.shutdown()
 
+
 class TestStatsCacheHitRate:
     """Test stats cache hit rate calculation."""
 
@@ -239,6 +252,7 @@ class TestProviderNotFoundReRaise:
         """ProviderNotFoundError is properly re-raised."""
         container = init(modules=[])
         try:
+
             class UnknownService:
                 pass
 
@@ -274,6 +288,7 @@ class TestCanonicalKeyBranches:
 # ============================================================
 # Async Tests
 # ============================================================
+
 
 class TestAsyncOperations:
     """Test async container operations."""
@@ -315,5 +330,3 @@ class TestAsyncOperations:
         await container.ashutdown()
 
         assert container.container_id not in PicoContainer._container_registry
-
-

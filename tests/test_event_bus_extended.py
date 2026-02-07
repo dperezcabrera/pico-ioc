@@ -1,6 +1,7 @@
 """
 Extended tests for event_bus.py to increase coverage.
 """
+
 import asyncio
 import logging
 import threading
@@ -14,12 +15,14 @@ from pico_ioc.exceptions import EventBusClosedError, EventBusError
 
 class MyEvent(Event):
     """Test event class."""
+
     def __init__(self, data=None):
         self.data = data
 
 
 class AnotherEvent(Event):
     """Another test event class."""
+
     pass
 
 
@@ -35,10 +38,7 @@ class TestEventBusBasics:
 
     def test_eventbus_custom_policies(self):
         """EventBus accepts custom default policies."""
-        bus = EventBus(
-            error_policy=ErrorPolicy.RAISE,
-            default_exec_policy=ExecPolicy.TASK
-        )
+        bus = EventBus(error_policy=ErrorPolicy.RAISE, default_exec_policy=ExecPolicy.TASK)
 
         assert bus._error_policy == ErrorPolicy.RAISE
         assert bus._default_policy == ExecPolicy.TASK
