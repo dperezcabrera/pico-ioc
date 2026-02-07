@@ -2,6 +2,7 @@ import json
 import os
 import re
 import hashlib
+import typing
 from dataclasses import is_dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union, get_args, get_origin, Annotated
@@ -225,10 +226,15 @@ class ObjectGraphBuilder:
             extra = [k for k in node.keys() if k not in known]
             if extra:
                 raise ConfigurationError(f"Unknown keys {extra} at {'.'.join(path)}")
+            try:
+                dc_hints = typing.get_type_hints(t, include_extras=True)
+            except Exception:
+                dc_hints = {}
             vals: Dict[str, Any] = {}
             for f in fields(t):
                 if f.name in node:
-                    vals[f.name] = self._build(node[f.name], f.type, path + (f.name,))
+                    field_type = dc_hints.get(f.name, f.type)
+                    vals[f.name] = self._build(node[f.name], field_type, path + (f.name,))
                 else:
                     continue
             return t(**vals)
@@ -242,11 +248,16 @@ class ObjectGraphBuilder:
                 kwargs: Dict[str, Any] = {}
                 import inspect
                 sig = inspect.signature(t.__init__)
+                try:
+                    init_hints = typing.get_type_hints(t.__init__, include_extras=True)
+                except Exception:
+                    init_hints = {}
                 for name, p in sig.parameters.items():
                     if name in ("self", "cls"):
                         continue
                     if name in node:
-                        kwargs[name] = self._build(node[name], p.annotation if p.annotation is not inspect._empty else Any, path + (name,))
+                        hint = init_hints.get(name, p.annotation)
+                        kwargs[name] = self._build(node[name], hint if hint is not inspect._empty else Any, path + (name,))
                 return t(**kwargs)
                 
         return node
