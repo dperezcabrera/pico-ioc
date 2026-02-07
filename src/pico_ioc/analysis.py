@@ -1,4 +1,5 @@
 import inspect
+import typing
 from dataclasses import dataclass
 import collections
 import collections.abc
@@ -52,8 +53,13 @@ def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[Dep
         LOGGER.debug(f"Could not analyze dependencies for {callable_obj!r}: {e}")
         return ()
 
+    try:
+        resolved_hints = typing.get_type_hints(callable_obj, include_extras=True)
+    except Exception:
+        resolved_hints = {}
+
     plan: List[DependencyRequest] = []
-    
+
     SUPPORTED_COLLECTION_ORIGINS = (
         list,
         set,
@@ -75,7 +81,7 @@ def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[Dep
         if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
             continue
 
-        ann = param.annotation
+        ann = resolved_hints.get(name, param.annotation)
         
         base_type, is_optional = _check_optional(ann)
         base_type, qualifier = _extract_annotated(base_type)

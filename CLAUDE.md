@@ -14,6 +14,6 @@ pico-ioc is the **foundation** of the pico-framework ecosystem. All other packag
 ## Key Reminders
 
 - Internal attributes are `_pico_meta`, `_pico_infra`, `_pico_name`, `_pico_key` (not dunder)
-- `version_scheme = "post-release"` in pyproject.toml
+- **NEVER change `version_scheme`** in pyproject.toml. It MUST remain `"post-release"`. Changing it to `"guess-next-dev"` causes `.dev0` versions to leak to PyPI. This was already fixed once — do not revert it.
 - requires-python >= 3.11 (no 3.10)
 - Commit messages: one line only

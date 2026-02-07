@@ -1,3 +1,4 @@
+import typing
 from dataclasses import is_dataclass, fields, MISSING
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, get_args, get_origin, Annotated
 from .constants import PICO_META, SCOPE_SINGLETON
@@ -65,11 +66,15 @@ class ConfigurationManager:
     def _build_flat_instance(self, cls: type, prefix: Optional[str]) -> Any:
         if not is_dataclass(cls):
             raise ConfigurationError(f"Configuration class {getattr(cls, '__name__', str(cls))} must be a dataclass")
+        try:
+            dc_hints = typing.get_type_hints(cls, include_extras=True)
+        except Exception:
+            dc_hints = {}
         values: Dict[str, Any] = {}
         for f in fields(cls):
-            field_type = f.type
+            field_type = dc_hints.get(f.name, f.type)
             value_override = None
-            
+
             if get_origin(field_type) is Annotated:
                 args = get_args(field_type)
                 field_type = args[0] if args else Any
@@ -105,11 +110,15 @@ class ConfigurationManager:
     def _auto_detect_mapping(self, target_type: type) -> str:
         if not is_dataclass(target_type):
             return "tree"
-        
+
+        try:
+            dc_hints = typing.get_type_hints(target_type, include_extras=True)
+        except Exception:
+            dc_hints = {}
         primitives = (str, int, float, bool)
         for f in fields(target_type):
-            t = f.type
-            
+            t = dc_hints.get(f.name, f.type)
+
             if get_origin(t) is Annotated:
                 args = get_args(t)
                 t = args[0] if args else Any

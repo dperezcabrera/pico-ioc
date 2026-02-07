@@ -1,5 +1,6 @@
 from typing import Any, Callable, Dict, Iterable, Optional
 import inspect
+import typing
 from dataclasses import MISSING
 from .constants import PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
 
@@ -185,9 +186,13 @@ def configured(target: Any = "self", *, prefix: str = "", mapping: str = "auto",
 
 def get_return_type(fn: Callable[..., Any]) -> Optional[type]:
     try:
-        ra = inspect.signature(fn).return_annotation
+        hints = typing.get_type_hints(fn, include_extras=True)
+        ra = hints.get('return')
     except Exception:
-        return None
-    if ra is inspect._empty:
+        try:
+            ra = inspect.signature(fn).return_annotation
+        except Exception:
+            return None
+    if ra is None or ra is inspect._empty:
         return None
     return ra if isinstance(ra, type) else None
