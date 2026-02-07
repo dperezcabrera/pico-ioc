@@ -1,19 +1,32 @@
 # tests/test_pico_integration.py
-import pytest
-import os
-import json
 import contextvars
+import json
+import logging
+import os
+import time
 import types
 from dataclasses import dataclass
-from typing import List, Optional, Annotated, Callable, Any, Protocol
-import logging
-import time
+from typing import Annotated, Any, Callable, List, Optional, Protocol
+
+import pytest
 
 from pico_ioc import (
-    component, factory, provides, configuration, configured,
-    Qualifier, intercepted_by, cleanup,
-    init, PicoContainer, MethodInterceptor, MethodCtx,
-    EnvSource, FileSource, ScopeProtocol, ContextVarScope
+    ContextVarScope,
+    EnvSource,
+    FileSource,
+    MethodCtx,
+    MethodInterceptor,
+    PicoContainer,
+    Qualifier,
+    ScopeProtocol,
+    cleanup,
+    component,
+    configuration,
+    configured,
+    factory,
+    init,
+    intercepted_by,
+    provides,
 )
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')

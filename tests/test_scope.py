@@ -1,8 +1,11 @@
-import pytest
 import contextvars
-from pico_ioc.scope import ScopeManager, ScopedCaches, ContextVarScope
-from pico_ioc.exceptions import ScopeError
+
+import pytest
+
 from pico_ioc.decorators import cleanup
+from pico_ioc.exceptions import ScopeError
+from pico_ioc.scope import ContextVarScope, ScopedCaches, ScopeManager
+
 
 @pytest.fixture
 def scope_manager():

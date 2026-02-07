@@ -1,7 +1,10 @@
 # tests/test_container_context.py
 import types
+
 import pytest
-from pico_ioc import init, PicoContainer
+
+from pico_ioc import PicoContainer, init
+
 
 def _empty_module(name: str = "ctx_mod"):
     return types.ModuleType(name)

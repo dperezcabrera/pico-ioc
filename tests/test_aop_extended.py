@@ -3,19 +3,20 @@ Extended tests for aop.py to increase coverage.
 """
 import asyncio
 import pickle
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from pico_ioc.aop import (
-    UnifiedComponentProxy,
     MethodCtx,
     MethodInterceptor,
-    dispatch_method,
-    intercepted_by,
+    UnifiedComponentProxy,
     _gather_interceptors_for_method,
-    health
+    dispatch_method,
+    health,
+    intercepted_by,
 )
-from pico_ioc.exceptions import SerializationError, AsyncResolutionError
+from pico_ioc.exceptions import AsyncResolutionError, SerializationError
 
 
 class TestMethodCtx:

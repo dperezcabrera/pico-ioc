@@ -1,18 +1,13 @@
-import pytest
 import json
 import os
 from dataclasses import dataclass
-from typing import Mapping, Any
+from typing import Any, Mapping
 
-from pico_ioc.config_builder import (
-    FlatDictSource,
-    FileSource,
-    configuration,
-    EnvSource,
-    ContextConfig,
-    TreeSource
-)
+import pytest
+
+from pico_ioc.config_builder import ContextConfig, EnvSource, FileSource, FlatDictSource, TreeSource, configuration
 from pico_ioc.exceptions import ConfigurationError
+
 
 class MockTreeSource(TreeSource):
     def get_tree(self) -> Mapping[str, Any]:

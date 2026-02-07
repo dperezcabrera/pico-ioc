@@ -1,36 +1,36 @@
-from .constants import LOGGER_NAME, LOGGER, PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META
+from .analysis import DependencyRequest, analyze_callable_dependencies
+from .aop import ContainerObserver, MethodCtx, MethodInterceptor, UnifiedComponentProxy, health, intercepted_by
+from .api import (
+    Qualifier,
+    cleanup,
+    component,
+    configure,
+    configured,
+    factory,
+    init,
+    provides,
+)
+from .component_scanner import CustomScanner
+from .config_builder import ContextConfig, EnvSource, FileSource, FlatDictSource, configuration
+from .config_runtime import DictSource, Discriminator, JsonTreeSource, Value, YamlTreeSource
+from .constants import LOGGER, LOGGER_NAME, PICO_INFRA, PICO_KEY, PICO_META, PICO_NAME
+from .container import PicoContainer
+from .event_bus import AutoSubscriberMixin, ErrorPolicy, Event, EventBus, ExecPolicy, subscribe
 from .exceptions import (
+    AsyncResolutionError,
+    ComponentCreationError,
+    ConfigurationError,
+    EventBusClosedError,
+    InvalidBindingError,
     PicoError,
     ProviderNotFoundError,
-    ComponentCreationError,
     ScopeError,
-    ConfigurationError,
     SerializationError,
     ValidationError,
-    InvalidBindingError,
-    EventBusClosedError,
-    AsyncResolutionError,
 )
-from .api import (
-    component,
-    factory,
-    provides,
-    Qualifier,
-    configure,
-    cleanup,
-    init,
-    configured,
-)
-from .config_builder import configuration, ContextConfig, EnvSource, FileSource, FlatDictSource, Value
-from .scope import ScopeManager, ContextVarScope, ScopeProtocol, ScopedCaches
+from .factory import ComponentFactory, DeferredProvider, ProviderMetadata
 from .locator import ComponentLocator
-from .factory import ComponentFactory, ProviderMetadata, DeferredProvider
-from .aop import MethodCtx, MethodInterceptor, intercepted_by, UnifiedComponentProxy, health, ContainerObserver
-from .container import PicoContainer
-from .event_bus import EventBus, ExecPolicy, ErrorPolicy, Event, subscribe, AutoSubscriberMixin
-from .config_runtime import JsonTreeSource, YamlTreeSource, DictSource, Discriminator, Value
-from .analysis import DependencyRequest, analyze_callable_dependencies
-from .component_scanner import CustomScanner
+from .scope import ContextVarScope, ScopedCaches, ScopeManager, ScopeProtocol
 
 __all__ = [
     "LOGGER_NAME",
@@ -77,7 +77,6 @@ __all__ = [
     "configured",
     "configuration",
     "ContextConfig",
-    "Value",
     "EventBus",
     "ExecPolicy",
     "ErrorPolicy",

@@ -1,13 +1,15 @@
+import hashlib
 import json
 import os
 import re
-import hashlib
 import typing
-from dataclasses import is_dataclass, fields
+from dataclasses import fields, is_dataclass
 from enum import Enum
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union, get_args, get_origin, Annotated
-from .exceptions import ConfigurationError
+from typing import Annotated, Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union, get_args, get_origin
+
 from .constants import PICO_META
+from .exceptions import ConfigurationError
+
 
 class Value:
     def __init__(self, value: Any):
@@ -32,7 +34,7 @@ class JsonTreeSource(TreeSource):
         self._path = path
     def get_tree(self) -> Mapping[str, Any]:
         try:
-            with open(self._path, "r", encoding="utf-8") as f:
+            with open(self._path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             raise ConfigurationError(f"Failed to load JSON config: {e}")
@@ -46,7 +48,7 @@ class YamlTreeSource(TreeSource):
         except Exception:
             raise ConfigurationError("PyYAML not installed")
         try:
-            with open(self._path, "r", encoding="utf-8") as f:
+            with open(self._path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
             return data
         except Exception as e:

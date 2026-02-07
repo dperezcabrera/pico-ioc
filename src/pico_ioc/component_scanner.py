@@ -1,11 +1,12 @@
 import inspect
 import os
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Set, Protocol
-from .constants import PICO_INFRA, PICO_NAME, PICO_KEY, PICO_META, SCOPE_SINGLETON
-from .factory import ProviderMetadata, DeferredProvider
-from .decorators import get_return_type
+from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
+
+from .analysis import DependencyRequest, analyze_callable_dependencies
 from .config_registrar import ConfigurationManager
-from .analysis import analyze_callable_dependencies, DependencyRequest
+from .constants import PICO_INFRA, PICO_KEY, PICO_META, PICO_NAME, SCOPE_SINGLETON
+from .decorators import get_return_type
+from .factory import DeferredProvider, ProviderMetadata
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]

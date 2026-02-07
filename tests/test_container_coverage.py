@@ -1,8 +1,11 @@
-import pytest
 import contextvars
-from pico_ioc import PicoContainer, ComponentFactory, ScopedCaches, ScopeManager, health
+
+import pytest
+
+from pico_ioc import ComponentFactory, PicoContainer, ScopedCaches, ScopeManager, health
 from pico_ioc.exceptions import AsyncResolutionError
 from pico_ioc.locator import ComponentLocator
+
 
 def test_container_ashutdown():
     c = PicoContainer(ComponentFactory(), ScopedCaches(), ScopeManager())

@@ -1,6 +1,9 @@
-import pytest
 import asyncio
-from pico_ioc import init, component, PicoContainer, ScopeError
+
+import pytest
+
+from pico_ioc import PicoContainer, ScopeError, component, init
+
 
 @component
 class SimpleA:

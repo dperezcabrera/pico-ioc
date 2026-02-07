@@ -1,6 +1,6 @@
 # pico-ioc
 
-Lightweight, async-native dependency injection container for Python 3.11+.
+Lightweight, async-native dependency injection container for Python 3.11+. Zero runtime dependencies.
 
 ## Commands
 
@@ -9,6 +9,8 @@ pip install -e ".[test]"          # Install in dev mode
 pytest tests/ -v                  # Run tests
 pytest --cov=pico_ioc --cov-report=term-missing tests/  # Coverage
 tox                               # Full matrix (3.11-3.14)
+ruff check src/ tests/            # Lint
+ruff format --check src/ tests/   # Format check
 mkdocs serve -f mkdocs.yml        # Local docs
 ```
 
@@ -16,19 +18,25 @@ mkdocs serve -f mkdocs.yml        # Local docs
 
 ```
 src/pico_ioc/
-  __init__.py          # Public API: decorators, init(), PicoContainer
-  container.py         # PicoContainer - core DI container
-  locator.py           # ComponentLocator - metadata registry
-  scope.py             # ScopeManager, ScopedCaches, ContextVarScope
-  resolver.py          # Dependency resolution & cycle detection
-  scanner.py           # ComponentScanner - auto-discovery
-  decorators.py        # @component, @factory, @provides, @configured, @intercepted_by
-  constants.py         # PICO_META, PICO_INFRA, PICO_NAME, PICO_KEY
-  interceptor.py       # MethodInterceptor, MethodCtx, proxy creation
-  configuration.py     # DictSource, configuration(), @configured binding
-  event_bus.py         # EventBus, @subscribe, publish/subscribe
-  health.py            # HealthCheck protocol, HealthAggregator
-  exceptions.py        # All custom exceptions
+  __init__.py              # Public API — re-exports 60 symbols via __all__
+  constants.py             # PICO_META, PICO_INFRA, PICO_NAME, PICO_KEY, scope names
+  exceptions.py            # Exception hierarchy rooted in PicoError
+  decorators.py            # @component, @factory, @provides, @configured, @intercepted_by, metadata helpers
+  api.py                   # High-level API: factory(), provides(), configure(), cleanup(), init()
+  container.py             # PicoContainer — core DI container, wiring, resolution, lifecycle
+  locator.py               # ComponentLocator — provider lookup registry, multi-binding
+  registrar.py             # Registrar — scans decorated classes and registers providers
+  component_scanner.py     # ComponentScanner — recursive package import + component discovery
+  scope.py                 # ScopeProtocol, ScopeManager, ContextVarScope, ScopedCaches
+  factory.py               # ProviderMetadata, DeferredProvider, ComponentFactory type aliases
+  dependency_validator.py  # Startup validation: cycle detection, missing providers
+  provider_selector.py     # ProviderSelector — config-driven multi-provider resolution
+  aop.py                   # AOP: MethodCtx, MethodInterceptor, UnifiedComponentProxy, health()
+  config_builder.py        # configuration(), ContextConfig, EnvSource, FileSource, FlatDictSource, Value
+  config_runtime.py        # Runtime config: JsonTreeSource, YamlTreeSource, DictSource, Discriminator, Value
+  config_registrar.py      # ConfigurationManager — registers @configured dataclasses as providers
+  analysis.py              # DependencyRequest, analyze_callable_dependencies — introspection
+  event_bus.py             # EventBus, @subscribe, ExecPolicy, ErrorPolicy, AutoSubscriberMixin
 ```
 
 ## Key Concepts
@@ -39,26 +47,48 @@ src/pico_ioc/
 - **Resolution**: Constructor injection by type hint. Lists via qualifier. `container.get()` (sync) / `container.aget()` (async)
 - **AOP**: `MethodInterceptor` protocol with `invoke(ctx, call_next)`. Applied via `@intercepted_by(InterceptorClass)`
 - **Configuration**: `configuration(DictSource({...}))` creates config. `@configured(prefix="x", mapping="tree")` binds to dataclass
+- **Events**: `EventBus` with sync/async dispatch, `ExecPolicy` (INLINE/THREADPOOL/TASK), `ErrorPolicy`, `@subscribe`
 - **Entry point**: `init(modules=[...], config=cfg)` bootstraps container
 
 ## Code Style
 
-- Python 3.11+ (type hints with `X | Y` union syntax)
+- Python 3.11+ (type hints with `X | Y` union syntax preferred)
+- Linting: `ruff check` (rules: E, F, I, UP). Formatting: `ruff format`
 - No docstrings on obvious methods
 - Private attributes prefixed with `_`
 - Internal pico attributes: `_pico_*` (never `__dunder__`)
 - Async-first: prefer `async def` where IO is involved
 - Exceptions in `exceptions.py`, not inline
+- Typed package: `py.typed` marker present (PEP 561)
 
 ## Testing
 
 - pytest + pytest-asyncio (mode=strict)
 - Tests mirror src structure: `test_container.py`, `test_scope.py`, etc.
 - Use `DictSource` for test config, `sqlite+aiosqlite:///:memory:` for DB tests
+- No `conftest.py` — fixtures are local to each test file
 - Target: >95% coverage
+- Coverage config: `.coveragerc` (branch=True, omit `_version.py`)
+
+## CI/CD
+
+Three GitHub Actions workflows:
+
+- **`ci.yml`**: Runs `tox -e cov` across Python 3.11–3.14 matrix. Merges coverage, uploads to Codecov. Triggers on push/PR to `main`.
+- **`docs.yml`**: Builds MkDocs site. On PR: validates build (`--strict`). On push to `main`: deploys to GitHub Pages.
+- **`publish-to-pypi.yml`**: Publishes to PyPI via trusted publishing (OIDC). Triggers on GitHub Release (tag-based).
+
+## Release Process
+
+1. All changes merged to `main`, CI green
+2. Create a GitHub Release with tag `vX.Y.Z` (e.g., `v2.2.3`)
+3. `publish-to-pypi.yml` triggers automatically, builds and publishes to PyPI
+4. Version is computed by `setuptools-scm` from the git tag
+5. **NEVER change `version_scheme`** — must remain `"post-release"` (see CLAUDE.md)
 
 ## Boundaries
 
 - Do not modify `_version.py` (auto-generated by setuptools-scm)
-- Do not add dependencies without discussion
-- `pico-ioc` is the foundation - no circular deps with other pico-* packages
+- Do not add runtime dependencies (zero-dependency is a core promise)
+- `pico-ioc` is the foundation — no circular deps with other pico-* packages
+- Do not remove or rename public API symbols without a major version bump

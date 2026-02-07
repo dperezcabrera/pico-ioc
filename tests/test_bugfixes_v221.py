@@ -6,15 +6,16 @@ Tests for bugs fixed in v2.2.1:
 """
 import asyncio
 import logging
-import pytest
-import tempfile
 import os
+import tempfile
 from unittest.mock import MagicMock, patch
 
-from pico_ioc import init, component, configure, cleanup
+import pytest
+
+from pico_ioc import cleanup, component, configure, init
 from pico_ioc.aop import UnifiedComponentProxy
-from pico_ioc.scope import ScopedCaches, ScopeManager, ComponentContainer
 from pico_ioc.constants import PICO_META
+from pico_ioc.scope import ComponentContainer, ScopedCaches, ScopeManager
 
 
 # Define components at module level for proper scanning
@@ -64,7 +65,7 @@ class TestDotGraphExportFix:
 
             container.export_graph(path)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 dot_output = f.read()
 
             # Should contain valid edge syntax
@@ -88,7 +89,7 @@ class TestDotGraphExportFix:
 
             container.export_graph(path)
 
-            with open(path, 'r') as f:
+            with open(path) as f:
                 dot_output = f.read()
 
             # Count edges - should have multiple

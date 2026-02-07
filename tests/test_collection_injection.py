@@ -1,12 +1,9 @@
+from typing import Annotated, Any, Collection, Deque, Dict, Iterable, List, Mapping, Protocol, Sequence, Set, Type, cast
+
 import pytest
-from typing import (
-    List, Set, Iterable, Deque, Dict, Mapping, Protocol, Any,
-    Annotated, Type, cast, Sequence, Collection
-)
-from pico_ioc import (
-    init, component, factory, provides, Qualifier,
-    DependencyRequest, analyze_callable_dependencies
-)
+
+from pico_ioc import DependencyRequest, Qualifier, analyze_callable_dependencies, component, factory, init, provides
+
 
 class IService(Protocol):
     def serve(self) -> str: ...
