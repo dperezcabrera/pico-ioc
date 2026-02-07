@@ -8,38 +8,52 @@ from .exceptions import ScopeError
 
 _logger = logging.getLogger(__name__)
 
+
 class ScopeProtocol:
     def get_id(self) -> Any | None: ...
+
 
 class ContextVarScope(ScopeProtocol):
     def __init__(self, var: contextvars.ContextVar) -> None:
         self._var = var
+
     def get_id(self) -> Any | None:
         return self._var.get()
+
     def activate(self, scope_id: Any) -> contextvars.Token:
         return self._var.set(scope_id)
+
     def deactivate(self, token: contextvars.Token) -> None:
         self._var.reset(token)
+
 
 class ComponentContainer:
     def __init__(self) -> None:
         self._instances: Dict[object, object] = {}
+
     def get(self, key):
         return self._instances.get(key)
+
     def put(self, key, value):
         self._instances[key] = value
+
     def items(self):
         return list(self._instances.items())
+
 
 class _NoCacheContainer(ComponentContainer):
     def __init__(self) -> None:
         pass
+
     def get(self, key):
         return None
+
     def put(self, key, value):
         return
+
     def items(self):
         return []
+
 
 class ScopeManager:
     def __init__(self) -> None:
@@ -62,45 +76,52 @@ class ScopeManager:
         context_var = contextvars.ContextVar(var_name, default=None)
         implementation = ContextVarScope(context_var)
         self._scopes[name] = implementation
-        
-        
+
     def get_id(self, name: str) -> Any | None:
         if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             return None
         impl = self._scopes.get(name)
         return impl.get_id() if impl else None
+
     def activate(self, name: str, scope_id: Any) -> Optional[contextvars.Token]:
         if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             return None
         impl = self._scopes.get(name)
         if impl is None:
             from .exceptions import ScopeError
+
             raise ScopeError(f"Unknown scope: {name}")
         if hasattr(impl, "activate"):
             return getattr(impl, "activate")(scope_id)
         return None
+
     def deactivate(self, name: str, token: Optional[contextvars.Token]) -> None:
         if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
             return
         impl = self._scopes.get(name)
         if impl is None:
             from .exceptions import ScopeError
+
             raise ScopeError(f"Unknown scope: {name}")
         if token is not None and hasattr(impl, "deactivate"):
             getattr(impl, "deactivate")(token)
+
     def names(self) -> Tuple[str, ...]:
         return tuple(n for n in self._scopes.keys() if n not in (SCOPE_SINGLETON, SCOPE_PROTOTYPE))
+
     def signature(self, names: Tuple[str, ...]) -> Tuple[Any, ...]:
         return tuple(self.get_id(n) for n in names)
+
     def signature_all(self) -> Tuple[Any, ...]:
         return self.signature(self.names())
+
 
 class ScopedCaches:
     def __init__(self) -> None:
         self._singleton = ComponentContainer()
         self._by_scope: Dict[str, Dict[Any, ComponentContainer]] = {}
         self._no_cache = _NoCacheContainer()
-        
+
     def _cleanup_object(self, obj: Any) -> None:
         try:
             from .constants import PICO_META
@@ -117,11 +138,11 @@ class ScopedCaches:
                             "Cleanup method %s.%s failed: %s",
                             type(obj).__name__,
                             getattr(m, "__name__", "<unknown>"),
-                            e
+                            e,
                         )
         except Exception as e:
             _logger.debug("Failed to inspect object for cleanup: %s", e)
-            
+
     def cleanup_scope(self, scope_name: str, scope_id: Any) -> None:
         bucket = self._by_scope.get(scope_name)
         if bucket and scope_id in bucket:
@@ -140,9 +161,9 @@ class ScopedCaches:
             return self._singleton
         if scope == SCOPE_PROTOTYPE:
             return self._no_cache
-        
+
         sid = scopes.get_id(scope)
-        
+
         if sid is None:
             raise ScopeError(
                 f"Cannot resolve component in scope '{scope}': No active scope ID found. "
@@ -152,7 +173,7 @@ class ScopedCaches:
         bucket = self._by_scope.setdefault(scope, {})
         if sid in bucket:
             return bucket[sid]
-        
+
         c = ComponentContainer()
         bucket[sid] = c
         return c
@@ -171,11 +192,11 @@ class ScopedCaches:
         bucket = self._by_scope.get(scope)
         if not bucket:
             return
-        
+
         # Manual cleanup if needed, though we rely on explicit cleanup now
         if len(bucket) > keep:
             # Simple eviction strategy if forced manually
-            keys_to_remove = list(bucket.keys())[:len(bucket)-keep]
+            keys_to_remove = list(bucket.keys())[: len(bucket) - keep]
             for k in keys_to_remove:
                 container = bucket.pop(k)
                 self._cleanup_container(container)

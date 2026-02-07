@@ -12,8 +12,10 @@ from .factory import DeferredProvider, ProviderMetadata
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
 
+
 def _truthy(s: str) -> bool:
     return s.strip().lower() in {"1", "true", "yes", "on", "y", "t"}
+
 
 def _coerce(val: Optional[str], t: type) -> Any:
     if val is None:
@@ -34,8 +36,10 @@ def _coerce(val: Optional[str], t: type) -> Any:
         return _coerce(val, args[0])
     return val
 
+
 def _upper_key(name: str) -> str:
     return name.upper()
+
 
 def _lookup(sources: Tuple[ConfigSource, ...], key: str) -> Optional[str]:
     for src in sources:
@@ -44,13 +48,14 @@ def _lookup(sources: Tuple[ConfigSource, ...], key: str) -> Optional[str]:
             return v
     return None
 
+
 class ConfigurationManager:
     def __init__(self, config: Optional[ContextConfig]) -> None:
         cfg = config or ContextConfig(flat_sources=(), tree_sources=(), overrides={})
-        
+
         self._flat_config = cfg.flat_sources
         self._overrides = cfg.overrides
-        
+
         self._resolver = ConfigResolver(cfg.tree_sources)
         self._adapters = TypeAdapterRegistry()
         self._graph = ObjectGraphBuilder(self._resolver, self._adapters)
@@ -84,30 +89,30 @@ class ConfigurationManager:
                     if isinstance(m, Value):
                         value_override = m.value
                         break
-            
+
             if value_override is not None:
                 values[f.name] = value_override
                 continue
-            
+
             base_key = _upper_key(f.name)
             keys_to_try = []
             if prefix:
                 keys_to_try.append(prefix + base_key)
             keys_to_try.append(base_key)
-            
+
             raw = None
             for k in keys_to_try:
                 raw = self._lookup_flat(k)
                 if raw is not None:
                     break
-                    
+
             if raw is None:
                 if f.default is not MISSING or f.default_factory is not MISSING:
                     continue
                 raise ConfigurationError(f"Missing configuration key: {(prefix or '') + base_key}")
             values[f.name] = _coerce(raw, field_type if isinstance(field_type, type) or get_origin(field_type) else str)
         return cls(**values)
-    
+
     def _auto_detect_mapping(self, target_type: type) -> str:
         if not is_dataclass(target_type):
             return "tree"
@@ -125,7 +130,7 @@ class ConfigurationManager:
                 t = args[0] if args else Any
 
             origin = get_origin(t)
-            
+
             if origin in (list, List, dict, Dict, Union):
                 return "tree"
             if isinstance(t, type) and is_dataclass(t):
@@ -139,40 +144,42 @@ class ConfigurationManager:
                     base_type = real_args[0]
                 else:
                     continue
-            
+
             if isinstance(base_type, type) and base_type not in primitives:
                 return "tree"
-                
+
         return "flat"
 
     def register_configured_class(self, cls: type, enabled: bool) -> Optional[Tuple[KeyT, Provider, ProviderMetadata]]:
         if not enabled:
             return None
-        
+
         meta = getattr(cls, PICO_META, {})
         cfg = meta.get("configured", None)
         if not cfg:
             return None
-            
+
         target = cfg.get("target")
         prefix = cfg.get("prefix")
         mapping = cfg.get("mapping", "auto")
-        
+
         if target == "self":
             target = cls
-        
+
         if not isinstance(target, type):
             return None
-            
+
         if mapping == "auto":
             mapping = self._auto_detect_mapping(target)
-            
+
         graph_builder = self._graph
         qset = set(str(q) for q in meta.get("qualifier", ()))
         sc = meta.get("scope", SCOPE_SINGLETON)
-        
+
         if mapping == "tree":
-            provider = DeferredProvider(lambda pico, loc, t=target, p=prefix, g=graph_builder: g.build_from_prefix(t, p))
+            provider = DeferredProvider(
+                lambda pico, loc, t=target, p=prefix, g=graph_builder: g.build_from_prefix(t, p)
+            )
             deps = ()
             if not is_dataclass(target) and hasattr(target, "__init__"):
                 deps = analyze_callable_dependencies(target.__init__)
@@ -188,14 +195,14 @@ class ConfigurationManager:
                 infra="configured",
                 pico_name=prefix,
                 scope=sc,
-                dependencies=deps
+                dependencies=deps,
             )
             return (target, provider, md)
-            
+
         elif mapping == "flat":
             if not is_dataclass(target):
                 raise ConfigurationError(f"Target class {target.__name__} for flat mapping must be a dataclass")
-            
+
             provider = DeferredProvider(lambda pico, loc, c=target, p=prefix: self._build_flat_instance(c, p))
             md = ProviderMetadata(
                 key=target,
@@ -209,27 +216,27 @@ class ConfigurationManager:
                 infra="configured",
                 pico_name=prefix,
                 scope=sc,
-                dependencies=()
+                dependencies=(),
             )
             return (target, provider, md)
-            
+
         return None
 
     def prefix_exists(self, md: ProviderMetadata) -> bool:
         if md.infra != "configured":
             return False
-            
+
         target_type = md.provided_type or md.concrete_class
         if not isinstance(target_type, type):
             return False
-            
+
         meta = getattr(target_type, PICO_META, {})
         cfg = meta.get("configured", {})
         mapping = cfg.get("mapping", "auto")
-        
+
         if mapping == "auto":
             mapping = self._auto_detect_mapping(target_type)
-            
+
         if mapping == "tree":
             try:
                 _ = self._resolver.subtree(md.pico_name)
@@ -242,4 +249,3 @@ class ConfigurationManager:
             prefix = md.pico_name or ""
             keys = [_upper_key(f.name) for f in fields(target_type)]
             return any(self._lookup_flat(prefix + k) is not None for k in keys)
-

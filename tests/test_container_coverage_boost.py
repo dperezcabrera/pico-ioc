@@ -2,6 +2,7 @@
 Additional tests to boost container.py coverage to 90%+.
 Tests edge cases and less common code paths.
 """
+
 import asyncio
 import inspect
 import os
@@ -30,11 +31,13 @@ from pico_ioc.scope import ScopedCaches, ScopeManager
 # Helper function tests - don't need container
 # ============================================================
 
+
 class TestGetSignatureSafeEdgeCases:
     """Test _get_signature_safe edge cases."""
 
     def test_signature_with_wrapped_attribute(self):
         """Function with __wrapped__ falls back to wrapped signature."""
+
         def original(x: int, y: str) -> bool:
             return True
 
@@ -46,22 +49,25 @@ class TestGetSignatureSafeEdgeCases:
         bad.__wrapped__ = original
 
         sig = _get_signature_safe(bad)
-        assert 'x' in sig.parameters
-        assert 'y' in sig.parameters
+        assert "x" in sig.parameters
+        assert "y" in sig.parameters
 
     def test_signature_normal_function(self):
         """Normal function returns signature directly."""
+
         def normal_func(a: int, b: str = "default") -> None:
             pass
 
         sig = _get_signature_safe(normal_func)
-        assert 'a' in sig.parameters
-        assert 'b' in sig.parameters
+        assert "a" in sig.parameters
+        assert "b" in sig.parameters
 
     def test_signature_raises_when_no_wrapped(self):
         """_get_signature_safe raises when signature fails and no __wrapped__."""
+
         class BadObj:
             """Object that can't be introspected."""
+
             pass
 
         bad = BadObj()
@@ -75,6 +81,7 @@ class TestNeedsAsyncConfigure:
 
     def test_needs_async_configure_detects_async(self):
         """_needs_async_configure returns True for async configure methods."""
+
         class Service:
             async def setup(self):
                 pass
@@ -86,6 +93,7 @@ class TestNeedsAsyncConfigure:
 
     def test_needs_async_configure_false_for_sync(self):
         """_needs_async_configure returns False for sync configure."""
+
         class Service:
             def setup(self):
                 pass
@@ -97,6 +105,7 @@ class TestNeedsAsyncConfigure:
 
     def test_needs_async_configure_false_no_configure(self):
         """Returns False when no configure methods exist."""
+
         class Service:
             def regular(self):
                 pass
@@ -110,11 +119,14 @@ class TestIterConfigureMethods:
 
     def test_iter_configure_methods_yields_all(self):
         """_iter_configure_methods yields all configure methods."""
+
         class Service:
             def setup1(self):
                 pass
+
             def setup2(self):
                 pass
+
             def regular(self):
                 pass
 
@@ -128,6 +140,7 @@ class TestIterConfigureMethods:
 
     def test_iter_configure_methods_empty(self):
         """_iter_configure_methods yields nothing for no configure methods."""
+
         class Service:
             def regular(self):
                 pass
@@ -187,7 +200,7 @@ class TestContainerInit:
         id2 = PicoContainer._generate_container_id()
 
         assert id1 != id2
-        assert id1.startswith('c')
+        assert id1.startswith("c")
 
     def test_container_custom_id(self):
         """Container accepts custom ID."""
@@ -195,10 +208,7 @@ class TestContainerInit:
         caches = ScopedCaches()
         scopes = ScopeManager()
 
-        container = PicoContainer(
-            factory_mock, caches, scopes,
-            container_id="my-custom-id"
-        )
+        container = PicoContainer(factory_mock, caches, scopes, container_id="my-custom-id")
 
         assert container.container_id == "my-custom-id"
         container.shutdown()
@@ -209,10 +219,7 @@ class TestContainerInit:
         caches = ScopedCaches()
         scopes = ScopeManager()
 
-        container = PicoContainer(
-            factory_mock, caches, scopes,
-            profiles=("dev", "test")
-        )
+        container = PicoContainer(factory_mock, caches, scopes, profiles=("dev", "test"))
 
         assert container.context.profiles == ("dev", "test")
         container.shutdown()
@@ -403,6 +410,7 @@ class TestHasMethod:
         """has() returns False for unknown keys."""
         container = init(modules=[])
         try:
+
             class UnknownClass:
                 pass
 
@@ -471,6 +479,7 @@ class TestBuildResolutionGraphMethod:
 # Additional tests for uncovered lines - using mocks
 # ============================================================
 
+
 class TestBuildResolutionGraphIssubclassException:
     """Test _build_resolution_graph handles issubclass exceptions."""
 
@@ -498,6 +507,7 @@ class TestCanonicalKeyWithTypeNotFound:
         """_canonical_key returns unknown type unchanged."""
         container = init(modules=[])
         try:
+
             class SomeRandomClass:
                 pass
 
@@ -514,7 +524,7 @@ class TestExportGraphWritesFile:
         """export_graph writes valid DOT file."""
         container = init(modules=[])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path)
@@ -522,7 +532,7 @@ class TestExportGraphWritesFile:
             with open(path) as f:
                 content = f.read()
 
-            assert 'digraph Pico' in content
+            assert "digraph Pico" in content
             os.unlink(path)
         finally:
             container.shutdown()
@@ -531,7 +541,7 @@ class TestExportGraphWritesFile:
         """export_graph includes title when specified."""
         container = init(modules=[])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path, title="My App")
@@ -539,7 +549,7 @@ class TestExportGraphWritesFile:
             with open(path) as f:
                 content = f.read()
 
-            assert 'My App' in content
+            assert "My App" in content
             os.unlink(path)
         finally:
             container.shutdown()

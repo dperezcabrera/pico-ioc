@@ -110,7 +110,7 @@ def test_math_ops_and_reflected_ops_with_int():
     assert p * 2 == 20
     assert p // 3 == 3
     assert p % 4 == 2
-    assert p ** 2 == 100
+    assert p**2 == 100
 
     assert 5 + p == 15
     assert 30 - p == 20
@@ -172,6 +172,7 @@ def test_dir_and_getattr_delattr_passthrough():
     with pytest.raises(AttributeError):
         _ = p.attr
 
+
 def test___class___property_mirrors_real_class_and_affects_isinstance():
     def factory():
         return Tracker()
@@ -179,6 +180,7 @@ def test___class___property_mirrors_real_class_and_affects_isinstance():
     p = UnifiedComponentProxy(container=MockContainer, object_creator=factory)
 
     from pico_ioc.aop import UnifiedComponentProxy as _ProxyType
+
     assert type(p) is _ProxyType
 
     assert p.__class__ is Tracker
@@ -188,6 +190,7 @@ def test___class___property_mirrors_real_class_and_affects_isinstance():
 
 def test_true_div_and_reflected_and_divmod():
     calls = {"n": 0}
+
     def factory():
         calls["n"] += 1
         return 10
@@ -205,6 +208,7 @@ def test_true_div_and_reflected_and_divmod():
 
 def test_bitwise_ops_and_reflected():
     calls = {"n": 0}
+
     def factory():
         calls["n"] += 1
         return 0b0110
@@ -224,6 +228,7 @@ def test_bitwise_ops_and_reflected():
 
 def test_shift_ops_and_reflected():
     calls = {"n": 0}
+
     def factory():
         calls["n"] += 1
         return 3
@@ -234,9 +239,14 @@ def test_shift_ops_and_reflected():
     assert (p >> 1) == 1
 
     class Shiftable:
-        def __init__(self, v): self.v = v
-        def __lshift__(self, other): return ("L", self.v, other)
-        def __rshift__(self, other): return ("R", self.v, other)
+        def __init__(self, v):
+            self.v = v
+
+        def __lshift__(self, other):
+            return ("L", self.v, other)
+
+        def __rshift__(self, other):
+            return ("R", self.v, other)
 
     s = Shiftable(5)
     assert (s << p) == ("L", 5, 3)
@@ -247,6 +257,7 @@ def test_shift_ops_and_reflected():
 
 def test_unary_ops_and_ordered_comparisons():
     calls = {"n": 0}
+
     def factory():
         calls["n"] += 1
         return -3
@@ -268,6 +279,7 @@ def test_unary_ops_and_ordered_comparisons():
 
 def test_matmul_and_reflected_matmul():
     calls = {"n": 0}
+
     def factory():
         calls["n"] += 1
         return Mat(2)

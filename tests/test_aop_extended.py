@@ -1,6 +1,7 @@
 """
 Extended tests for aop.py to increase coverage.
 """
+
 import asyncio
 import pickle
 from unittest.mock import MagicMock, patch
@@ -42,7 +43,7 @@ class TestMethodCtx:
             args=(1, 2),
             kwargs={"key": "value"},
             container=MagicMock(),
-            request_key="req-123"
+            request_key="req-123",
         )
 
         assert ctx.instance is instance
@@ -56,15 +57,7 @@ class TestMethodCtx:
 
     def test_method_ctx_local_storage(self):
         """MethodCtx.local can store interceptor data."""
-        ctx = MethodCtx(
-            instance=None,
-            cls=object,
-            method=lambda: None,
-            name="test",
-            args=(),
-            kwargs={},
-            container=None
-        )
+        ctx = MethodCtx(instance=None, cls=object, method=lambda: None, name="test", args=(), kwargs={}, container=None)
 
         ctx.local["key1"] = "value1"
         ctx.local["key2"] = 42
@@ -78,18 +71,11 @@ class TestDispatchMethod:
 
     def test_dispatch_no_interceptors(self):
         """dispatch_method calls method directly without interceptors."""
+
         def method(a, b):
             return a + b
 
-        ctx = MethodCtx(
-            instance=None,
-            cls=object,
-            method=method,
-            name="add",
-            args=(1, 2),
-            kwargs={},
-            container=None
-        )
+        ctx = MethodCtx(instance=None, cls=object, method=method, name="add", args=(1, 2), kwargs={}, container=None)
 
         result = dispatch_method([], ctx)
 
@@ -97,6 +83,7 @@ class TestDispatchMethod:
 
     def test_dispatch_with_single_interceptor(self):
         """dispatch_method chains single interceptor."""
+
         class LoggingInterceptor:
             def invoke(self, ctx, call_next):
                 ctx.local["logged"] = True
@@ -105,15 +92,7 @@ class TestDispatchMethod:
         def method(x):
             return x * 2
 
-        ctx = MethodCtx(
-            instance=None,
-            cls=object,
-            method=method,
-            name="double",
-            args=(5,),
-            kwargs={},
-            container=None
-        )
+        ctx = MethodCtx(instance=None, cls=object, method=method, name="double", args=(5,), kwargs={}, container=None)
 
         result = dispatch_method([LoggingInterceptor()], ctx)
 
@@ -142,32 +121,16 @@ class TestDispatchMethod:
             order.append("method")
             return "done"
 
-        ctx = MethodCtx(
-            instance=None,
-            cls=object,
-            method=method,
-            name="test",
-            args=(),
-            kwargs={},
-            container=None
-        )
+        ctx = MethodCtx(instance=None, cls=object, method=method, name="test", args=(), kwargs={}, container=None)
 
-        result = dispatch_method(
-            [FirstInterceptor(), SecondInterceptor()],
-            ctx
-        )
+        result = dispatch_method([FirstInterceptor(), SecondInterceptor()], ctx)
 
         assert result == "done"
-        assert order == [
-            "first_before",
-            "second_before",
-            "method",
-            "second_after",
-            "first_after"
-        ]
+        assert order == ["first_before", "second_before", "method", "second_after", "first_after"]
 
     def test_dispatch_interceptor_can_modify_args(self):
         """Interceptors can modify args before calling next."""
+
         class MultiplyInterceptor:
             def invoke(self, ctx, call_next):
                 new_args = tuple(a * 2 for a in ctx.args)
@@ -177,15 +140,7 @@ class TestDispatchMethod:
         def method(x):
             return x
 
-        ctx = MethodCtx(
-            instance=None,
-            cls=object,
-            method=method,
-            name="identity",
-            args=(5,),
-            kwargs={},
-            container=None
-        )
+        ctx = MethodCtx(instance=None, cls=object, method=method, name="identity", args=(5,), kwargs={}, container=None)
 
         result = dispatch_method([MultiplyInterceptor()], ctx)
 
@@ -197,6 +152,7 @@ class TestInterceptedBy:
 
     def test_intercepted_by_single_class(self):
         """@intercepted_by accepts single interceptor class."""
+
         class MyInterceptor:
             def invoke(self, ctx, call_next):
                 return call_next(ctx)
@@ -209,6 +165,7 @@ class TestInterceptedBy:
 
     def test_intercepted_by_multiple_classes(self):
         """@intercepted_by accepts multiple interceptor classes."""
+
         class Interceptor1:
             def invoke(self, ctx, call_next):
                 return call_next(ctx)
@@ -226,6 +183,7 @@ class TestInterceptedBy:
 
     def test_intercepted_by_stacking(self):
         """@intercepted_by can be stacked."""
+
         class InterceptorA:
             def invoke(self, ctx, call_next):
                 return call_next(ctx)
@@ -245,6 +203,7 @@ class TestInterceptedBy:
     def test_intercepted_by_no_args_raises(self):
         """@intercepted_by with no args raises TypeError."""
         with pytest.raises(TypeError):
+
             @intercepted_by()
             def my_method():
                 pass
@@ -252,12 +211,14 @@ class TestInterceptedBy:
     def test_intercepted_by_non_class_raises(self):
         """@intercepted_by with non-class raises TypeError."""
         with pytest.raises(TypeError):
+
             @intercepted_by("not_a_class")
             def my_method():
                 pass
 
     def test_intercepted_by_on_non_callable_raises(self):
         """@intercepted_by on non-callable raises TypeError."""
+
         class Interceptor:
             pass
 
@@ -270,6 +231,7 @@ class TestGatherInterceptors:
 
     def test_gather_interceptors_returns_tuple(self):
         """_gather_interceptors_for_method returns tuple of classes."""
+
         class MyInterceptor:
             pass
 
@@ -284,6 +246,7 @@ class TestGatherInterceptors:
 
     def test_gather_interceptors_no_attribute(self):
         """_gather_interceptors_for_method returns empty for missing method."""
+
         class MyClass:
             pass
 
@@ -293,6 +256,7 @@ class TestGatherInterceptors:
 
     def test_gather_interceptors_no_interceptors(self):
         """_gather_interceptors_for_method returns empty for plain method."""
+
         class MyClass:
             def plain_method(self):
                 pass
@@ -307,6 +271,7 @@ class TestHealthDecorator:
 
     def test_health_decorator_sets_metadata(self):
         """@health decorator sets _pico_meta."""
+
         @health
         def check_status():
             return True
@@ -315,6 +280,7 @@ class TestHealthDecorator:
 
     def test_health_decorator_preserves_function(self):
         """@health decorator preserves function behavior."""
+
         @health
         def check_value():
             return 42
@@ -330,10 +296,7 @@ class TestUnifiedComponentProxySerialization:
         target = {"key": "value", "number": 42}
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         state = proxy.__getstate__()
 
@@ -344,10 +307,7 @@ class TestUnifiedComponentProxySerialization:
         target = {"key": "value"}
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         state = proxy.__getstate__()
 
@@ -362,10 +322,7 @@ class TestUnifiedComponentProxySerialization:
         target = [1, 2, 3]
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         pickled = pickle.dumps(proxy)
         restored = pickle.loads(pickled)
@@ -379,10 +336,7 @@ class TestUnifiedComponentProxySerialization:
         target = lambda x: x
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         with pytest.raises(SerializationError):
             proxy.__getstate__()
@@ -396,10 +350,7 @@ class TestUnifiedComponentProxyDunderMethods:
         target = "hashable_string"
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         assert hash(proxy) == hash(target)
 
@@ -408,10 +359,7 @@ class TestUnifiedComponentProxyDunderMethods:
         target = [1, 2, 3]
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         assert bool(proxy) is True
 
@@ -420,24 +368,19 @@ class TestUnifiedComponentProxyDunderMethods:
         target = []
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         assert bool(proxy) is False
 
     def test_proxy_call(self):
         """Proxy delegates __call__."""
+
         def target(x):
             return x * 2
 
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         assert proxy(5) == 10
 
@@ -446,10 +389,7 @@ class TestUnifiedComponentProxyDunderMethods:
         target = [1, 2, 3]
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         assert list(reversed(proxy)) == [3, 2, 1]
 
@@ -458,10 +398,7 @@ class TestUnifiedComponentProxyDunderMethods:
         target = 17
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=target
-        )
+        proxy = UnifiedComponentProxy(container=container, target=target)
 
         assert divmod(proxy, 5) == (3, 2)
 
@@ -481,11 +418,7 @@ class TestUnifiedComponentProxyLazyInit:
         container = MagicMock()
         container._run_configure_methods = MagicMock(return_value=None)
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=None,
-            object_creator=creator
-        )
+        proxy = UnifiedComponentProxy(container=container, target=None, object_creator=creator)
 
         # Not created yet
         assert len(created) == 0
@@ -507,11 +440,7 @@ class TestUnifiedComponentProxyLazyInit:
         container = MagicMock()
         container._run_configure_methods = MagicMock(return_value=None)
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=None,
-            object_creator=creator
-        )
+        proxy = UnifiedComponentProxy(container=container, target=None, object_creator=creator)
 
         # Multiple accesses
         obj1 = proxy._get_real_object()
@@ -523,16 +452,13 @@ class TestUnifiedComponentProxyLazyInit:
 
     def test_lazy_proxy_creator_returns_none_raises(self):
         """Proxy raises if creator returns None."""
+
         def bad_creator():
             return None
 
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=None,
-            object_creator=bad_creator
-        )
+        proxy = UnifiedComponentProxy(container=container, target=None, object_creator=bad_creator)
 
         with pytest.raises(RuntimeError, match="returned None"):
             proxy._get_real_object()
@@ -541,11 +467,7 @@ class TestUnifiedComponentProxyLazyInit:
         """Proxy raises if creator is not callable."""
         container = MagicMock()
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=None,
-            object_creator="not_callable"
-        )
+        proxy = UnifiedComponentProxy(container=container, target=None, object_creator="not_callable")
 
         with pytest.raises(TypeError, match="must be callable"):
             proxy._get_real_object()
@@ -557,18 +479,11 @@ class TestUnifiedComponentProxyValidation:
     def test_proxy_requires_container(self):
         """Proxy requires non-null container."""
         with pytest.raises(ValueError, match="non-null container"):
-            UnifiedComponentProxy(
-                container=None,
-                target={}
-            )
+            UnifiedComponentProxy(container=None, target={})
 
     def test_proxy_requires_target_or_creator(self):
         """Proxy requires either target or object_creator."""
         container = MagicMock()
 
         with pytest.raises(ValueError, match="target or an object_creator"):
-            UnifiedComponentProxy(
-                container=container,
-                target=None,
-                object_creator=None
-            )
+            UnifiedComponentProxy(container=container, target=None, object_creator=None)

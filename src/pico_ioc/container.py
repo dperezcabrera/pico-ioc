@@ -31,17 +31,20 @@ from .scope import ScopedCaches, ScopeManager
 
 KeyT = Union[str, type]
 
+
 def _normalize_callable(obj):
-    return getattr(obj, '__func__', obj)
+    return getattr(obj, "__func__", obj)
+
 
 def _get_signature_safe(callable_obj):
     try:
         return inspect.signature(callable_obj)
     except (ValueError, TypeError):
-        wrapped = getattr(callable_obj, '__wrapped__', None)
+        wrapped = getattr(callable_obj, "__wrapped__", None)
         if wrapped is not None:
             return inspect.signature(wrapped)
         raise
+
 
 def _needs_async_configure(obj: Any) -> bool:
     for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
@@ -50,20 +53,22 @@ def _needs_async_configure(obj: Any) -> bool:
             return True
     return False
 
+
 def _iter_configure_methods(obj: Any):
     for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
         meta = getattr(m, PICO_META, {})
         if meta.get("configure", False):
             yield m
 
+
 def _build_resolution_graph(loc) -> Dict[KeyT, Tuple[KeyT, ...]]:
     if not loc:
         return {}
-        
+
     def _map_dep_to_bound_key(dep_key: KeyT) -> KeyT:
         if dep_key in loc._metadata:
             return dep_key
-        
+
         if isinstance(dep_key, str):
             mapped = loc.find_key_by_name(dep_key)
             if mapped is not None:
@@ -89,6 +94,7 @@ def _build_resolution_graph(loc) -> Dict[KeyT, Tuple[KeyT, ...]]:
         graph[key] = tuple(deps)
     return graph
 
+
 class PicoContainer:
     _container_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("pico_container_id", default=None)
     _container_registry: Dict[str, "PicoContainer"] = {}
@@ -101,7 +107,15 @@ class PicoContainer:
             self.resolve_count = 0
             self.cache_hit_count = 0
 
-    def __init__(self, component_factory: ComponentFactory, caches: ScopedCaches, scopes: ScopeManager, observers: Optional[List["ContainerObserver"]] = None, container_id: Optional[str] = None, profiles: Tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        component_factory: ComponentFactory,
+        caches: ScopedCaches,
+        scopes: ScopeManager,
+        observers: Optional[List["ContainerObserver"]] = None,
+        container_id: Optional[str] = None,
+        profiles: Tuple[str, ...] = (),
+    ) -> None:
         self._factory = component_factory
         self._caches = caches
         self.scopes = scopes
@@ -109,6 +123,7 @@ class PicoContainer:
         self._observers = list(observers or [])
         self.container_id = container_id or self._generate_container_id()
         import time as _t
+
         self.context = PicoContainer._Ctx(container_id=self.container_id, profiles=profiles, created_at=_t.time())
         PicoContainer._container_registry[self.container_id] = self
 
@@ -116,7 +131,8 @@ class PicoContainer:
     def _generate_container_id() -> str:
         import random as _r
         import time as _t
-        return f"c{_t.time_ns():x}{_r.randrange(1<<16):04x}"
+
+        return f"c{_t.time_ns():x}{_r.randrange(1 << 16):04x}"
 
     @classmethod
     def get_current(cls) -> Optional["PicoContainer"]:
@@ -150,7 +166,7 @@ class PicoContainer:
 
     def _cache_for(self, key: KeyT):
         md = self._locator._metadata.get(key) if self._locator else None
-        sc = (md.scope if md else SCOPE_SINGLETON)
+        sc = md.scope if md else SCOPE_SINGLETON
         return self._caches.for_scope(self.scopes, sc)
 
     def has(self, key: KeyT) -> bool:
@@ -160,7 +176,7 @@ class PicoContainer:
     def _canonical_key(self, key: KeyT) -> KeyT:
         if self._factory.has(key):
             return key
-            
+
         if isinstance(key, type) and self._locator:
             cands: List[Tuple[bool, Any]] = []
             for k, md in self._locator._metadata.items():
@@ -175,25 +191,27 @@ class PicoContainer:
             if cands:
                 prim = [k for is_p, k in cands if is_p]
                 return prim[0] if prim else cands[0][1]
-                
+
         if isinstance(key, str) and self._locator:
             for k, md in self._locator._metadata.items():
                 if md.pico_name == key:
                     return k
-                    
+
         return key
 
     def _resolve_or_create_internal(self, key: KeyT) -> Tuple[Any, float, bool]:
         key = self._canonical_key(key)
         cache = self._cache_for(key)
         cached = cache.get(key)
-        
+
         if cached is not None:
             self.context.cache_hit_count += 1
-            for o in self._observers: o.on_cache_hit(key)
+            for o in self._observers:
+                o.on_cache_hit(key)
             return cached, 0.0, True
 
         import time as _tm
+
         t0 = _tm.perf_counter()
 
         token_container = self.activate()
@@ -213,7 +231,7 @@ class PicoContainer:
 
         finally:
             self.deactivate(token_container)
-            
+
     def _run_configure_methods(self, instance: Any) -> Any:
         if not _needs_async_configure(instance):
             for m in _iter_configure_methods(instance):
@@ -236,6 +254,7 @@ class PicoContainer:
                 if inspect.isawaitable(r):
                     await r
             return instance
+
         return runner()
 
     @overload
@@ -253,7 +272,7 @@ class PicoContainer:
             raise AsyncResolutionError(key)
 
         md = self._locator._metadata.get(key) if self._locator else None
-        scope = (md.scope if md else SCOPE_SINGLETON)
+        scope = md.scope if md else SCOPE_SINGLETON
         if scope != SCOPE_SINGLETON:
             instance_or_awaitable_configured = self._run_configure_methods(instance)
             if inspect.isawaitable(instance_or_awaitable_configured):
@@ -264,7 +283,8 @@ class PicoContainer:
         cache = self._cache_for(key)
         cache.put(key, final_instance)
         self.context.resolve_count += 1
-        for o in self._observers: o.on_resolve(key, took_ms)
+        for o in self._observers:
+            o.on_resolve(key, took_ms)
 
         return final_instance
 
@@ -281,7 +301,7 @@ class PicoContainer:
             instance = await instance_or_awaitable
 
         md = self._locator._metadata.get(key) if self._locator else None
-        scope = (md.scope if md else SCOPE_SINGLETON)
+        scope = md.scope if md else SCOPE_SINGLETON
         if scope != SCOPE_SINGLETON:
             instance_or_awaitable_configured = self._run_configure_methods(instance)
             if inspect.isawaitable(instance_or_awaitable_configured):
@@ -290,14 +310,15 @@ class PicoContainer:
                 instance = instance_or_awaitable_configured
 
         final_instance = self._maybe_wrap_with_aspects(key, instance)
-        
+
         if isinstance(final_instance, UnifiedComponentProxy):
-             await final_instance._async_init_if_needed()
-             
+            await final_instance._async_init_if_needed()
+
         cache = self._cache_for(key)
         cache.put(key, final_instance)
         self.context.resolve_count += 1
-        for o in self._observers: o.on_resolve(key, took_ms)
+        for o in self._observers:
+            o.on_resolve(key, took_ms)
 
         return final_instance
 
@@ -305,14 +326,16 @@ class PicoContainer:
         if isinstance(instance, UnifiedComponentProxy):
             return instance
         cls = type(instance)
-        for _, fn in inspect.getmembers(cls, predicate=lambda m: inspect.isfunction(m) or inspect.ismethod(m) or inspect.iscoroutinefunction(m)):
+        for _, fn in inspect.getmembers(
+            cls, predicate=lambda m: inspect.isfunction(m) or inspect.ismethod(m) or inspect.iscoroutinefunction(m)
+        ):
             if getattr(fn, "_pico_interceptors_", None):
                 return UnifiedComponentProxy(container=self, target=instance, component_key=key)
         return instance
 
     def _iterate_cleanup_targets(self) -> Iterable[Any]:
         yield from (obj for _, obj in self._caches.all_items())
-        
+
         if self._locator:
             seen = set()
             for md in self._locator._metadata.values():
@@ -343,9 +366,10 @@ class PicoContainer:
                     res = self._call_cleanup_method(m)
                     if inspect.isawaitable(res):
                         await res
-        
+
         try:
             from .event_bus import EventBus
+
             for _, obj in self._caches.all_items():
                 if isinstance(obj, EventBus):
                     await obj.aclose()
@@ -375,13 +399,14 @@ class PicoContainer:
             for name, m in inspect.getmembers(obj, predicate=callable):
                 if getattr(m, PICO_META, {}).get("health_check", False):
                     try:
-                        out[f"{getattr(k,'__name__',k)}.{name}"] = bool(m())
+                        out[f"{getattr(k, '__name__', k)}.{name}"] = bool(m())
                     except Exception:
-                        out[f"{getattr(k,'__name__',k)}.{name}"] = False
+                        out[f"{getattr(k, '__name__', k)}.{name}"] = False
         return out
 
     def stats(self) -> Dict[str, Any]:
         import time as _t
+
         resolves = self.context.resolve_count
         hits = self.context.cache_hit_count
         total = resolves + hits
@@ -402,10 +427,10 @@ class PicoContainer:
     async def ashutdown(self) -> None:
         await self.cleanup_all_async()
         PicoContainer._container_registry.pop(self.container_id, None)
-        
+
     def build_resolution_graph(self):
         return _build_resolution_graph(self._locator)
-        
+
     def export_graph(
         self,
         path: str,
@@ -431,7 +456,7 @@ class PicoContainer:
             lines.append(f'  label="{title}";')
 
         def _node_id(k: KeyT) -> str:
-            return f'n_{abs(hash(k))}'
+            return f"n_{abs(hash(k))}"
 
         def _node_label(k: KeyT) -> str:
             name = getattr(k, "__name__", str(k))
@@ -460,12 +485,11 @@ class PicoContainer:
         with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
-            
     def _resolve_args(self, dependencies: Tuple[DependencyRequest, ...]) -> Dict[str, Any]:
         kwargs: Dict[str, Any] = {}
         if not dependencies or self._locator is None:
             return kwargs
-            
+
         for dep in dependencies:
             if dep.is_list:
                 keys: Tuple[KeyT, ...] = ()
@@ -473,22 +497,22 @@ class PicoContainer:
                     keys = tuple(self._locator.collect_by_type(dep.key, dep.qualifier))
                 kwargs[dep.parameter_name] = [self.get(k) for k in keys]
                 continue
-            
+
             if dep.is_dict:
                 value_type = dep.key
                 key_type = dep.dict_key_type
                 result_map: Dict[Any, Any] = {}
-                
+
                 keys_to_resolve: Tuple[KeyT, ...] = ()
                 if isinstance(value_type, type):
                     keys_to_resolve = tuple(self._locator.collect_by_type(value_type, dep.qualifier))
-                
+
                 for comp_key in keys_to_resolve:
                     instance = self.get(comp_key)
                     md = self._locator._metadata.get(comp_key)
                     if md is None:
                         continue
-                    
+
                     dict_key: Any = None
                     if key_type is str:
                         dict_key = md.pico_name
@@ -506,13 +530,13 @@ class PicoContainer:
                                 dict_key = comp_key
                             else:
                                 dict_key = getattr(comp_key, "__name__", str(comp_key))
-                    
+
                     if dict_key is not None:
                         if (key_type is type or key_type is Type) and not isinstance(dict_key, type):
                             continue
-                        
+
                         result_map[dict_key] = instance
-                        
+
                 kwargs[dep.parameter_name] = result_map
                 continue
 
@@ -520,7 +544,7 @@ class PicoContainer:
             if isinstance(primary_key, str):
                 mapped = self._locator.find_key_by_name(primary_key)
                 primary_key = mapped if mapped is not None else primary_key
-            
+
             try:
                 kwargs[dep.parameter_name] = self.get(primary_key)
             except Exception as first_error:
@@ -533,7 +557,6 @@ class PicoContainer:
                     raise first_error from None
         return kwargs
 
-
     def build_class(self, cls: type, locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]) -> Any:
         init = cls.__init__
         if init is object.__init__:
@@ -541,11 +564,12 @@ class PicoContainer:
         else:
             deps = self._resolve_args(dependencies)
             inst = cls(**deps)
-        
+
         ainit = getattr(inst, "__ainit__", None)
-        has_async = (callable(ainit) and inspect.iscoroutinefunction(ainit))
-        
+        has_async = callable(ainit) and inspect.iscoroutinefunction(ainit)
+
         if has_async:
+
             async def runner():
                 if callable(ainit):
                     kwargs = {}
@@ -558,11 +582,14 @@ class PicoContainer:
                     if inspect.isawaitable(res):
                         await res
                 return inst
+
             return runner()
-            
+
         return inst
 
-    def build_method(self, fn: Callable[..., Any], locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]) -> Any:
+    def build_method(
+        self, fn: Callable[..., Any], locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]
+    ) -> Any:
         deps = self._resolve_args(dependencies)
         obj = fn(**deps)
         return obj

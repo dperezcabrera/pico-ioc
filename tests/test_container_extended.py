@@ -1,6 +1,7 @@
 """
 Extended tests for container.py to increase coverage.
 """
+
 import asyncio
 import inspect
 import os
@@ -110,6 +111,7 @@ class TestContainerHelperFunctions:
 
     def test_normalize_callable_with_func_attr(self):
         """_normalize_callable returns __func__ if present."""
+
         class MyClass:
             def method(self):
                 pass
@@ -120,6 +122,7 @@ class TestContainerHelperFunctions:
 
     def test_normalize_callable_without_func_attr(self):
         """_normalize_callable returns obj if no __func__."""
+
         def plain_func():
             pass
 
@@ -128,15 +131,17 @@ class TestContainerHelperFunctions:
 
     def test_get_signature_safe_normal(self):
         """_get_signature_safe works with normal functions."""
+
         def my_func(a: int, b: str) -> bool:
             pass
 
         sig = _get_signature_safe(my_func)
-        assert 'a' in sig.parameters
-        assert 'b' in sig.parameters
+        assert "a" in sig.parameters
+        assert "b" in sig.parameters
 
     def test_get_signature_safe_wrapped(self):
         """_get_signature_safe falls back to __wrapped__."""
+
         def original(a: int) -> int:
             return a
 
@@ -146,10 +151,11 @@ class TestContainerHelperFunctions:
         wrapper.__wrapped__ = original
 
         sig = _get_signature_safe(wrapper)
-        assert 'a' in sig.parameters
+        assert "a" in sig.parameters
 
     def test_needs_async_configure_true(self):
         """_needs_async_configure detects async configure methods."""
+
         class Service:
             async def setup(self):
                 pass
@@ -161,6 +167,7 @@ class TestContainerHelperFunctions:
 
     def test_needs_async_configure_false_sync(self):
         """_needs_async_configure returns False for sync configure."""
+
         class Service:
             def setup(self):
                 pass
@@ -172,6 +179,7 @@ class TestContainerHelperFunctions:
 
     def test_needs_async_configure_false_no_configure(self):
         """_needs_async_configure returns False if no configure methods."""
+
         class Service:
             def regular_method(self):
                 pass
@@ -181,11 +189,14 @@ class TestContainerHelperFunctions:
 
     def test_iter_configure_methods(self):
         """_iter_configure_methods yields configure methods."""
+
         class Service:
             def setup(self):
                 pass
+
             def teardown(self):
                 pass
+
             def normal(self):
                 pass
 
@@ -211,8 +222,8 @@ class TestContainerInit:
         id2 = PicoContainer._generate_container_id()
 
         assert id1 != id2
-        assert id1.startswith('c')
-        assert id2.startswith('c')
+        assert id1.startswith("c")
+        assert id2.startswith("c")
 
     def test_container_custom_id(self):
         """Container accepts custom ID."""
@@ -220,10 +231,7 @@ class TestContainerInit:
         caches = ScopedCaches()
         scopes = ScopeManager()
 
-        container = PicoContainer(
-            factory_mock, caches, scopes,
-            container_id="custom-123"
-        )
+        container = PicoContainer(factory_mock, caches, scopes, container_id="custom-123")
 
         assert container.container_id == "custom-123"
         container.shutdown()
@@ -234,10 +242,7 @@ class TestContainerInit:
         caches = ScopedCaches()
         scopes = ScopeManager()
 
-        container = PicoContainer(
-            factory_mock, caches, scopes,
-            profiles=("dev", "test")
-        )
+        container = PicoContainer(factory_mock, caches, scopes, profiles=("dev", "test"))
 
         assert container.context.profiles == ("dev", "test")
         container.shutdown()
@@ -250,10 +255,7 @@ class TestContainerInit:
 
         observer = MagicMock(spec=ContainerObserver)
 
-        container = PicoContainer(
-            factory_mock, caches, scopes,
-            observers=[observer]
-        )
+        container = PicoContainer(factory_mock, caches, scopes, observers=[observer])
 
         assert observer in container._observers
         container.shutdown()
@@ -317,6 +319,7 @@ class TestContainerResolution:
         """has() returns False for unregistered types."""
         container = init(modules=[])
         try:
+
             class NotRegistered:
                 pass
 
@@ -332,7 +335,7 @@ class TestContainerExportGraph:
         """export_graph writes DOT file to disk."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path)
@@ -340,10 +343,10 @@ class TestContainerExportGraph:
             with open(path) as f:
                 content = f.read()
 
-            assert 'digraph Pico' in content
-            assert 'ExportDatabase' in content
-            assert 'ExportRepository' in content
-            assert '->' in content
+            assert "digraph Pico" in content
+            assert "ExportDatabase" in content
+            assert "ExportRepository" in content
+            assert "->" in content
 
             os.unlink(path)
         finally:
@@ -353,7 +356,7 @@ class TestContainerExportGraph:
         """export_graph includes title when specified."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path, title="My Application")
@@ -361,7 +364,7 @@ class TestContainerExportGraph:
             with open(path) as f:
                 content = f.read()
 
-            assert 'My Application' in content
+            assert "My Application" in content
             assert 'labelloc="t"' in content
 
             os.unlink(path)
@@ -372,7 +375,7 @@ class TestContainerExportGraph:
         """export_graph includes qualifiers when enabled."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path, include_qualifiers=True)
@@ -380,7 +383,7 @@ class TestContainerExportGraph:
             with open(path) as f:
                 content = f.read()
 
-            assert 'digraph Pico' in content
+            assert "digraph Pico" in content
 
             os.unlink(path)
         finally:
@@ -390,7 +393,7 @@ class TestContainerExportGraph:
         """export_graph respects rankdir parameter."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path, rankdir="TB")
