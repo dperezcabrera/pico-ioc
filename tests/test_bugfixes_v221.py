@@ -4,6 +4,7 @@ Tests for bugs fixed in v2.2.1:
 2. Race condition in async lazy proxy
 3. Silent cleanup failures now logged
 """
+
 import asyncio
 import logging
 import os
@@ -60,7 +61,7 @@ class TestDotGraphExportFix:
         """Verify edges use {cid} not {child} - the v2.2.1 fix."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path)
@@ -84,7 +85,7 @@ class TestDotGraphExportFix:
         """Test DOT export with complex dependency tree."""
         container = init(modules=[__name__])
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.dot', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
                 path = f.name
 
             container.export_graph(path)
@@ -97,12 +98,12 @@ class TestDotGraphExportFix:
             assert edge_count >= 3
 
             # Verify no malformed syntax
-            lines = dot_output.split('\n')
+            lines = dot_output.split("\n")
             for line in lines:
-                if '->' in line:
+                if "->" in line:
                     # Each edge line should not have unresolved variables
-                    assert '{child}' not in line
-                    assert '{cid}' not in line
+                    assert "{child}" not in line
+                    assert "{cid}" not in line
 
             os.unlink(path)
         finally:
@@ -125,12 +126,7 @@ class TestAsyncProxyRaceConditionFix:
         container = MagicMock()
         container._run_configure_methods = MagicMock(return_value=None)
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=None,
-            object_creator=creator,
-            component_key="test"
-        )
+        proxy = UnifiedComponentProxy(container=container, target=None, object_creator=creator, component_key="test")
 
         # Simulate concurrent access
         async def access_proxy():
@@ -165,12 +161,7 @@ class TestAsyncProxyRaceConditionFix:
         # Return an awaitable from _run_configure_methods
         container._run_configure_methods = MagicMock(return_value=async_configure_result())
 
-        proxy = UnifiedComponentProxy(
-            container=container,
-            target=None,
-            object_creator=creator,
-            component_key="test"
-        )
+        proxy = UnifiedComponentProxy(container=container, target=None, object_creator=creator, component_key="test")
 
         await proxy._async_init_if_needed()
 
@@ -188,7 +179,7 @@ class TestAsyncProxyRaceConditionFix:
             container=container,
             target={"existing": True},  # Already has target
             object_creator=creator,
-            component_key="test"
+            component_key="test",
         )
 
         await proxy._async_init_if_needed()

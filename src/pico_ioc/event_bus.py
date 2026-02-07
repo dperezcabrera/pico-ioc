@@ -11,16 +11,20 @@ from .exceptions import EventBusClosedError, EventBusError, EventBusHandlerError
 
 log = logging.getLogger(__name__)
 
+
 class ExecPolicy(Enum):
     INLINE = auto()
     THREADPOOL = auto()
     TASK = auto()
 
+
 class ErrorPolicy(Enum):
     LOG = auto()
     RAISE = auto()
 
+
 class Event: ...
+
 
 @dataclass(order=True)
 class _Subscriber:
@@ -29,8 +33,10 @@ class _Subscriber:
     callback: Callable[[Event], Any] | Callable[[Event], Awaitable[Any]] = field(compare=False)
     policy: ExecPolicy = field(compare=False)
     once: bool = field(compare=False)
+
     def __post_init__(self):
         self.sort_index = -int(self.priority)
+
 
 class EventBus:
     def __init__(
@@ -68,7 +74,9 @@ class EventBus:
             lst.append(sub)
             lst.sort()
 
-    def unsubscribe(self, event_type: Type[Event], fn: Callable[[Event], Any] | Callable[[Event], Awaitable[Any]]) -> None:
+    def unsubscribe(
+        self, event_type: Type[Event], fn: Callable[[Event], Any] | Callable[[Event], Awaitable[Any]]
+    ) -> None:
         with self._lock:
             lst = self._subs.get(event_type, [])
             self._subs[event_type] = [s for s in lst if s.callback is not fn]
@@ -80,8 +88,10 @@ class EventBus:
             asyncio.run(self.publish(event))
             return
         if loop.is_running():
+
             async def _bridge():
                 await self.publish(event)
+
             loop.create_task(_bridge())
         else:
             asyncio.run(self.publish(event))
@@ -110,7 +120,9 @@ class EventBus:
                 if sub.once:
                     to_remove.append(sub)
             except Exception as ex:
-                self._handle_error(EventBusHandlerError(type(event).__name__, getattr(sub.callback, "__name__", "<callback>"), ex))
+                self._handle_error(
+                    EventBusHandlerError(type(event).__name__, getattr(sub.callback, "__name__", "<callback>"), ex)
+                )
         if pending:
             try:
                 await asyncio.gather(*pending, return_exceptions=False)
@@ -130,6 +142,7 @@ class EventBus:
             self._queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
         self._worker_loop = loop
+
         async def _worker():
             while True:
                 evt = await self._queue.get()
@@ -140,6 +153,7 @@ class EventBus:
                     await self.publish(evt)
                 finally:
                     self._queue.task_done()
+
         self._worker_task = asyncio.create_task(_worker())
 
     async def stop_worker(self) -> None:
@@ -156,7 +170,7 @@ class EventBus:
                 raise EventBusClosedError()
             if self._queue is None:
                 raise EventBusError("Worker queue not initialized. Call start_worker().")
-            
+
             queue_ref = self._queue
             loop_ref = self._worker_loop
 
@@ -191,14 +205,19 @@ class EventBus:
         if self._error_policy is ErrorPolicy.LOG:
             log.exception("%s", ex)
 
-def subscribe(event_type: Type[Event], *, priority: int = 0, policy: ExecPolicy = ExecPolicy.INLINE, once: bool = False):
+
+def subscribe(
+    event_type: Type[Event], *, priority: int = 0, policy: ExecPolicy = ExecPolicy.INLINE, once: bool = False
+):
     def dec(fn: Callable[[Event], Any] | Callable[[Event], Awaitable[Any]]):
         subs: Iterable[Tuple[Type[Event], int, ExecPolicy, bool]] = getattr(fn, "_pico_subscriptions_", ())
         subs = list(subs)
         subs.append((event_type, int(priority), policy, bool(once)))
         setattr(fn, "_pico_subscriptions_", tuple(subs))
         return fn
+
     return dec
+
 
 class AutoSubscriberMixin:
     @configure
@@ -208,11 +227,13 @@ class AutoSubscriberMixin:
             for evt_t, pr, pol, once in subs:
                 event_bus.subscribe(evt_t, attr, priority=pr, policy=pol, once=once)
 
+
 @factory()
 class PicoEventBusProvider:
     @provides(EventBus, primary=True)
     def build(self) -> EventBus:
         return EventBus()
+
     @cleanup
     def shutdown(self, event_bus: EventBus) -> None:
         try:

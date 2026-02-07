@@ -18,6 +18,7 @@ from .provider_selector import ProviderSelector
 KeyT = Union[str, type]
 Provider = Callable[[], Any]
 
+
 def _can_be_selected_for(reg_md: Dict[KeyT, ProviderMetadata], selector: Any) -> bool:
     if not isinstance(selector, type):
         return False
@@ -31,8 +32,17 @@ def _can_be_selected_for(reg_md: Dict[KeyT, ProviderMetadata], selector: Any) ->
                 continue
     return False
 
+
 class Registrar:
-    def __init__(self, factory: ComponentFactory, *, profiles: Tuple[str, ...] = (), environ: Optional[Dict[str, str]] = None, logger: Optional[logging.Logger] = None, config: Optional[ContextConfig] = None) -> None:
+    def __init__(
+        self,
+        factory: ComponentFactory,
+        *,
+        profiles: Tuple[str, ...] = (),
+        environ: Optional[Dict[str, str]] = None,
+        logger: Optional[logging.Logger] = None,
+        config: Optional[ContextConfig] = None,
+    ) -> None:
         self._factory = factory
         self._profiles = set(p.strip() for p in profiles if p)
         self._environ = environ if environ is not None else os.environ
@@ -58,9 +68,11 @@ class Registrar:
             deferred.attach(pico, locator)
         for key, md in list(self._metadata.items()):
             if md.lazy:
-                original = self._factory.get(key, origin='lazy')
+                original = self._factory.get(key, origin="lazy")
+
                 def lazy_proxy_provider(_orig=original, _p=pico, _k=key):
                     return UnifiedComponentProxy(container=_p, object_creator=_orig, component_key=_k)
+
                 self._factory.bind(key, lazy_proxy_provider)
 
     def _bind_if_absent(self, key: KeyT, provider: Provider) -> None:
@@ -108,10 +120,25 @@ class Registrar:
             if md.scope == SCOPE_SINGLETON:
                 ns = self._find_narrower_scope_from_deps(md.dependencies)
                 if ns and ns != SCOPE_SINGLETON:
-                    self._metadata[k] = ProviderMetadata(key=md.key, provided_type=md.provided_type, concrete_class=md.concrete_class, factory_class=md.factory_class, factory_method=md.factory_method, qualifiers=md.qualifiers, primary=md.primary, lazy=md.lazy, infra=md.infra, pico_name=md.pico_name, override=md.override, scope=ns, dependencies=md.dependencies)
+                    self._metadata[k] = ProviderMetadata(
+                        key=md.key,
+                        provided_type=md.provided_type,
+                        concrete_class=md.concrete_class,
+                        factory_class=md.factory_class,
+                        factory_method=md.factory_method,
+                        qualifiers=md.qualifiers,
+                        primary=md.primary,
+                        lazy=md.lazy,
+                        infra=md.infra,
+                        pico_name=md.pico_name,
+                        override=md.override,
+                        scope=ns,
+                        dependencies=md.dependencies,
+                    )
 
     def _rebuild_indexes(self) -> None:
         self._indexes.clear()
+
         def add(idx: str, val: Any, key: KeyT):
             b = self._indexes.setdefault(idx, {}).setdefault(val, [])
             if key not in b:
@@ -137,7 +164,7 @@ class Registrar:
         for key, (provider, md) in winners.items():
             self._bind_if_absent(key, provider)
             self._metadata[key] = md
-            
+
         if PicoContainer not in self._metadata:
             self._factory.bind(PicoContainer, lambda: pico_instance)
             self._metadata[PicoContainer] = ProviderMetadata(
@@ -153,7 +180,7 @@ class Registrar:
                 pico_name="PicoContainer",
                 override=True,
                 scope=SCOPE_SINGLETON,
-                dependencies=()
+                dependencies=(),
             )
 
         self._promote_scopes()
@@ -168,7 +195,21 @@ class Registrar:
             provider = DeferredProvider(lambda pico, loc, c=default_cls, d=deps: pico.build_class(c, loc, d))
             qset = set(str(q) for q in getattr(default_cls, PICO_META, {}).get("qualifier", ()))
             sc = getattr(default_cls, PICO_META, {}).get("scope", SCOPE_SINGLETON)
-            md = ProviderMetadata(key=key, provided_type=key if isinstance(key, type) else None, concrete_class=default_cls, factory_class=None, factory_method=None, qualifiers=qset, primary=True, lazy=bool(getattr(default_cls, PICO_META, {}).get("lazy", False)), infra=getattr(default_cls, PICO_INFRA, None), pico_name=getattr(default_cls, PICO_NAME, None), override=True, scope=sc, dependencies=deps)
+            md = ProviderMetadata(
+                key=key,
+                provided_type=key if isinstance(key, type) else None,
+                concrete_class=default_cls,
+                factory_class=None,
+                factory_method=None,
+                qualifiers=qset,
+                primary=True,
+                lazy=bool(getattr(default_cls, PICO_META, {}).get("lazy", False)),
+                infra=getattr(default_cls, PICO_INFRA, None),
+                pico_name=getattr(default_cls, PICO_NAME, None),
+                override=True,
+                scope=sc,
+                dependencies=deps,
+            )
 
             self._bind_if_absent(key, provider)
             self._metadata[key] = md

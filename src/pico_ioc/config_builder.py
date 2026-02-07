@@ -10,11 +10,14 @@ from .exceptions import ConfigurationError
 class ConfigSource(Protocol):
     pass
 
+
 class EnvSource(ConfigSource):
     def __init__(self, prefix: str = "") -> None:
         self.prefix = prefix
+
     def get(self, key: str) -> Optional[str]:
         return os.environ.get(self.prefix + key)
+
 
 class FileSource(ConfigSource):
     def __init__(self, path: str, prefix: str = "") -> None:
@@ -24,6 +27,7 @@ class FileSource(ConfigSource):
                 self._data = json.load(f)
         except Exception:
             self._data = {}
+
     def get(self, key: str) -> Optional[str]:
         k = self.prefix + key
         v = self._data
@@ -36,6 +40,7 @@ class FileSource(ConfigSource):
             return str(v)
         return None
 
+
 class FlatDictSource(ConfigSource):
     def __init__(self, data: Mapping[str, Any], prefix: str = "", case_sensitive: bool = True):
         base = dict(data)
@@ -46,6 +51,7 @@ class FlatDictSource(ConfigSource):
             self._data = {str(k).upper(): v for k, v in base.items()}
             self._prefix = prefix.upper()
         self._case_sensitive = case_sensitive
+
     def get(self, key: str) -> Optional[str]:
         if not key:
             return None
@@ -59,17 +65,16 @@ class FlatDictSource(ConfigSource):
             return str(v)
         return None
 
+
 @dataclass(frozen=True)
 class ContextConfig:
     flat_sources: Tuple[Union[EnvSource, FileSource, FlatDictSource], ...]
     tree_sources: Tuple[TreeSource, ...]
     overrides: Dict[str, Any]
 
-def configuration(
-    *sources: Any,
-    overrides: Optional[Dict[str, Any]] = None
-) -> ContextConfig:
-    
+
+def configuration(*sources: Any, overrides: Optional[Dict[str, Any]] = None) -> ContextConfig:
+
     flat: List[Union[EnvSource, FileSource, FlatDictSource]] = []
     tree: List[TreeSource] = []
 
@@ -80,9 +85,5 @@ def configuration(
             tree.append(src)
         else:
             raise ConfigurationError(f"Unknown configuration source type: {type(src)}")
-            
-    return ContextConfig(
-        flat_sources=tuple(flat),
-        tree_sources=tuple(tree),
-        overrides=dict(overrides or {})
-    )
+
+    return ContextConfig(flat_sources=tuple(flat), tree_sources=tuple(tree), overrides=dict(overrides or {}))

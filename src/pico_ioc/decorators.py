@@ -13,6 +13,7 @@ def _meta_get(obj: Any) -> Dict[str, Any]:
         setattr(obj, PICO_META, m)
     return m
 
+
 def _apply_common_metadata(
     obj: Any,
     *,
@@ -29,31 +30,25 @@ def _apply_common_metadata(
     m = _meta_get(obj)
     m["qualifier"] = tuple(str(q) for q in qualifiers or ())
     m["scope"] = scope
-    
+
     if primary:
         m["primary"] = True
     if lazy:
         m["lazy"] = True
-    
-    has_conditional = (
-        conditional_profiles or 
-        conditional_require_env or 
-        conditional_predicate is not None
-    )
-    
+
+    has_conditional = conditional_profiles or conditional_require_env or conditional_predicate is not None
+
     if has_conditional:
         m["conditional"] = {
             "profiles": tuple(p for p in conditional_profiles or ()),
             "require_env": tuple(e for e in conditional_require_env or ()),
             "predicate": conditional_predicate,
         }
-    
+
     if on_missing_selector is not None:
-        m["on_missing"] = {
-            "selector": on_missing_selector, 
-            "priority": int(on_missing_priority)
-        }
+        m["on_missing"] = {"selector": on_missing_selector, "priority": int(on_missing_priority)}
     return obj
+
 
 def component(
     cls=None,
@@ -73,7 +68,7 @@ def component(
         setattr(c, PICO_INFRA, "component")
         setattr(c, PICO_NAME, name if name is not None else getattr(c, "__name__", str(c)))
         setattr(c, PICO_KEY, name if name is not None else c)
-        
+
         _apply_common_metadata(
             c,
             qualifiers=qualifiers,
@@ -87,7 +82,9 @@ def component(
             on_missing_priority=on_missing_priority,
         )
         return c
+
     return dec(cls) if cls else dec
+
 
 def factory(
     cls=None,
@@ -106,7 +103,7 @@ def factory(
     def dec(c):
         setattr(c, PICO_INFRA, "factory")
         setattr(c, PICO_NAME, name if name is not None else getattr(c, "__name__", str(c)))
-        
+
         _apply_common_metadata(
             c,
             qualifiers=qualifiers,
@@ -120,12 +117,28 @@ def factory(
             on_missing_priority=on_missing_priority,
         )
         return c
+
     return dec(cls) if cls else dec
 
+
 def provides(*dargs, **dkwargs):
-    def _apply(fn, key_hint, *, name=None, qualifiers=(), scope="singleton", primary=False, lazy=False, conditional_profiles=(), conditional_require_env=(), conditional_predicate=None, on_missing_selector=None, on_missing_priority=0):
+    def _apply(
+        fn,
+        key_hint,
+        *,
+        name=None,
+        qualifiers=(),
+        scope="singleton",
+        primary=False,
+        lazy=False,
+        conditional_profiles=(),
+        conditional_require_env=(),
+        conditional_predicate=None,
+        on_missing_selector=None,
+        on_missing_priority=0,
+    ):
         target = fn.__func__ if isinstance(fn, (staticmethod, classmethod)) else fn
-        
+
         inferred_key = key_hint
         if inferred_key is MISSING:
             rt = get_return_type(target)
@@ -133,12 +146,16 @@ def provides(*dargs, **dkwargs):
                 inferred_key = rt
             else:
                 inferred_key = getattr(target, "__name__", str(target))
-        
+
         setattr(target, PICO_INFRA, "provides")
-        pico_name = name if name is not None else (inferred_key if isinstance(inferred_key, str) else getattr(target, "__name__", str(target)))
+        pico_name = (
+            name
+            if name is not None
+            else (inferred_key if isinstance(inferred_key, str) else getattr(target, "__name__", str(target)))
+        )
         setattr(target, PICO_NAME, pico_name)
         setattr(target, PICO_KEY, inferred_key)
-        
+
         _apply_common_metadata(
             target,
             qualifiers=qualifiers,
@@ -158,38 +175,47 @@ def provides(*dargs, **dkwargs):
         return _apply(fn, MISSING)
     else:
         key = dargs[0] if dargs else MISSING
+
         def _decorator(fn):
             return _apply(fn, key, **dkwargs)
+
         return _decorator
+
 
 class Qualifier(str):
     __slots__ = ()
+
 
 def configure(fn):
     m = _meta_get(fn)
     m["configure"] = True
     return fn
 
+
 def cleanup(fn):
     m = _meta_get(fn)
     m["cleanup"] = True
     return fn
 
+
 def configured(target: Any = "self", *, prefix: str = "", mapping: str = "auto", **kwargs):
     if mapping not in ("auto", "flat", "tree"):
         raise ValueError("mapping must be one of 'auto', 'flat', or 'tree'")
+
     def dec(cls):
         setattr(cls, PICO_INFRA, "configured")
         m = _meta_get(cls)
         m["configured"] = {"target": target, "prefix": prefix, "mapping": mapping}
         _apply_common_metadata(cls, **kwargs)
         return cls
+
     return dec
+
 
 def get_return_type(fn: Callable[..., Any]) -> Optional[type]:
     try:
         hints = typing.get_type_hints(fn, include_extras=True)
-        ra = hints.get('return')
+        ra = hints.get("return")
     except Exception:
         try:
             ra = inspect.signature(fn).return_annotation

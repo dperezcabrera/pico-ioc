@@ -3,6 +3,7 @@
 When `from __future__ import annotations` is active, all type hints become
 strings at runtime. pico-ioc must resolve them via typing.get_type_hints().
 """
+
 from __future__ import annotations
 
 import types
@@ -17,6 +18,7 @@ from pico_ioc.config_runtime import DictSource
 from pico_ioc.decorators import get_return_type
 
 # --- Plain classes (not decorated) for unit tests ---
+
 
 class Repo:
     pass
@@ -39,6 +41,7 @@ class ListService:
 
 
 # --- Unit Tests: analyze_callable_dependencies ---
+
 
 class TestAnalyzeCallableDependencies:
     def test_resolves_string_annotations(self):
@@ -64,15 +67,18 @@ class TestAnalyzeCallableDependencies:
 
 # --- Unit Tests: get_return_type ---
 
+
 class TestGetReturnType:
     def test_resolves_string_return_type(self):
         def make_repo() -> Repo:
             return Repo()
+
         assert get_return_type(make_repo) is Repo
 
     def test_none_for_no_return(self):
         def no_return():
             pass
+
         assert get_return_type(no_return) is None
 
 
@@ -80,6 +86,7 @@ class TestGetReturnType:
 
 # These are defined at module level so init(modules=[__name__]) can scan them.
 # Only compatible components here — no @configured (needs config).
+
 
 @component
 class FutureRepo:
@@ -113,6 +120,7 @@ class TestContainerIntegration:
 
 
 # --- Integration Test: @configured dataclass ---
+
 
 @dataclass
 class AppSettings:

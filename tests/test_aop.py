@@ -25,28 +25,29 @@ class LoggingInterceptor(MethodInterceptor):
 
     def invoke(self, ctx: MethodCtx, call_next: Callable[[MethodCtx], Any]) -> Any:
         self.logger.log(f"Entering method: {ctx.name}")
-        
+
         ctx.kwargs["name"] = ctx.kwargs.get("name", "").upper()
 
         original_func = ctx.method
-        if hasattr(original_func, '__func__'):
+        if hasattr(original_func, "__func__"):
             original_func = original_func.__func__
-        
+
         is_async = inspect.iscoroutinefunction(original_func)
 
         if is_async:
+
             async def async_wrapper():
                 result_coro = call_next(ctx)
                 result = await result_coro
-                
+
                 modified_result = f"{result} - Intercepted!"
                 self.logger.log(f"Exiting method: {ctx.name}")
                 return modified_result
-            
+
             return async_wrapper()
         else:
             result = call_next(ctx)
-            
+
             modified_result = f"{result} - Intercepted!"
             self.logger.log(f"Exiting method: {ctx.name}")
             return modified_result
@@ -71,12 +72,7 @@ class UnrelatedService:
 
 @pytest.fixture
 def container():
-    c = init(
-        modules=[__name__],
-        overrides={
-            CallLogger: CallLogger()
-        }
-    )
+    c = init(modules=[__name__], overrides={CallLogger: CallLogger()})
     yield c
     c.shutdown()
 
@@ -84,30 +80,24 @@ def container():
 def test_aop_intercepts_sync_call(container):
     service = container.get(MyService)
     logger = container.get(CallLogger)
-    
+
     result = service.greet(name="World")
-    
+
     assert result == "Hello WORLD - Intercepted!"
-    assert logger.messages == [
-        "Entering method: greet",
-        "Exiting method: greet"
-    ]
+    assert logger.messages == ["Entering method: greet", "Exiting method: greet"]
 
 
 @pytest.mark.asyncio
 async def test_aop_intercepts_async_call(container):
     service = await container.aget(MyService)
     logger = await container.aget(CallLogger)
-    
+
     logger.clear()
-    
+
     result = await service.async_greet(name="AsyncWorld")
-    
+
     assert result == "Async Hello ASYNCWORLD - Intercepted!"
-    assert logger.messages == [
-        "Entering method: async_greet",
-        "Exiting method: async_greet"
-    ]
+    assert logger.messages == ["Entering method: async_greet", "Exiting method: async_greet"]
 
 
 def test_aop_does_not_intercept_unrelated_call(container):
@@ -115,8 +105,8 @@ def test_aop_does_not_intercept_unrelated_call(container):
     logger = container.get(CallLogger)
 
     logger.clear()
-    
+
     result = service.greet(name="World")
-    
+
     assert result == "Hello World"
     assert logger.messages == []
