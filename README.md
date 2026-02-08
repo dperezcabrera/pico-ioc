@@ -307,16 +307,22 @@ See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.
 
 -----
 
-## 🤖 Claude Code Skills
+## Claude Code Skills
 
-This project includes pre-designed skills for [Claude Code](https://claude.ai/claude-code), enabling AI-assisted development with pico-ioc patterns.
+Install [Claude Code](https://code.claude.com) skills for AI-assisted development with pico-ioc:
 
-| Skill | Command | Description |
-|-------|---------|-------------|
-| **Pico Component Creator** | `/pico-component` | Creates components with DI, scopes, factories and interceptors |
-| **Pico Test Generator** | `/pico-tests` | Generates tests for pico-framework components |
+```bash
+curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash -s -- ioc
+```
 
-See [Skills documentation](docs/skills.md) for full details and installation instructions.
+| Command | Description |
+|---------|-------------|
+| `/add-component` | Add components, factories, interceptors, event subscribers, settings |
+| `/add-tests` | Generate tests for pico-framework components |
+
+All skills: `curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash`
+
+See [pico-skills](https://github.com/dperezcabrera/pico-skills) for details.
 
 -----
 
