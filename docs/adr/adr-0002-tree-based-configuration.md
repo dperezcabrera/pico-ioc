@@ -1,6 +1,6 @@
 # ADR-002: Tree-Based Configuration Binding
 
-> ⚠️ **DEPRECATED**: This decision has been superseded by ADR-010 (Unified Configuration). 
+> **DEPRECATED**: This decision has been superseded by ADR-010 (Unified Configuration).
 > This document is kept for historical context only. Please refer to the User Guide.
 
 Note: While the core concepts of tree-binding logic (`ConfigResolver`, `ObjectGraphBuilder`) and using `@configured` for nested structures remain valid, ADR-0010 unified the configuration system. The mechanism described here using a separate `init(tree_config=...)` argument is no longer current. Configuration sources (including tree sources like `YamlTreeSource`) are now passed to the `configuration(...)` builder, and the resulting `ContextConfig` object is passed to `init(config=...)`. The `@configured` decorator now handles both flat and tree mapping via its `mapping` parameter.
