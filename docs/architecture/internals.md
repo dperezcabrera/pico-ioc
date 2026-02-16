@@ -202,3 +202,113 @@ The EventBus (from pico_ioc.event_bus) is registered like a normal component. In
   * Publisher/Subscriber: The EventBus.
   * Builder Pattern: configuration(...) creating ContextConfig.
   * Facade Pattern: PicoContainer simplifying access to internal components.
+
+-----
+
+## 10. Mermaid Diagrams
+
+### 10.1. Container Resolution Flow
+
+```mermaid
+flowchart TD
+    A["container.get(key)"] --> B{"Canonical key lookup"}
+    B --> C{"Cache hit?"}
+    C -- Yes --> D["Return cached instance"]
+    C -- No --> E["Activate container context"]
+    E --> F["ComponentFactory.get(key)"]
+    F --> G["Call provider()"]
+    G --> H{"Awaitable?"}
+    H -- Yes --> I["Raise AsyncResolutionError"]
+    H -- No --> J{"Non-singleton scope?"}
+    J -- Yes --> K["Run @configure methods"]
+    J -- No --> L["_maybe_wrap_with_aspects"]
+    K --> L
+    L --> M{"Has @intercepted_by?"}
+    M -- Yes --> N["Wrap in UnifiedComponentProxy"]
+    M -- No --> O["Use raw instance"]
+    N --> P["Put in scope cache"]
+    O --> P
+    P --> Q["Notify observers"]
+    Q --> R["Return instance"]
+```
+
+### 10.2. Interceptor Chain Execution
+
+```mermaid
+flowchart LR
+    subgraph Proxy["UnifiedComponentProxy"]
+        A["__getattr__(name)"] --> B{"Interceptors?"}
+        B -- No --> C["Return raw attribute"]
+        B -- Yes --> D["Resolve interceptor instances"]
+        D --> E["Build wrapped method"]
+    end
+
+    subgraph Chain["dispatch_method()"]
+        F["call_next(ctx)"] --> G["Interceptor 1: invoke()"]
+        G -->|"call_next(ctx)"| H["Interceptor 2: invoke()"]
+        H -->|"call_next(ctx)"| I["Interceptor N: invoke()"]
+        I -->|"call_next(ctx)"| J["Real method: ctx.method(*args, **kwargs)"]
+        J -->|result| I
+        I -->|result| H
+        H -->|result| G
+        G -->|result| F
+    end
+
+    E --> F
+    F -->|result| A
+```
+
+### 10.3. Component Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Scanning: init() called
+    Scanning --> Registered: @component / @factory / @provides discovered
+    Registered --> Validated: DependencyValidator checks bindings
+    Validated --> EagerInit: Non-lazy singleton
+
+    state EagerInit {
+        [*] --> Constructing: Provider called
+        Constructing --> Configuring: __init__ complete
+        Configuring --> Ready: @configure methods run
+    }
+
+    Validated --> LazyProxy: lazy=True
+    LazyProxy --> Dormant: UnifiedComponentProxy created
+
+    Dormant --> EagerInit: First attribute access
+
+    EagerInit --> Proxied: Has @intercepted_by
+    EagerInit --> Cached: No interceptors
+    Proxied --> Cached: Wrapped in proxy
+
+    Cached --> Active: In scope cache
+    Active --> CleaningUp: container.shutdown()
+    CleaningUp --> [*]: @cleanup methods run
+```
+
+### 10.4. Initialization Flow (`init()`)
+
+```mermaid
+flowchart TD
+    A["init(modules, config, ...)"] --> B["Create ComponentFactory, ScopedCaches, ScopeManager"]
+    B --> C["Register custom scopes"]
+    C --> D["Create PicoContainer"]
+    D --> E["Create Registrar"]
+    E --> F["Scan all modules"]
+    F --> G["Discover @component, @factory, @provides, @configured"]
+    G --> H["Evaluate conditional logic (profiles, env, predicate)"]
+    H --> I["ProviderSelector.select_providers()"]
+    I --> J["Bind winning providers to ComponentFactory"]
+    J --> K["Promote scopes (_promote_scopes)"]
+    K --> L["Register on_missing fallbacks"]
+    L --> M["Build ComponentLocator indexes"]
+    M --> N["DependencyValidator.validate_bindings()"]
+    N --> O{"validate_only?"}
+    O -- Yes --> P["Return container (no eager init)"]
+    O -- No --> Q["Attach locator + deferred providers"]
+    Q --> R["Cycle detection"]
+    R --> S["Eagerly resolve non-lazy singletons"]
+    S --> T["Run @configure methods"]
+    T --> U["Return PicoContainer"]
+```

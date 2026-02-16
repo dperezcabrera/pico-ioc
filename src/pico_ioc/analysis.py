@@ -1,3 +1,10 @@
+"""Static dependency analysis for callables.
+
+Inspects constructor and method signatures to produce
+:class:`DependencyRequest` descriptors that the container uses to wire
+dependencies at resolution time.
+"""
+
 import collections
 import collections.abc
 import inspect
@@ -33,6 +40,18 @@ KeyT = Union[str, type]
 
 @dataclass(frozen=True)
 class DependencyRequest:
+    """Describes a single dependency required by a constructor or method.
+
+    Attributes:
+        parameter_name: The Python parameter name in the signature.
+        key: The resolution key (type or string) used to look up the provider.
+        is_list: ``True`` if the parameter expects a list of components.
+        qualifier: Optional qualifier string for filtering multi-bindings.
+        is_optional: ``True`` if the parameter has a default value or is
+            ``Optional[...]``.
+        is_dict: ``True`` if the parameter expects a ``Dict[K, V]`` mapping.
+        dict_key_type: The key type of the dict (e.g. ``str``, ``type``).
+    """
     parameter_name: str
     key: KeyT
     is_list: bool = False
@@ -84,6 +103,19 @@ _SUPPORTED_DICT_ORIGINS = (dict, collections.abc.Mapping)
 
 
 def analyze_callable_dependencies(callable_obj: Callable[..., Any]) -> Tuple[DependencyRequest, ...]:
+    """Analyse a callable's signature and return its dependency requests.
+
+    Inspects type annotations (resolving PEP 563 deferred annotations) and
+    classifies each parameter as a single dependency, list injection, dict
+    injection, or optional.
+
+    Args:
+        callable_obj: The function, method, or class ``__init__`` to analyse.
+
+    Returns:
+        A tuple of :class:`DependencyRequest` descriptors, one per injectable
+        parameter (excluding ``self``, ``cls``, ``*args``, and ``**kwargs``).
+    """
     try:
         sig = inspect.signature(callable_obj)
     except (ValueError, TypeError) as e:

@@ -1,3 +1,9 @@
+"""High-level API for bootstrapping the pico-ioc container.
+
+The :func:`init` function is the primary entry point. It scans modules,
+validates bindings, and returns a fully wired :class:`PicoContainer`.
+"""
+
 import importlib
 import inspect
 import logging
@@ -76,6 +82,52 @@ def init(
     observers: Optional[List[ContainerObserver]] = None,
     custom_scanners: Optional[List[CustomScanner]] = None,
 ) -> PicoContainer:
+    """Bootstrap the pico-ioc container.
+
+    Scans the given modules for decorated components, validates all
+    dependency bindings, eagerly creates non-lazy singletons, and returns a
+    ready-to-use :class:`PicoContainer`.
+
+    Args:
+        modules: One or more Python modules (or packages, or dotted-name
+            strings) to scan for ``@component``, ``@factory``,
+            ``@provides``, and ``@configured`` declarations.
+        profiles: Active profile names for conditional binding.
+        allowed_profiles: If set, unknown profile names raise
+            :class:`ConfigurationError`.
+        environ: Custom environment dict (defaults to ``os.environ``).
+        overrides: Dict of ``{key: value_or_callable}`` that replace
+            scanned providers. Useful for testing.
+        logger: Custom logger for framework messages.
+        config: An optional :class:`ContextConfig` created by
+            :func:`configuration`.
+        custom_scopes: Additional scope names to register (each backed by
+            a new ``ContextVar``).
+        validate_only: If ``True``, perform binding validation and cycle
+            detection but skip eager singleton creation.
+        container_id: Explicit container identifier.
+        observers: :class:`ContainerObserver` instances for monitoring.
+        custom_scanners: :class:`CustomScanner` implementations for
+            extending component discovery.
+
+    Returns:
+        A fully wired :class:`PicoContainer`.
+
+    Raises:
+        ConfigurationError: If unknown profiles are used or async
+            singletons lack ``lazy=True``.
+        InvalidBindingError: If dependency validation or cycle detection
+            fails.
+        ProviderNotFoundError: If a required dependency cannot be found.
+
+    Example:
+        >>> from pico_ioc import init, configuration, DictSource
+        >>> container = init(
+        ...     modules=["myapp.services", "myapp.repos"],
+        ...     config=configuration(DictSource({"db": {"url": "sqlite://"}})),
+        ... )
+        >>> svc = container.get(MyService)
+    """
     active = tuple(p.strip() for p in profiles if p)
     _validate_profiles(active, allowed_profiles)
 

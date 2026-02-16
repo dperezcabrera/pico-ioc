@@ -287,20 +287,41 @@ logging.getLogger("pico_ioc").setLevel(logging.DEBUG)
 
 ---
 
-## Common Errors
+## Troubleshooting -- Error Reference
 
-### `ProviderNotFoundError: No provider found for X`
+This section lists every error message produced by pico-ioc, what causes it,
+and how to fix it.
+
+---
+
+### `ProviderNotFoundError`
+
+**Message:** `Provider for key 'X' not found (required by: 'Y')`
 
 **Causes:**
-- Missing `@component` decorator
-- Module not included in `init(modules=[...])`
-- Typo in type hint
 
-### `CircularDependencyError: Circular dependency detected`
+- Missing `@component` decorator on the class.
+- Module not included in `init(modules=[...])`.
+- Typo in the type hint (e.g. `Databse` instead of `Database`).
+- The class is conditionally excluded (wrong profile, missing env var).
 
-**Cause:** A depends on B, and B depends on A.
+**Fix:**
 
-**Solution:** Use `lazy=True` on one of the components:
+1. Add `@component` to the class.
+2. Include the module in `init(modules=[...])`.
+3. Check the type hint matches the registered class exactly.
+4. Verify profiles and environment variables.
+
+---
+
+### `InvalidBindingError` (Circular Dependency)
+
+**Message:** `Invalid bindings:\n- Circular dependency detected: A -> B -> A`
+
+**Cause:** Component A depends on B, and B depends on A (directly or transitively).
+
+**Fix:** Break the cycle by marking one side as `lazy=True`:
+
 ```python
 @component(lazy=True)
 class ServiceA:
@@ -308,11 +329,207 @@ class ServiceA:
         self.b = b
 ```
 
-### `AsyncResolutionError: Cannot resolve async component synchronously`
+---
 
-**Cause:** Calling `get()` on a component with `__ainit__` or async `@configure`.
+### `InvalidBindingError` (Missing Binding)
 
-**Solution:** Use `await container.aget(...)` instead.
+**Message:** `Invalid bindings:\n- MyService (component MyService) depends on Database which is not bound`
+
+**Cause:** A dependency declared in a constructor type hint has no registered provider.
+
+**Fix:**
+
+1. Register the dependency with `@component`, `@provides`, or `overrides`.
+2. If the dependency is optional, annotate it as `Optional[Database]` or provide a default value.
+
+---
+
+### `AsyncResolutionError`
+
+**Message:** `Synchronous get() received an awaitable for key 'X'. Use aget() instead.`
+
+**Cause:** Calling `container.get()` on a component whose provider, `__ainit__`,
+or `@configure` method returns a coroutine.
+
+**Fix:** Use `await container.aget(X)` instead, or mark the component as
+`lazy=True` and access it in an async context.
+
+---
+
+### `ComponentCreationError`
+
+**Message:** `Failed to create component for key: X; cause: ErrorType: details`
+
+**Cause:** The provider callable raised an exception during component creation.
+
+**Fix:** Read the `cause` in the message. Common issues:
+
+- Missing constructor argument (dependency not bound).
+- Exception in `__init__` or `__ainit__`.
+- Database connection failure in a factory `@provides` method.
+
+---
+
+### `ConfigurationError` (Unknown Profiles)
+
+**Message:** `Unknown profiles: ['staging']; allowed: ['dev', 'prod', 'test']`
+
+**Cause:** A profile name was passed to `init(profiles=(...))` that is not in
+`allowed_profiles`.
+
+**Fix:** Either add the profile to `allowed_profiles`, or fix the typo.
+
+---
+
+### `ConfigurationError` (Missing Config Key)
+
+**Message:** `Missing configuration key: DB_HOST`
+
+**Cause:** A `@configured(mapping="flat")` dataclass has a required field with
+no default, and no configuration source provides a value for that key.
+
+**Fix:** Either provide the key in your configuration source (env var, dict, etc.)
+or add a default value to the dataclass field.
+
+---
+
+### `ConfigurationError` (Missing Config Prefix)
+
+**Message:** `Missing config prefix: db.connection`
+
+**Cause:** A `@configured(prefix="db.connection", mapping="tree")` class expects
+a subtree in the configuration, but no source provides it.
+
+**Fix:** Add the subtree to your `DictSource`, `JsonTreeSource`, or `YamlTreeSource`.
+
+---
+
+### `ConfigurationError` (Unknown Source Type)
+
+**Message:** `Unknown configuration source type: <class 'MySource'>`
+
+**Cause:** An unrecognised object was passed to `configuration(...)`.
+
+**Fix:** Use one of the supported source types: `EnvSource`, `FileSource`,
+`FlatDictSource`, `DictSource`, `JsonTreeSource`, `YamlTreeSource`.
+
+---
+
+### `ConfigurationError` (Missing ENV Var)
+
+**Message:** `Missing ENV var MY_SECRET`
+
+**Cause:** A `${ENV:MY_SECRET}` interpolation in a tree config references an
+environment variable that is not set.
+
+**Fix:** Set the environment variable, or remove the interpolation.
+
+---
+
+### `ConfigurationError` (Async Singletons)
+
+**Message:** `Sync init() found eagerly loaded singletons with async @configure methods. ...`
+
+**Cause:** A non-lazy singleton has an async `@configure` method, but `init()`
+is called synchronously.
+
+**Fix:** Either mark the component `lazy=True`, or use `await container.aget(X)`
+in an async context.
+
+---
+
+### `ScopeError` (Unknown Scope)
+
+**Message:** `Unknown scope: tenant`
+
+**Cause:** A component uses `scope="tenant"`, but the scope was not registered.
+
+**Fix:** Pass `custom_scopes=["tenant"]` to `init()`.
+
+---
+
+### `ScopeError` (No Active Scope ID)
+
+**Message:** `Cannot resolve component in scope 'request': No active scope ID found. Are you trying to use a request-scoped component outside of its context?`
+
+**Cause:** You called `container.get(RequestScopedComponent)` outside of a
+`container.scope("request", id)` block.
+
+**Fix:** Wrap the resolution in the appropriate scope context:
+
+```python
+with container.scope("request", request_id):
+    component = container.get(RequestScopedComponent)
+```
+
+---
+
+### `ScopeError` (Reserved Scope)
+
+**Message:** `Cannot register reserved scope: 'singleton'`
+
+**Cause:** Attempting to register `"singleton"` or `"prototype"` as a custom scope.
+
+**Fix:** Choose a different scope name. `singleton` and `prototype` are built-in.
+
+---
+
+### `EventBusClosedError`
+
+**Message:** `EventBus is closed`
+
+**Cause:** Calling `publish()`, `subscribe()`, or `post()` after the EventBus
+has been closed via `await bus.aclose()`.
+
+**Fix:** Do not interact with the bus after shutdown.
+
+---
+
+### `RuntimeError` (DeferredProvider)
+
+**Message:** `DeferredProvider must be attached before use`
+
+**Cause:** Internal error -- a provider was called before the container and
+locator were wired. This usually indicates a bug in custom scanner logic.
+
+**Fix:** Ensure `DeferredProvider.attach(pico, locator)` is called before
+the provider is invoked.
+
+---
+
+### `RuntimeError` (Async Interceptor on Sync Method)
+
+**Message:** `Async interceptor returned awaitable on sync method: method_name`
+
+**Cause:** An interceptor returned a coroutine from `invoke()`, but the
+intercepted method is synchronous.
+
+**Fix:** Ensure sync methods only use sync interceptors, or handle the
+async/sync distinction inside your interceptor.
+
+---
+
+### `ValueError` (Invalid Mapping)
+
+**Message:** `mapping must be one of 'auto', 'flat', or 'tree'`
+
+**Cause:** Invalid `mapping` argument passed to `@configured(mapping="xyz")`.
+
+**Fix:** Use `"auto"`, `"flat"`, or `"tree"`.
+
+---
+
+## Common Errors (Quick Reference)
+
+| Error | Typical Cause | Fix |
+|-------|--------------|-----|
+| `ProviderNotFoundError` | Missing decorator or module | Add `@component` and include module |
+| `InvalidBindingError` | Circular or missing deps | Use `lazy=True` or register missing provider |
+| `AsyncResolutionError` | Sync `get()` on async component | Use `await aget()` |
+| `ComponentCreationError` | Exception in provider | Fix the root cause in the error message |
+| `ConfigurationError` | Missing key, bad source, async singleton | Provide the key or mark `lazy=True` |
+| `ScopeError` | Unknown scope or missing context | Register scope or use `container.scope()` |
+| `EventBusClosedError` | Using bus after shutdown | Stop using the bus after `aclose()` |
 
 ---
 
