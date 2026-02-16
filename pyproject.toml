@@ -74,7 +74,8 @@ line-length = 120
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+preview = true
+select = ["E", "F", "I", "UP", "C901", "PLR1702"]
 ignore = [
     "E501",   # line-too-long — revisable later
     "E701",   # multiple-statements-on-one-line
@@ -87,6 +88,12 @@ ignore = [
     "UP035",  # deprecated-import — gradual migration from typing
     "UP045",  # non-pep604-annotation-optional — gradual migration
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.pylint]
+max-nested-blocks = 4
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F841"]  # unused-variable — common in test setup

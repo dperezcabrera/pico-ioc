@@ -79,39 +79,37 @@ class ConfigurationManager:
         values: Dict[str, Any] = {}
         for f in fields(cls):
             field_type = dc_hints.get(f.name, f.type)
-            value_override = None
-
-            if get_origin(field_type) is Annotated:
-                args = get_args(field_type)
-                field_type = args[0] if args else Any
-                metas = args[1:] if len(args) > 1 else ()
-                for m in metas:
-                    if isinstance(m, Value):
-                        value_override = m.value
-                        break
+            field_type, value_override = self._extract_field_override(field_type)
 
             if value_override is not None:
                 values[f.name] = value_override
                 continue
 
-            base_key = _upper_key(f.name)
-            keys_to_try = []
-            if prefix:
-                keys_to_try.append(prefix + base_key)
-            keys_to_try.append(base_key)
-
-            raw = None
-            for k in keys_to_try:
-                raw = self._lookup_flat(k)
-                if raw is not None:
-                    break
-
+            raw = self._lookup_flat_field(f.name, prefix)
             if raw is None:
                 if f.default is not MISSING or f.default_factory is not MISSING:
                     continue
-                raise ConfigurationError(f"Missing configuration key: {(prefix or '') + base_key}")
+                raise ConfigurationError(f"Missing configuration key: {(prefix or '') + _upper_key(f.name)}")
             values[f.name] = _coerce(raw, field_type if isinstance(field_type, type) or get_origin(field_type) else str)
         return cls(**values)
+
+    def _extract_field_override(self, field_type: Any) -> Tuple[Any, Any]:
+        if get_origin(field_type) is not Annotated:
+            return field_type, None
+        args = get_args(field_type)
+        base = args[0] if args else Any
+        for m in args[1:]:
+            if isinstance(m, Value):
+                return base, m.value
+        return base, None
+
+    def _lookup_flat_field(self, field_name: str, prefix: Optional[str]) -> Optional[str]:
+        base_key = _upper_key(field_name)
+        if prefix:
+            val = self._lookup_flat(prefix + base_key)
+            if val is not None:
+                return val
+        return self._lookup_flat(base_key)
 
     def _auto_detect_mapping(self, target_type: type) -> str:
         if not is_dataclass(target_type):

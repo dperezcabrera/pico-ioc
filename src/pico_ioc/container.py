@@ -65,34 +65,40 @@ def _build_resolution_graph(loc) -> Dict[KeyT, Tuple[KeyT, ...]]:
     if not loc:
         return {}
 
-    def _map_dep_to_bound_key(dep_key: KeyT) -> KeyT:
-        if dep_key in loc._metadata:
-            return dep_key
-
-        if isinstance(dep_key, str):
-            mapped = loc.find_key_by_name(dep_key)
-            if mapped is not None:
-                return mapped
-
-        if isinstance(dep_key, type):
-            for k, md in loc._metadata.items():
-                typ = md.provided_type or md.concrete_class
-                if isinstance(typ, type):
-                    try:
-                        if issubclass(typ, dep_key):
-                            return k
-                    except Exception:
-                        continue
-        return dep_key
-
     graph: Dict[KeyT, Tuple[KeyT, ...]] = {}
     for key, md in list(loc._metadata.items()):
         deps: List[KeyT] = []
         for d in loc.dependency_keys_for_static(md):
-            mapped = _map_dep_to_bound_key(d)
-            deps.append(mapped)
+            deps.append(_map_dep_to_bound_key(loc, d))
         graph[key] = tuple(deps)
     return graph
+
+
+def _map_dep_to_bound_key(loc, dep_key: KeyT) -> KeyT:
+    if dep_key in loc._metadata:
+        return dep_key
+
+    if isinstance(dep_key, str):
+        mapped = loc.find_key_by_name(dep_key)
+        if mapped is not None:
+            return mapped
+
+    if isinstance(dep_key, type):
+        return _find_subtype_key(loc, dep_key)
+    return dep_key
+
+
+def _find_subtype_key(loc, dep_key: type) -> KeyT:
+    for k, md in loc._metadata.items():
+        typ = md.provided_type or md.concrete_class
+        if not isinstance(typ, type):
+            continue
+        try:
+            if issubclass(typ, dep_key):
+                return k
+        except Exception:
+            continue
+    return dep_key
 
 
 class PicoContainer:
@@ -492,70 +498,69 @@ class PicoContainer:
 
         for dep in dependencies:
             if dep.is_list:
-                keys: Tuple[KeyT, ...] = ()
-                if isinstance(dep.key, type):
-                    keys = tuple(self._locator.collect_by_type(dep.key, dep.qualifier))
-                kwargs[dep.parameter_name] = [self.get(k) for k in keys]
-                continue
-
-            if dep.is_dict:
-                value_type = dep.key
-                key_type = dep.dict_key_type
-                result_map: Dict[Any, Any] = {}
-
-                keys_to_resolve: Tuple[KeyT, ...] = ()
-                if isinstance(value_type, type):
-                    keys_to_resolve = tuple(self._locator.collect_by_type(value_type, dep.qualifier))
-
-                for comp_key in keys_to_resolve:
-                    instance = self.get(comp_key)
-                    md = self._locator._metadata.get(comp_key)
-                    if md is None:
-                        continue
-
-                    dict_key: Any = None
-                    if key_type is str:
-                        dict_key = md.pico_name
-                        if dict_key is None:
-                            if isinstance(comp_key, str):
-                                dict_key = comp_key
-                            else:
-                                dict_key = getattr(comp_key, "__name__", str(comp_key))
-                    elif key_type is type or key_type is Type:
-                        dict_key = md.concrete_class or md.provided_type
-                    elif key_type is Any:
-                        dict_key = md.pico_name
-                        if dict_key is None:
-                            if isinstance(comp_key, str):
-                                dict_key = comp_key
-                            else:
-                                dict_key = getattr(comp_key, "__name__", str(comp_key))
-
-                    if dict_key is not None:
-                        if (key_type is type or key_type is Type) and not isinstance(dict_key, type):
-                            continue
-
-                        result_map[dict_key] = instance
-
-                kwargs[dep.parameter_name] = result_map
-                continue
-
-            primary_key = dep.key
-            if isinstance(primary_key, str):
-                mapped = self._locator.find_key_by_name(primary_key)
-                primary_key = mapped if mapped is not None else primary_key
-
-            try:
-                kwargs[dep.parameter_name] = self.get(primary_key)
-            except Exception as first_error:
-                if primary_key != dep.parameter_name:
-                    try:
-                        kwargs[dep.parameter_name] = self.get(dep.parameter_name)
-                    except Exception:
-                        raise first_error from None
-                else:
-                    raise first_error from None
+                self._resolve_list_dep(dep, kwargs)
+            elif dep.is_dict:
+                self._resolve_dict_dep(dep, kwargs)
+            else:
+                self._resolve_single_dep(dep, kwargs)
         return kwargs
+
+    def _resolve_list_dep(self, dep: DependencyRequest, kwargs: Dict[str, Any]) -> None:
+        keys: Tuple[KeyT, ...] = ()
+        if isinstance(dep.key, type):
+            keys = tuple(self._locator.collect_by_type(dep.key, dep.qualifier))
+        kwargs[dep.parameter_name] = [self.get(k) for k in keys]
+
+    def _resolve_dict_dep(self, dep: DependencyRequest, kwargs: Dict[str, Any]) -> None:
+        value_type = dep.key
+        key_type = dep.dict_key_type
+        result_map: Dict[Any, Any] = {}
+
+        keys_to_resolve: Tuple[KeyT, ...] = ()
+        if isinstance(value_type, type):
+            keys_to_resolve = tuple(self._locator.collect_by_type(value_type, dep.qualifier))
+
+        for comp_key in keys_to_resolve:
+            instance = self.get(comp_key)
+            md = self._locator._metadata.get(comp_key)
+            if md is None:
+                continue
+
+            dict_key = self._extract_dict_key(comp_key, md, key_type)
+            if dict_key is not None:
+                if (key_type is type or key_type is Type) and not isinstance(dict_key, type):
+                    continue
+                result_map[dict_key] = instance
+
+        kwargs[dep.parameter_name] = result_map
+
+    def _extract_dict_key(self, comp_key: KeyT, md: "ProviderMetadata", key_type: Any) -> Any:
+        if key_type is str or key_type is Any:
+            if md.pico_name is not None:
+                return md.pico_name
+            if isinstance(comp_key, str):
+                return comp_key
+            return getattr(comp_key, "__name__", str(comp_key))
+        if key_type is type or key_type is Type:
+            return md.concrete_class or md.provided_type
+        return None
+
+    def _resolve_single_dep(self, dep: DependencyRequest, kwargs: Dict[str, Any]) -> None:
+        primary_key = dep.key
+        if isinstance(primary_key, str):
+            mapped = self._locator.find_key_by_name(primary_key)
+            primary_key = mapped if mapped is not None else primary_key
+
+        try:
+            kwargs[dep.parameter_name] = self.get(primary_key)
+        except Exception as first_error:
+            if primary_key != dep.parameter_name:
+                try:
+                    kwargs[dep.parameter_name] = self.get(dep.parameter_name)
+                except Exception:
+                    raise first_error from None
+            else:
+                raise first_error from None
 
     def build_class(self, cls: type, locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]) -> Any:
         init = cls.__init__

@@ -103,43 +103,11 @@ class ComponentScanner:
         if not self._enabled_by_condition(cls):
             return
 
-        factory_deps: Optional[Tuple[DependencyRequest, ...]] = None
-        has_instance_provides = False
-        for name in dir(cls):
-            try:
-                raw = inspect.getattr_static(cls, name)
-                if inspect.isfunction(raw) and getattr(raw, PICO_INFRA, None) == "provides":
-                    has_instance_provides = True
-                    break
-            except Exception:
-                continue
-
-        if has_instance_provides:
-            factory_deps = analyze_callable_dependencies(cls.__init__)
+        factory_deps = self._detect_factory_deps(cls)
 
         for name in dir(cls):
-            try:
-                raw = inspect.getattr_static(cls, name)
-            except Exception:
-                continue
-
-            fn = None
-            kind = None
-            if isinstance(raw, staticmethod):
-                fn = raw.__func__
-                kind = "static"
-            elif isinstance(raw, classmethod):
-                fn = raw.__func__
-                kind = "class"
-            elif inspect.isfunction(raw):
-                fn = raw
-                kind = "instance"
-            else:
-                continue
-
-            if getattr(fn, PICO_INFRA, None) != "provides":
-                continue
-            if not self._enabled_by_condition(fn):
+            fn, kind = self._resolve_provides_member(cls, name)
+            if fn is None:
                 continue
 
             k = getattr(fn, PICO_KEY)
@@ -174,6 +142,37 @@ class ComponentScanner:
                 dependencies=deps,
             )
             self._queue(k, provider, md)
+
+    def _detect_factory_deps(self, cls: type) -> Optional[Tuple[DependencyRequest, ...]]:
+        for name in dir(cls):
+            try:
+                raw = inspect.getattr_static(cls, name)
+                if inspect.isfunction(raw) and getattr(raw, PICO_INFRA, None) == "provides":
+                    return analyze_callable_dependencies(cls.__init__)
+            except Exception:
+                continue
+        return None
+
+    def _resolve_provides_member(self, cls: type, name: str) -> Tuple[Optional[Callable], Optional[str]]:
+        try:
+            raw = inspect.getattr_static(cls, name)
+        except Exception:
+            return None, None
+
+        if isinstance(raw, staticmethod):
+            fn, kind = raw.__func__, "static"
+        elif isinstance(raw, classmethod):
+            fn, kind = raw.__func__, "class"
+        elif inspect.isfunction(raw):
+            fn, kind = raw, "instance"
+        else:
+            return None, None
+
+        if getattr(fn, PICO_INFRA, None) != "provides":
+            return None, None
+        if not self._enabled_by_condition(fn):
+            return None, None
+        return fn, kind
 
     def _register_provides_function(self, fn: Callable[..., Any]) -> None:
         if not self._enabled_by_condition(fn):
@@ -218,27 +217,28 @@ class ComponentScanner:
             if self._try_custom_scanners(obj):
                 continue
 
-            if inspect.isclass(obj) or getattr(obj, "_is_protocol", False):
-                if inspect.isclass(obj):
-                    meta = getattr(obj, PICO_META, {})
-
-                    if "on_missing" in meta:
-                        sel = meta["on_missing"]["selector"]
-                        pr = int(meta["on_missing"].get("priority", 0))
-                        self._on_missing.append((pr, sel, obj))
-                        continue
-
-                    infra = getattr(obj, PICO_INFRA, None)
-                    if infra == "component":
-                        self._register_component_class(obj)
-                    elif infra == "factory":
-                        self._register_factory_class(obj)
-                    elif infra == "configured":
-                        enabled = self._enabled_by_condition(obj)
-                        reg_data = self._config_manager.register_configured_class(obj, enabled)
-                        if reg_data:
-                            self._queue(reg_data[0], reg_data[1], reg_data[2])
-
+            if inspect.isclass(obj):
+                self._scan_class(obj)
             elif inspect.isfunction(obj):
                 if getattr(obj, PICO_INFRA, None) == "provides":
                     self._register_provides_function(obj)
+
+    def _scan_class(self, obj: type) -> None:
+        meta = getattr(obj, PICO_META, {})
+
+        if "on_missing" in meta:
+            sel = meta["on_missing"]["selector"]
+            pr = int(meta["on_missing"].get("priority", 0))
+            self._on_missing.append((pr, sel, obj))
+            return
+
+        infra = getattr(obj, PICO_INFRA, None)
+        if infra == "component":
+            self._register_component_class(obj)
+        elif infra == "factory":
+            self._register_factory_class(obj)
+        elif infra == "configured":
+            enabled = self._enabled_by_condition(obj)
+            reg_data = self._config_manager.register_configured_class(obj, enabled)
+            if reg_data:
+                self._queue(reg_data[0], reg_data[1], reg_data[2])
