@@ -1,3 +1,11 @@
+"""Runtime configuration resolution and object graph building.
+
+Provides :class:`Value` and :class:`Discriminator` (used in ``Annotated``
+type hints), :class:`ConfigResolver` (merges and interpolates tree sources),
+and :class:`ObjectGraphBuilder` (maps configuration trees onto typed
+dataclass graphs).
+"""
+
 import hashlib
 import json
 import os
@@ -13,11 +21,35 @@ from .exceptions import ConfigurationError
 
 
 class Value:
+    """Annotation marker that injects a literal value into a ``@configured`` field.
+
+    Use with ``typing.Annotated``::
+
+        @configured(prefix="app")
+        @dataclass
+        class AppConfig:
+            version: Annotated[str, Value("1.0.0")]
+
+    Args:
+        value: The literal value to inject.
+    """
+
     def __init__(self, value: Any):
         self.value = value
 
 
 class Discriminator:
+    """Annotation marker for discriminated unions in tree configuration.
+
+    Tells the :class:`ObjectGraphBuilder` which field in the config dict
+    determines the concrete type within a ``Union``::
+
+        Field = Annotated[Union[TextInput, NumberInput], Discriminator("type")]
+
+    Args:
+        name: The discriminator field name in the configuration mapping.
+    """
+
     def __init__(self, name: str):
         self.name = name
 

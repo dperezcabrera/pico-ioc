@@ -1,3 +1,11 @@
+"""Asynchronous in-process event bus.
+
+Provides :class:`EventBus` for publishing and subscribing to typed events,
+:func:`subscribe` as a declarative decorator, and :class:`AutoSubscriberMixin`
+for automatic wiring of ``@subscribe``-decorated methods during container
+startup.
+"""
+
 import asyncio
 import inspect
 import logging
@@ -13,17 +21,42 @@ log = logging.getLogger(__name__)
 
 
 class ExecPolicy(Enum):
+    """Execution policy for event handlers.
+
+    Attributes:
+        INLINE: Execute the handler synchronously in the current coroutine.
+        THREADPOOL: Run sync handlers in a thread-pool executor.
+        TASK: Schedule async handlers as ``asyncio.Task`` instances.
+    """
+
     INLINE = auto()
     THREADPOOL = auto()
     TASK = auto()
 
 
 class ErrorPolicy(Enum):
+    """Error handling policy for event handlers.
+
+    Attributes:
+        LOG: Log handler errors and continue dispatching.
+        RAISE: Re-raise the first handler error immediately.
+    """
+
     LOG = auto()
     RAISE = auto()
 
 
-class Event: ...
+class Event:
+    """Base class for application events.
+
+    Subclass this to define typed events::
+
+        class OrderPlaced(Event):
+            def __init__(self, order_id: str):
+                self.order_id = order_id
+    """
+
+    ...
 
 
 @dataclass(order=True)
@@ -39,6 +72,24 @@ class _Subscriber:
 
 
 class EventBus:
+    """Asynchronous, typed, in-process event bus.
+
+    Supports both sync and async handlers with configurable execution and
+    error policies. Optionally runs a background worker for queued dispatch.
+
+    Args:
+        default_exec_policy: Default execution policy for handlers that do
+            not specify their own.
+        error_policy: How handler errors are treated (log or raise).
+        max_queue_size: Maximum size of the background worker queue. ``0``
+            means unbounded.
+
+    Example:
+        >>> bus = EventBus()
+        >>> bus.subscribe(OrderPlaced, lambda e: print(e.order_id))
+        >>> await bus.publish(OrderPlaced(order_id="123"))
+    """
+
     def __init__(
         self,
         *,
@@ -209,6 +260,26 @@ class EventBus:
 def subscribe(
     event_type: Type[Event], *, priority: int = 0, policy: ExecPolicy = ExecPolicy.INLINE, once: bool = False
 ):
+    """Decorator that marks a method for auto-subscription via ``AutoSubscriberMixin``.
+
+    Apply to methods on a ``@component`` class that mixes in
+    :class:`AutoSubscriberMixin`::
+
+        @component
+        class OrderHandler(AutoSubscriberMixin):
+            @subscribe(OrderPlaced, priority=10)
+            def on_order(self, event: OrderPlaced):
+                print(f"Order {event.order_id} placed")
+
+    Args:
+        event_type: The :class:`Event` subclass to subscribe to.
+        priority: Higher-priority handlers run first. Default ``0``.
+        policy: Execution policy for this handler.
+        once: If ``True``, the handler is unsubscribed after the first dispatch.
+
+    Returns:
+        A decorator that attaches subscription metadata to the function.
+    """
     def dec(fn: Callable[[Event], Any] | Callable[[Event], Awaitable[Any]]):
         subs: Iterable[Tuple[Type[Event], int, ExecPolicy, bool]] = getattr(fn, "_pico_subscriptions_", ())
         subs = list(subs)
@@ -220,6 +291,12 @@ def subscribe(
 
 
 class AutoSubscriberMixin:
+    """Mixin that auto-subscribes ``@subscribe``-decorated methods to the EventBus.
+
+    Add this mixin to a ``@component`` class. During ``@configure``, all
+    methods carrying ``@subscribe`` metadata are registered with the
+    :class:`EventBus`.
+    """
     @configure
     def _pico_autosubscribe(self, event_bus: EventBus) -> None:
         for _, attr in inspect.getmembers(self, predicate=callable):

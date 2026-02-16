@@ -1,3 +1,11 @@
+"""pico-ioc -- Lightweight, async-native dependency injection for Python 3.11+.
+
+Public API re-exported from sub-modules. Import everything you need
+directly from ``pico_ioc``::
+
+    from pico_ioc import component, init, configuration, DictSource
+"""
+
 from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import ContainerObserver, MethodCtx, MethodInterceptor, UnifiedComponentProxy, health, intercepted_by
 from .api import (
