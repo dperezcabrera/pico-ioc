@@ -199,50 +199,45 @@ class ObjectGraphBuilder:
         if t is Any or t is object:
             return node
 
-        adapter = self._registry.get(t) if isinstance(t, type) else None
-        if adapter:
-            return adapter(node)
+        if isinstance(t, type):
+            adapter = self._registry.get(t)
+            if adapter:
+                return adapter(node)
 
         org = get_origin(t)
 
         if org is Annotated:
             base, metas = self._split_annotated(t)
             return self._build_discriminated(node, base, metas, path)
-
         if org in (list, List):
-            elem_t = get_args(t)[0] if get_args(t) else Any
-            if not isinstance(node, list):
-                raise ConfigurationError(f"Expected list at {'.'.join(path)}")
-            return [self._build(x, elem_t, path + (str(i),)) for i, x in enumerate(node)]
-
+            return self._build_list(node, t, path)
         if org in (dict, Dict, Mapping):
-            args = get_args(t)
-            kt = args[0] if args else str
-            vt = args[1] if len(args) > 1 else Any
-            if kt not in (str, Any, object):
-                raise ConfigurationError(f"Only dicts with string keys supported at {'.'.join(path)}")
-            if not isinstance(node, dict):
-                raise ConfigurationError(f"Expected dict at {'.'.join(path)}")
-            return {k: self._build(v, vt, path + (k,)) for k, v in node.items()}
-
+            return self._build_dict(node, t, path)
         if org is Union:
-            args = [a for a in get_args(t)]
-            if not isinstance(node, dict):
-                for cand in args:
-                    try:
-                        return self._build(node, cand, path)
-                    except Exception:
-                        continue
-                raise ConfigurationError(f"No union match at {'.'.join(path)}")
+            return self._build_union(node, t, path)
+        if isinstance(t, type):
+            return self._build_type(node, t, path)
+        return node
 
-            if "$type" in node:
-                tn = str(node["$type"])
-                for cand in args:
-                    if isinstance(cand, type) and getattr(cand, "__name__", "") == tn:
-                        cleaned = {k: v for k, v in node.items() if k != "$type"}
-                        return self._build(cleaned, cand, path)
-                raise ConfigurationError(f"Discriminator $type did not match at {'.'.join(path)}")
+    def _build_list(self, node: Any, t: Any, path: Tuple[str, ...]) -> list:
+        elem_t = get_args(t)[0] if get_args(t) else Any
+        if not isinstance(node, list):
+            raise ConfigurationError(f"Expected list at {'.'.join(path)}")
+        return [self._build(x, elem_t, path + (str(i),)) for i, x in enumerate(node)]
 
+    def _build_dict(self, node: Any, t: Any, path: Tuple[str, ...]) -> dict:
+        args = get_args(t)
+        kt = args[0] if args else str
+        vt = args[1] if len(args) > 1 else Any
+        if kt not in (str, Any, object):
+            raise ConfigurationError(f"Only dicts with string keys supported at {'.'.join(path)}")
+        if not isinstance(node, dict):
+            raise ConfigurationError(f"Expected dict at {'.'.join(path)}")
+        return {k: self._build(v, vt, path + (k,)) for k, v in node.items()}
+
+    def _build_union(self, node: Any, t: Any, path: Tuple[str, ...]) -> Any:
+        args = list(get_args(t))
+        if not isinstance(node, dict):
             for cand in args:
                 try:
                     return self._build(node, cand, path)
@@ -250,61 +245,80 @@ class ObjectGraphBuilder:
                     continue
             raise ConfigurationError(f"No union match at {'.'.join(path)}")
 
-        if isinstance(t, type) and issubclass(t, Enum):
-            if isinstance(node, str):
-                try:
-                    return t[node]
-                except Exception:
-                    for e in t:
-                        if str(e.value) == node:
-                            return e
-            raise ConfigurationError(f"Invalid enum at {'.'.join(path)}")
+        if "$type" in node:
+            tn = str(node["$type"])
+            for cand in args:
+                if isinstance(cand, type) and getattr(cand, "__name__", "") == tn:
+                    cleaned = {k: v for k, v in node.items() if k != "$type"}
+                    return self._build(cleaned, cand, path)
+            raise ConfigurationError(f"Discriminator $type did not match at {'.'.join(path)}")
 
-        if isinstance(t, type) and is_dataclass(t):
-            if not isinstance(node, dict):
-                raise ConfigurationError(f"Expected object at {'.'.join(path)}")
-            known = {f.name for f in fields(t)}
-            extra = [k for k in node.keys() if k not in known]
-            if extra:
-                raise ConfigurationError(f"Unknown keys {extra} at {'.'.join(path)}")
+        for cand in args:
             try:
-                dc_hints = typing.get_type_hints(t, include_extras=True)
+                return self._build(node, cand, path)
             except Exception:
-                dc_hints = {}
-            vals: Dict[str, Any] = {}
-            for f in fields(t):
-                if f.name in node:
-                    field_type = dc_hints.get(f.name, f.type)
-                    vals[f.name] = self._build(node[f.name], field_type, path + (f.name,))
-                else:
-                    continue
-            return t(**vals)
+                continue
+        raise ConfigurationError(f"No union match at {'.'.join(path)}")
 
-        if isinstance(t, type):
-            if t in (str, int, float, bool):
-                return self._coerce_prim(node, t, path)
-            if hasattr(t, "__init__"):
-                if not isinstance(node, dict):
-                    raise ConfigurationError(f"Expected object for ctor at {'.'.join(path)}")
-                kwargs: Dict[str, Any] = {}
-                import inspect
-
-                sig = inspect.signature(t.__init__)
-                try:
-                    init_hints = typing.get_type_hints(t.__init__, include_extras=True)
-                except Exception:
-                    init_hints = {}
-                for name, p in sig.parameters.items():
-                    if name in ("self", "cls"):
-                        continue
-                    if name in node:
-                        hint = init_hints.get(name, p.annotation)
-                        kwargs[name] = self._build(
-                            node[name], hint if hint is not inspect._empty else Any, path + (name,)
-                        )
-                return t(**kwargs)
-
+    def _build_type(self, node: Any, t: type, path: Tuple[str, ...]) -> Any:
+        if issubclass(t, Enum):
+            return self._build_enum(node, t, path)
+        if is_dataclass(t):
+            return self._build_dataclass(node, t, path)
+        if t in (str, int, float, bool):
+            return self._coerce_prim(node, t, path)
+        if hasattr(t, "__init__"):
+            return self._build_constructor(node, t, path)
         return node
+
+    def _build_enum(self, node: Any, t: type, path: Tuple[str, ...]) -> Any:
+        if isinstance(node, str):
+            try:
+                return t[node]
+            except Exception:
+                for e in t:
+                    if str(e.value) == node:
+                        return e
+        raise ConfigurationError(f"Invalid enum at {'.'.join(path)}")
+
+    def _build_dataclass(self, node: Any, t: type, path: Tuple[str, ...]) -> Any:
+        if not isinstance(node, dict):
+            raise ConfigurationError(f"Expected object at {'.'.join(path)}")
+        known = {f.name for f in fields(t)}
+        extra = [k for k in node.keys() if k not in known]
+        if extra:
+            raise ConfigurationError(f"Unknown keys {extra} at {'.'.join(path)}")
+        try:
+            dc_hints = typing.get_type_hints(t, include_extras=True)
+        except Exception:
+            dc_hints = {}
+        vals: Dict[str, Any] = {}
+        for f in fields(t):
+            if f.name in node:
+                field_type = dc_hints.get(f.name, f.type)
+                vals[f.name] = self._build(node[f.name], field_type, path + (f.name,))
+        return t(**vals)
+
+    def _build_constructor(self, node: Any, t: type, path: Tuple[str, ...]) -> Any:
+        if not isinstance(node, dict):
+            raise ConfigurationError(f"Expected object for ctor at {'.'.join(path)}")
+        import inspect
+
+        sig = inspect.signature(t.__init__)
+        try:
+            init_hints = typing.get_type_hints(t.__init__, include_extras=True)
+        except Exception:
+            init_hints = {}
+        kwargs: Dict[str, Any] = {}
+        for name, p in sig.parameters.items():
+            if name in ("self", "cls"):
+                continue
+            if name in node:
+                hint = init_hints.get(name, p.annotation)
+                kwargs[name] = self._build(
+                    node[name], hint if hint is not inspect._empty else Any, path + (name,)
+                )
+        return t(**kwargs)
 
     def _split_annotated(self, t: Any) -> Tuple[Any, Tuple[Any, ...]]:
         args = get_args(t)
@@ -353,35 +367,42 @@ class ObjectGraphBuilder:
 
     def _coerce_prim(self, node: Any, t: type, path: Tuple[str, ...]) -> Any:
         if t is str:
-            if isinstance(node, str):
-                return node
-            return str(node)
+            return node if isinstance(node, str) else str(node)
         if t is int:
-            if isinstance(node, int):
-                return node
-            if isinstance(node, str):
-                try:
-                    return int(node.strip())
-                except ValueError:
-                    pass
-            raise ConfigurationError(f"Expected int at {'.'.join(path)}")
+            return self._coerce_int(node, path)
         if t is float:
-            if isinstance(node, (int, float)):
-                return float(node)
-            if isinstance(node, str):
-                try:
-                    return float(node)
-                except Exception:
-                    pass
-            raise ConfigurationError(f"Expected float at {'.'.join(path)}")
+            return self._coerce_float(node, path)
         if t is bool:
-            if isinstance(node, bool):
-                return node
-            if isinstance(node, str):
-                s = node.strip().lower()
-                if s in ("1", "true", "yes", "on", "y", "t"):
-                    return True
-                if s in ("0", "false", "no", "off", "n", "f"):
-                    return False
-            raise ConfigurationError(f"Expected bool at {'.'.join(path)}")
+            return self._coerce_bool(node, path)
         return node
+
+    def _coerce_int(self, node: Any, path: Tuple[str, ...]) -> int:
+        if isinstance(node, int):
+            return node
+        if isinstance(node, str):
+            try:
+                return int(node.strip())
+            except ValueError:
+                pass
+        raise ConfigurationError(f"Expected int at {'.'.join(path)}")
+
+    def _coerce_float(self, node: Any, path: Tuple[str, ...]) -> float:
+        if isinstance(node, (int, float)):
+            return float(node)
+        if isinstance(node, str):
+            try:
+                return float(node)
+            except Exception:
+                pass
+        raise ConfigurationError(f"Expected float at {'.'.join(path)}")
+
+    def _coerce_bool(self, node: Any, path: Tuple[str, ...]) -> bool:
+        if isinstance(node, bool):
+            return node
+        if isinstance(node, str):
+            s = node.strip().lower()
+            if s in ("1", "true", "yes", "on", "y", "t"):
+                return True
+            if s in ("0", "false", "no", "off", "n", "f"):
+                return False
+        raise ConfigurationError(f"Expected bool at {'.'.join(path)}")
