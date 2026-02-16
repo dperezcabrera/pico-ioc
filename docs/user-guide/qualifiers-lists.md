@@ -210,7 +210,7 @@ What if you don't want *all* services, just a specific subset? This is where `Qu
 
 You now know how to register components, configure them, control their lifecycle, and inject specific lists or dictionaries. The final piece of the core user guide is learning how to test your application.
 
-  * Testing Applications: Learn how to use `overrides` and `profiles` to mock dependencies and test your services in isolation. See [Testing Applications](https://www.google.com/search?q=./testing.md).
+  * Testing Applications: Learn how to use `overrides` and `profiles` to mock dependencies and test your services in isolation. See [Testing Applications](./testing.md).
 
 <!-- end list -->
 

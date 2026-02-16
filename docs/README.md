@@ -67,6 +67,7 @@ print(service.get_users())  # "data from DB"
 | 7 | **API Reference** | Decorators, exceptions, protocols | [api-reference/](./api-reference/README.md) |
 | 8 | **FAQ** | Common questions and solutions | [faq.md](./faq.md) |
 | 9 | **Examples** | Complete runnable applications | [examples/](./examples/README.md) |
+| 10 | **Learning Roadmap** | Step-by-step path from zero to advanced | [LEARN.md](./LEARN.md) |
 
 ---
 
@@ -138,5 +139,6 @@ container = init(
 ## Next Steps
 
 1. **New to pico-ioc?** Start with the [Getting Started](./getting-started.md) tutorial
-2. **Coming from Spring/Guice?** Check the [Architecture Comparison](./architecture/comparison.md)
-3. **Building a real app?** See the [Cookbook](./cookbook/README.md) patterns
+2. **Learning from scratch?** Follow the [Learning Roadmap](./LEARN.md) from zero to advanced
+3. **Coming from Spring/Guice?** Check the [Architecture Comparison](./architecture/comparison.md)
+4. **Building a real app?** See the [Cookbook](./cookbook/README.md) patterns
