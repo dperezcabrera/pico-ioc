@@ -25,10 +25,11 @@ This section focuses on the "Why" and the "How" of pico-ioc—intended for contr
 
 ## Table of Contents
 
-- 1. Design Principles (The "Why"): ./design-principles.md
-- 2. Comparison to Other Libraries: ./comparison.md
-- 3. Internals Deep-Dive (The "How"): ./internals.md
-- 4. Architecture Decision Records (ADR Index): ../adr/README.md
+- 1. Philosophy & Architectural Opinions: ./philosophy.md
+- 2. Design Principles (The "Why"): ./design-principles.md
+- 3. Comparison to Other Libraries: ./comparison.md
+- 4. Internals Deep-Dive (The "How"): ./internals.md
+- 5. Architecture Decision Records (ADR Index): ../adr/README.md
 
 ## Conventions Used in This Section
 
@@ -49,7 +50,8 @@ This section focuses on the "Why" and the "How" of pico-ioc—intended for contr
 
 ## How to Use This Section
 
-- Start with design-principles.md to understand motivations and constraints.
+- Start with philosophy.md for the high-level vision, opinions, and trade-offs.
+- Read design-principles.md for the technical rationale behind each feature.
 - Use comparison.md to position pico-ioc among similar solutions.
 - Consult internals.md for deep technical details and implementation notes.
 - Review adr/README.md to trace decisions over time and understand historical context.
