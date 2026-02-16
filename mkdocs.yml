@@ -127,6 +127,13 @@ nav:
   - FAQ: faq.md
   - Learning Roadmap: LEARN.md
 
+  - How-To Guides:
+    - Custom Scopes: how-to/custom-scopes.md
+    - Interceptors: how-to/interceptors.md
+    - Testing: how-to/testing.md
+
+  - Migration Guide: migration.md
+
   - Examples:
     - examples/README.md
     - FastAPI TODO App: examples/fastapi-todo-app.md

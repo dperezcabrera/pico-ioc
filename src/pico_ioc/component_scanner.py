@@ -1,3 +1,10 @@
+"""Module scanning and component discovery.
+
+Provides :class:`CustomScanner` (the extension protocol for custom
+discovery logic) and :class:`ComponentScanner` (the internal engine that
+walks modules and registers decorated classes and functions).
+"""
+
 import inspect
 import os
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
@@ -13,6 +20,18 @@ Provider = Callable[[], Any]
 
 
 class CustomScanner(Protocol):
+    """Protocol for extending component discovery.
+
+    Implement this protocol and pass instances to
+    ``init(custom_scanners=[...])`` to register components based on
+    custom decorators, base classes, or other criteria.
+
+    Methods:
+        should_scan: Return ``True`` if this scanner wants to handle *obj*.
+        scan: Analyse *obj* and return a ``(key, provider, metadata)`` tuple,
+            or ``None`` if the object should be skipped.
+    """
+
     def should_scan(self, obj: Any) -> bool: ...
     def scan(self, obj: Any) -> Optional[Tuple[KeyT, Provider, ProviderMetadata]]: ...
 

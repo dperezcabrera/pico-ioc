@@ -1,3 +1,11 @@
+"""The core dependency injection container.
+
+:class:`PicoContainer` is the central facade of pico-ioc. It provides
+synchronous (``get``) and asynchronous (``aget``) resolution, scope
+management, health checks, statistics, lifecycle management, and
+dependency graph export.
+"""
+
 import contextvars
 import inspect
 from contextlib import contextmanager
@@ -47,6 +55,22 @@ def _iter_configure_methods(obj: Any):
 
 
 class PicoContainer(_ResolutionMixin):
+    """The pico-ioc dependency injection container.
+
+    Created by :func:`init`. Provides synchronous (``get``) and asynchronous
+    (``aget``) resolution, scope management, lifecycle hooks, health checks,
+    and dependency graph export.
+
+    Args:
+        component_factory: The :class:`ComponentFactory` holding all provider
+            bindings.
+        caches: The :class:`ScopedCaches` instance managing instance storage.
+        scopes: The :class:`ScopeManager` coordinating scope activation.
+        observers: Optional list of :class:`ContainerObserver` instances.
+        container_id: Optional explicit container identifier.
+        profiles: Active profile names.
+    """
+
     _container_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("pico_container_id", default=None)
     _container_registry: Dict[str, "PicoContainer"] = {}
 
@@ -87,15 +111,18 @@ class PicoContainer(_ResolutionMixin):
 
     @classmethod
     def get_current(cls) -> Optional["PicoContainer"]:
+        """Return the container that is active in the current context, or ``None``."""
         cid = cls._container_id_var.get()
         return cls._container_registry.get(cid) if cid else None
 
     @classmethod
     def get_current_id(cls) -> Optional[str]:
+        """Return the container ID that is active in the current context, or ``None``."""
         return cls._container_id_var.get()
 
     @classmethod
     def all_containers(cls) -> Dict[str, "PicoContainer"]:
+        """Return a snapshot dict of all live containers, keyed by container ID."""
         return dict(cls._container_registry)
 
     def activate(self) -> contextvars.Token:
@@ -121,6 +148,14 @@ class PicoContainer(_ResolutionMixin):
         return self._caches.for_scope(self.scopes, sc)
 
     def has(self, key: KeyT) -> bool:
+        """Check whether a component is registered for *key*.
+
+        Args:
+            key: The resolution key (type or string).
+
+        Returns:
+            ``True`` if a provider or cached instance exists for *key*.
+        """
         cache = self._cache_for(key)
         return cache.get(key) is not None or self._factory.has(key)
 
@@ -213,6 +248,20 @@ class PicoContainer(_ResolutionMixin):
     @overload
     def get(self, key: str) -> Any: ...
     def get(self, key: KeyT) -> Any:
+        """Resolve a component synchronously.
+
+        Args:
+            key: The type or string key to resolve.
+
+        Returns:
+            The component instance.
+
+        Raises:
+            ProviderNotFoundError: If no provider is bound to *key*.
+            AsyncResolutionError: If the provider returns an awaitable
+                (use :meth:`aget` instead).
+            ComponentCreationError: If the provider fails during creation.
+        """
         instance_or_awaitable, took_ms, was_cached = self._resolve_or_create_internal(key)
 
         if was_cached:
@@ -240,6 +289,22 @@ class PicoContainer(_ResolutionMixin):
         return final_instance
 
     async def aget(self, key: KeyT) -> Any:
+        """Resolve a component asynchronously.
+
+        Awaits any coroutine returned by the provider, ``__ainit__``, and
+        async ``@configure`` methods. Always safe to use, even for sync
+        components.
+
+        Args:
+            key: The type or string key to resolve.
+
+        Returns:
+            The component instance.
+
+        Raises:
+            ProviderNotFoundError: If no provider is bound to *key*.
+            ComponentCreationError: If the provider fails during creation.
+        """
         instance_or_awaitable, took_ms, was_cached = self._resolve_or_create_internal(key)
 
         instance = instance_or_awaitable
@@ -290,6 +355,7 @@ class PicoContainer(_ResolutionMixin):
         return method(**self._resolve_args(deps_requests))
 
     def cleanup_all(self) -> None:
+        """Invoke all ``@cleanup`` methods on cached components (sync)."""
         for obj in self._iterate_cleanup_targets():
             for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
                 meta = getattr(m, PICO_META, {})
@@ -299,6 +365,10 @@ class PicoContainer(_ResolutionMixin):
                         LOGGER.warning(f"Async cleanup method {m} called during sync shutdown. Awaitable ignored.")
 
     async def cleanup_all_async(self) -> None:
+        """Invoke all ``@cleanup`` methods on cached components (async).
+
+        Awaits async cleanup methods and closes the :class:`EventBus` if present.
+        """
         for obj in self._iterate_cleanup_targets():
             for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
                 meta = getattr(m, PICO_META, {})
@@ -327,6 +397,19 @@ class PicoContainer(_ResolutionMixin):
 
     @contextmanager
     def scope(self, name: str, scope_id: Any):
+        """Context manager that activates a scope for the duration of a block.
+
+        Args:
+            name: The scope name (e.g. ``"request"``).
+            scope_id: A unique identifier for this scope instance.
+
+        Yields:
+            This container instance.
+
+        Example:
+            >>> with container.scope("request", request_id):
+            ...     ctx = container.get(RequestContext)
+        """
         tok = self.activate_scope(name, scope_id)
         try:
             yield self
@@ -334,6 +417,11 @@ class PicoContainer(_ResolutionMixin):
             self.deactivate_scope(name, tok)
 
     def health_check(self) -> Dict[str, bool]:
+        """Run all ``@health``-decorated methods and return their results.
+
+        Returns:
+            Dict mapping ``"ClassName.method_name"`` to ``True``/``False``.
+        """
         out: Dict[str, bool] = {}
         for k, obj in self._caches.all_items():
             for name, m in inspect.getmembers(obj, predicate=callable):
@@ -345,6 +433,13 @@ class PicoContainer(_ResolutionMixin):
         return out
 
     def stats(self) -> Dict[str, Any]:
+        """Return container statistics.
+
+        Returns:
+            Dict with keys ``container_id``, ``profiles``,
+            ``uptime_seconds``, ``total_resolves``, ``cache_hits``,
+            ``cache_hit_rate``, and ``registered_components``.
+        """
         import time as _t
 
         resolves = self.context.resolve_count
@@ -361,14 +456,29 @@ class PicoContainer(_ResolutionMixin):
         }
 
     def shutdown(self) -> None:
+        """Synchronously shut down the container.
+
+        Calls all ``@cleanup`` methods and removes the container from the
+        global registry.
+        """
         self.cleanup_all()
         PicoContainer._container_registry.pop(self.container_id, None)
 
     async def ashutdown(self) -> None:
+        """Asynchronously shut down the container.
+
+        Awaits async ``@cleanup`` methods, closes the ``EventBus``, and
+        removes the container from the global registry.
+        """
         await self.cleanup_all_async()
         PicoContainer._container_registry.pop(self.container_id, None)
 
     def build_resolution_graph(self):
+        """Build the static dependency graph from registered metadata.
+
+        Returns:
+            Dict mapping each key to a tuple of its dependency keys.
+        """
         return _build_resolution_graph(self._locator)
 
     def export_graph(
@@ -380,6 +490,18 @@ class PicoContainer(_ResolutionMixin):
         rankdir: str = "LR",
         title: Optional[str] = None,
     ) -> None:
+        """Export the dependency graph as a Graphviz DOT file.
+
+        Args:
+            path: Filesystem path for the output ``.dot`` file.
+            include_scopes: Annotate nodes with their scope.
+            include_qualifiers: Annotate nodes with their qualifiers.
+            rankdir: Graph layout direction (``"LR"`` or ``"TB"``).
+            title: Optional graph title.
+
+        Raises:
+            RuntimeError: If no locator is attached to the container.
+        """
         _export_graph(
             self._locator,
             path,

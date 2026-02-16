@@ -1,3 +1,10 @@
+"""Queryable index of registered component metadata.
+
+The :class:`ComponentLocator` provides a fluent API for filtering and
+querying registered providers by qualifier, primary flag, infra type,
+and other indexed attributes.
+"""
+
 import inspect
 from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
@@ -11,6 +18,16 @@ def _get_signature_static(fn):
 
 
 class ComponentLocator:
+    """Read-only, queryable index of all registered component metadata.
+
+    Built by the :class:`Registrar` after scanning and provider selection.
+    Supports fluent filtering and is used by the container for list injection,
+    type-based lookup, and dependency graph construction.
+
+    Args:
+        metadata: Mapping of resolution keys to :class:`ProviderMetadata`.
+        indexes: Pre-built inverted indexes for fast attribute-based filtering.
+    """
     def __init__(self, metadata: Dict[KeyT, ProviderMetadata], indexes: Dict[str, Dict[Any, List[KeyT]]]) -> None:
         self._metadata = metadata
         self._indexes = indexes

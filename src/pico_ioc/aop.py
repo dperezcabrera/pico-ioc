@@ -1,3 +1,11 @@
+"""Aspect-Oriented Programming support for pico-ioc.
+
+This module provides the AOP infrastructure: the :class:`MethodInterceptor`
+protocol, the :func:`intercepted_by` decorator, the :class:`MethodCtx`
+invocation context, and the :class:`UnifiedComponentProxy` that applies
+interception and lazy-loading transparently.
+"""
+
 import inspect
 import pickle
 import threading
@@ -11,6 +19,24 @@ KeyT = Union[str, type]
 
 
 class MethodCtx:
+    """Invocation context passed to interceptors.
+
+    Carries all information about the method call being intercepted,
+    including a mutable ``local`` dict for sharing state between chained
+    interceptors.
+
+    Attributes:
+        instance: The target object whose method is being called.
+        cls: The type of the target object.
+        method: The bound method being intercepted.
+        name: The method name (e.g. ``"process"``).
+        args: Positional arguments passed to the method.
+        kwargs: Keyword arguments passed to the method.
+        container: The :class:`PicoContainer` that owns the component.
+        local: Mutable dict for interceptor-to-interceptor communication.
+        request_key: The active scope ID, if any (e.g. a request ID).
+    """
+
     __slots__ = ("instance", "cls", "method", "name", "args", "kwargs", "container", "local", "request_key")
 
     def __init__(
@@ -37,15 +63,48 @@ class MethodCtx:
 
 
 class MethodInterceptor(Protocol):
+    """Protocol that interceptors must implement.
+
+    Interceptors form a chain around a method call. Each interceptor
+    receives the :class:`MethodCtx` and a ``call_next`` function to
+    invoke the next interceptor (or the real method)::
+
+        @component
+        class LoggingInterceptor:
+            def invoke(self, ctx: MethodCtx, call_next):
+                print(f"Calling {ctx.name}")
+                result = call_next(ctx)
+                print(f"{ctx.name} returned {result}")
+                return result
+    """
+
     def invoke(self, ctx: MethodCtx, call_next: Callable[[MethodCtx], Any]) -> Any: ...
 
 
 class ContainerObserver(Protocol):
+    """Protocol for observing container resolution events.
+
+    Implement this protocol and pass instances to ``init(observers=[...])``
+    to receive callbacks on every component resolution and cache hit.
+    """
+
     def on_resolve(self, key: KeyT, took_ms: float): ...
     def on_cache_hit(self, key: KeyT): ...
 
 
 def dispatch_method(interceptors: List["MethodInterceptor"], ctx: MethodCtx) -> Any:
+    """Execute an interceptor chain around a method call.
+
+    Interceptors are invoked in order. The last ``call_next`` invocation
+    calls the real method with ``ctx.args`` and ``ctx.kwargs``.
+
+    Args:
+        interceptors: Ordered list of interceptor instances.
+        ctx: The method invocation context.
+
+    Returns:
+        The return value of the (possibly intercepted) method call.
+    """
     idx = 0
 
     def call_next(next_ctx: MethodCtx) -> Any:
@@ -60,6 +119,29 @@ def dispatch_method(interceptors: List["MethodInterceptor"], ctx: MethodCtx) -> 
 
 
 def intercepted_by(*interceptor_classes: type["MethodInterceptor"]):
+    """Decorator that attaches interceptors to a method.
+
+    Apply to individual methods on a ``@component`` class. Each interceptor
+    class must be a container-managed component implementing
+    :class:`MethodInterceptor`::
+
+        @component
+        class OrderService:
+            @intercepted_by(LoggingInterceptor, SecurityInterceptor)
+            def place_order(self, order: Order) -> Receipt:
+                ...
+
+    Args:
+        *interceptor_classes: One or more interceptor classes. They are
+            resolved from the container at call time and executed in order.
+
+    Returns:
+        A decorator that attaches the interceptor metadata to the method.
+
+    Raises:
+        TypeError: If no interceptor classes are provided, or if any argument
+            is not a class, or if the target is not a callable.
+    """
     if not interceptor_classes:
         raise TypeError("intercepted_by requires at least one interceptor class")
     for ic in interceptor_classes:
@@ -90,6 +172,24 @@ def _gather_interceptors_for_method(target_cls: type, name: str) -> Tuple[type, 
 
 
 def health(fn):
+    """Mark a method as a health-check endpoint.
+
+    Methods decorated with ``@health`` are discovered by
+    ``container.health_check()`` and invoked to produce a boolean
+    health status::
+
+        @component
+        class DatabasePool:
+            @health
+            def is_healthy(self) -> bool:
+                return self.pool.is_connected()
+
+    Args:
+        fn: The method to decorate.
+
+    Returns:
+        The same method with health-check metadata attached.
+    """
     from .constants import PICO_META
 
     meta = getattr(fn, PICO_META, None)
@@ -101,6 +201,33 @@ def health(fn):
 
 
 class UnifiedComponentProxy(_ProxyProtocolMixin):
+    """Transparent proxy for lazy initialisation and AOP interception.
+
+    This proxy is inserted between the container and the real component
+    instance. It serves two roles:
+
+    * **Lazy loading** (``lazy=True``): the real object is created only on
+      the first attribute access, via ``object_creator``.
+    * **AOP interception** (``@intercepted_by``): method calls are routed
+      through the interceptor chain before reaching the real object.
+
+    The proxy delegates all attribute access, operators, and protocol methods
+    to the underlying target, making it transparent to callers.
+
+    Args:
+        container: The owning :class:`PicoContainer` (must not be ``None``).
+        target: An already-created target instance (used for AOP wrapping).
+        object_creator: A zero-argument callable that creates the target
+            (used for lazy loading). Exactly one of *target* or
+            *object_creator* must be provided.
+        component_key: The resolution key for this component (used for
+            scope-aware interceptor caching).
+
+    Raises:
+        ValueError: If *container* is ``None``, or if both *target* and
+            *object_creator* are ``None``.
+    """
+
     __slots__ = ("_target", "_creator", "_container", "_cache", "_lock", "_component_key")
 
     def __init__(
