@@ -9,6 +9,7 @@ from typing import Any, Callable, List, Optional
 import pytest
 
 import pico_ioc.event_bus
+from conftest import ListLogHandler, log_capture
 from pico_ioc import (
     AutoSubscriberMixin,
     ComponentCreationError,
@@ -36,23 +37,10 @@ from pico_ioc import (
     subscribe,
 )
 
-log_capture = []
-
-
-class ListLogHandler(logging.Handler):
-    def emit(self, record):
-        log_capture.append(self.format(record))
-
-
 test_logger = logging.getLogger("TestCoverageLogger")
 test_logger.handlers.clear()
 test_logger.addHandler(ListLogHandler())
 test_logger.setLevel(logging.INFO)
-
-
-@pytest.fixture(autouse=True)
-def reset_logging_capture():
-    log_capture.clear()
 
 
 @component

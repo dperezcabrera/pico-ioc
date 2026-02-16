@@ -10,6 +10,7 @@ from typing import Annotated, Any, Callable, List, Optional, Protocol
 
 import pytest
 
+from conftest import ListLogHandler, log_capture
 from pico_ioc import (
     ContextVarScope,
     EnvSource,
@@ -30,23 +31,11 @@ from pico_ioc import (
 )
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-log_capture = []
-
-
-class ListLogHandler(logging.Handler):
-    def emit(self, record):
-        log_capture.append(self.format(record))
-
 
 LOGGER = logging.getLogger("pico_ioc")
 test_logger = logging.getLogger("TestLogger")
 test_logger.addHandler(ListLogHandler())
 test_logger.setLevel(logging.INFO)
-
-
-@pytest.fixture(autouse=True)
-def reset_logging_capture():
-    log_capture.clear()
 
 
 @pytest.fixture
