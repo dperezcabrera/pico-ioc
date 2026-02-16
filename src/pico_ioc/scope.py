@@ -1,3 +1,11 @@
+"""Scope management for component lifecycles.
+
+Provides :class:`ScopeProtocol`, :class:`ContextVarScope`,
+:class:`ScopeManager`, and :class:`ScopedCaches` -- the machinery that ties
+component instances to a lifecycle (singleton, prototype, request, session,
+transaction, or custom scopes).
+"""
+
 import contextvars
 import inspect
 import logging
@@ -10,10 +18,25 @@ _logger = logging.getLogger(__name__)
 
 
 class ScopeProtocol:
+    """Protocol for scope implementations.
+
+    A scope implementation must provide a ``get_id()`` method that returns the
+    current scope identifier (or ``None`` if the scope is not active).
+    """
+
     def get_id(self) -> Any | None: ...
 
 
 class ContextVarScope(ScopeProtocol):
+    """Scope implementation backed by a :class:`contextvars.ContextVar`.
+
+    Each scope name (e.g. ``"request"``) gets its own ``ContextVar``. The
+    scope is activated by setting the var to a scope ID and deactivated by
+    resetting it.
+
+    Args:
+        var: The context variable that stores the scope identifier.
+    """
     def __init__(self, var: contextvars.ContextVar) -> None:
         self._var = var
 
@@ -56,6 +79,13 @@ class _NoCacheContainer(ComponentContainer):
 
 
 class ScopeManager:
+    """Registry and coordinator for all scope implementations.
+
+    Pre-registers the built-in context-aware scopes (``request``, ``session``,
+    ``websocket``, ``transaction``) and allows custom scopes to be added via
+    :meth:`register_scope`.
+    """
+
     def __init__(self) -> None:
         self._scopes: Dict[str, ScopeProtocol] = {
             "request": ContextVarScope(contextvars.ContextVar("pico_request_id", default=None)),
@@ -65,6 +95,15 @@ class ScopeManager:
         }
 
     def register_scope(self, name: str) -> None:
+        """Register a custom scope backed by a new ``ContextVar``.
+
+        Args:
+            name: The scope name (must be a non-empty string, not
+                ``'singleton'`` or ``'prototype'``).
+
+        Raises:
+            ScopeError: If *name* is empty or is a reserved scope name.
+        """
         if not isinstance(name, str) or not name:
             raise ScopeError("Scope name must be a non-empty string")
         if name in (SCOPE_SINGLETON, SCOPE_PROTOTYPE):
@@ -117,6 +156,12 @@ class ScopeManager:
 
 
 class ScopedCaches:
+    """Manages component instance storage across all scopes.
+
+    Maintains a singleton cache, per-scope-id caches for context-aware scopes,
+    and a no-op cache for prototype scope.
+    """
+
     def __init__(self) -> None:
         self._singleton = ComponentContainer()
         self._by_scope: Dict[str, Dict[Any, ComponentContainer]] = {}
