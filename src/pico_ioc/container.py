@@ -1,31 +1,16 @@
 import contextvars
-import functools
 import inspect
 from contextlib import contextmanager
-from typing import (
-    Annotated,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Set,
-    Tuple,
-    Type,
-    Union,
-    get_args,
-    get_origin,
-    overload,
-)
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union, overload
 
 from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import ContainerObserver, UnifiedComponentProxy
 from .constants import LOGGER, PICO_META, SCOPE_SINGLETON
-from .exceptions import AsyncResolutionError, ComponentCreationError, ConfigurationError, ProviderNotFoundError
-from .factory import ComponentFactory, ProviderMetadata
+from .container_resolution import _ResolutionMixin
+from .exceptions import AsyncResolutionError, ComponentCreationError, ProviderNotFoundError
+from .factory import ComponentFactory
+from .graph_export import _build_resolution_graph
+from .graph_export import export_graph as _export_graph
 from .locator import ComponentLocator
 from .scope import ScopedCaches, ScopeManager
 
@@ -61,47 +46,7 @@ def _iter_configure_methods(obj: Any):
             yield m
 
 
-def _build_resolution_graph(loc) -> Dict[KeyT, Tuple[KeyT, ...]]:
-    if not loc:
-        return {}
-
-    graph: Dict[KeyT, Tuple[KeyT, ...]] = {}
-    for key, md in list(loc._metadata.items()):
-        deps: List[KeyT] = []
-        for d in loc.dependency_keys_for_static(md):
-            deps.append(_map_dep_to_bound_key(loc, d))
-        graph[key] = tuple(deps)
-    return graph
-
-
-def _map_dep_to_bound_key(loc, dep_key: KeyT) -> KeyT:
-    if dep_key in loc._metadata:
-        return dep_key
-
-    if isinstance(dep_key, str):
-        mapped = loc.find_key_by_name(dep_key)
-        if mapped is not None:
-            return mapped
-
-    if isinstance(dep_key, type):
-        return _find_subtype_key(loc, dep_key)
-    return dep_key
-
-
-def _find_subtype_key(loc, dep_key: type) -> KeyT:
-    for k, md in loc._metadata.items():
-        typ = md.provided_type or md.concrete_class
-        if not isinstance(typ, type):
-            continue
-        try:
-            if issubclass(typ, dep_key):
-                return k
-        except Exception:
-            continue
-    return dep_key
-
-
-class PicoContainer:
+class PicoContainer(_ResolutionMixin):
     _container_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("pico_container_id", default=None)
     _container_registry: Dict[str, "PicoContainer"] = {}
 
@@ -328,17 +273,6 @@ class PicoContainer:
 
         return final_instance
 
-    def _maybe_wrap_with_aspects(self, key, instance: Any) -> Any:
-        if isinstance(instance, UnifiedComponentProxy):
-            return instance
-        cls = type(instance)
-        for _, fn in inspect.getmembers(
-            cls, predicate=lambda m: inspect.isfunction(m) or inspect.ismethod(m) or inspect.iscoroutinefunction(m)
-        ):
-            if getattr(fn, "_pico_interceptors_", None):
-                return UnifiedComponentProxy(container=self, target=instance, component_key=key)
-        return instance
-
     def _iterate_cleanup_targets(self) -> Iterable[Any]:
         yield from (obj for _, obj in self._caches.all_items())
 
@@ -446,155 +380,11 @@ class PicoContainer:
         rankdir: str = "LR",
         title: Optional[str] = None,
     ) -> None:
-
-        if not self._locator:
-            raise RuntimeError("No locator attached; cannot export dependency graph.")
-
-        md_by_key = self._locator._metadata
-        graph = _build_resolution_graph(self._locator)
-
-        lines: List[str] = []
-        lines.append("digraph Pico {")
-        lines.append(f'  rankdir="{rankdir}";')
-        lines.append("  node [shape=box, fontsize=10];")
-        if title:
-            lines.append('  labelloc="t";')
-            lines.append(f'  label="{title}";')
-
-        def _node_id(k: KeyT) -> str:
-            return f"n_{abs(hash(k))}"
-
-        def _node_label(k: KeyT) -> str:
-            name = getattr(k, "__name__", str(k))
-            md = md_by_key.get(k)
-            parts = [name]
-            if md is not None and include_scopes:
-                parts.append(f"[scope={md.scope}]")
-            if md is not None and include_qualifiers and md.qualifiers:
-                q = ",".join(sorted(md.qualifiers))
-                parts.append(f"\\n⟨{q}⟩")
-            return "\\n".join(parts)
-
-        for key in md_by_key.keys():
-            nid = _node_id(key)
-            label = _node_label(key)
-            lines.append(f'  {nid} [label="{label}"];')
-
-        for parent, deps in graph.items():
-            pid = _node_id(parent)
-            for child in deps:
-                cid = _node_id(child)
-                lines.append(f"  {pid} -> {cid};")
-
-        lines.append("}")
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-
-    def _resolve_args(self, dependencies: Tuple[DependencyRequest, ...]) -> Dict[str, Any]:
-        kwargs: Dict[str, Any] = {}
-        if not dependencies or self._locator is None:
-            return kwargs
-
-        for dep in dependencies:
-            if dep.is_list:
-                self._resolve_list_dep(dep, kwargs)
-            elif dep.is_dict:
-                self._resolve_dict_dep(dep, kwargs)
-            else:
-                self._resolve_single_dep(dep, kwargs)
-        return kwargs
-
-    def _resolve_list_dep(self, dep: DependencyRequest, kwargs: Dict[str, Any]) -> None:
-        keys: Tuple[KeyT, ...] = ()
-        if isinstance(dep.key, type):
-            keys = tuple(self._locator.collect_by_type(dep.key, dep.qualifier))
-        kwargs[dep.parameter_name] = [self.get(k) for k in keys]
-
-    def _resolve_dict_dep(self, dep: DependencyRequest, kwargs: Dict[str, Any]) -> None:
-        value_type = dep.key
-        key_type = dep.dict_key_type
-        result_map: Dict[Any, Any] = {}
-
-        keys_to_resolve: Tuple[KeyT, ...] = ()
-        if isinstance(value_type, type):
-            keys_to_resolve = tuple(self._locator.collect_by_type(value_type, dep.qualifier))
-
-        for comp_key in keys_to_resolve:
-            instance = self.get(comp_key)
-            md = self._locator._metadata.get(comp_key)
-            if md is None:
-                continue
-
-            dict_key = self._extract_dict_key(comp_key, md, key_type)
-            if dict_key is not None:
-                if (key_type is type or key_type is Type) and not isinstance(dict_key, type):
-                    continue
-                result_map[dict_key] = instance
-
-        kwargs[dep.parameter_name] = result_map
-
-    def _extract_dict_key(self, comp_key: KeyT, md: "ProviderMetadata", key_type: Any) -> Any:
-        if key_type is str or key_type is Any:
-            if md.pico_name is not None:
-                return md.pico_name
-            if isinstance(comp_key, str):
-                return comp_key
-            return getattr(comp_key, "__name__", str(comp_key))
-        if key_type is type or key_type is Type:
-            return md.concrete_class or md.provided_type
-        return None
-
-    def _resolve_single_dep(self, dep: DependencyRequest, kwargs: Dict[str, Any]) -> None:
-        primary_key = dep.key
-        if isinstance(primary_key, str):
-            mapped = self._locator.find_key_by_name(primary_key)
-            primary_key = mapped if mapped is not None else primary_key
-
-        try:
-            kwargs[dep.parameter_name] = self.get(primary_key)
-        except Exception as first_error:
-            if primary_key != dep.parameter_name:
-                try:
-                    kwargs[dep.parameter_name] = self.get(dep.parameter_name)
-                except Exception:
-                    raise first_error from None
-            else:
-                raise first_error from None
-
-    def build_class(self, cls: type, locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]) -> Any:
-        init = cls.__init__
-        if init is object.__init__:
-            inst = cls()
-        else:
-            deps = self._resolve_args(dependencies)
-            inst = cls(**deps)
-
-        ainit = getattr(inst, "__ainit__", None)
-        has_async = callable(ainit) and inspect.iscoroutinefunction(ainit)
-
-        if has_async:
-
-            async def runner():
-                if callable(ainit):
-                    kwargs = {}
-                    try:
-                        ainit_deps = analyze_callable_dependencies(ainit)
-                        kwargs = self._resolve_args(ainit_deps)
-                    except Exception:
-                        kwargs = {}
-                    res = ainit(**kwargs)
-                    if inspect.isawaitable(res):
-                        await res
-                return inst
-
-            return runner()
-
-        return inst
-
-    def build_method(
-        self, fn: Callable[..., Any], locator: ComponentLocator, dependencies: Tuple[DependencyRequest, ...]
-    ) -> Any:
-        deps = self._resolve_args(dependencies)
-        obj = fn(**deps)
-        return obj
+        _export_graph(
+            self._locator,
+            path,
+            include_scopes=include_scopes,
+            include_qualifiers=include_qualifiers,
+            rankdir=rankdir,
+            title=title,
+        )

@@ -12,7 +12,8 @@ from .api import (
 )
 from .component_scanner import CustomScanner
 from .config_builder import ContextConfig, EnvSource, FileSource, FlatDictSource, configuration
-from .config_runtime import DictSource, Discriminator, JsonTreeSource, Value, YamlTreeSource
+from .config_runtime import Discriminator, Value
+from .config_sources import DictSource, JsonTreeSource, YamlTreeSource
 from .constants import LOGGER, LOGGER_NAME, PICO_INFRA, PICO_KEY, PICO_META, PICO_NAME
 from .container import PicoContainer
 from .event_bus import AutoSubscriberMixin, ErrorPolicy, Event, EventBus, ExecPolicy, subscribe
