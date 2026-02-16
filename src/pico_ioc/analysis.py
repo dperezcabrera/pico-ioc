@@ -144,8 +144,9 @@ def _classify_collection(base_type: Any) -> Tuple[bool, bool, Any, Any]:
     return False, False, None, None
 
 
-def _resolve_key(is_list: bool, is_dict: bool, elem_t: Any, dict_key_t: Any,
-                 base_type: Any, ann: Any, name: str) -> Tuple[KeyT, Any]:
+def _resolve_key(
+    is_list: bool, is_dict: bool, elem_t: Any, dict_key_t: Any, base_type: Any, ann: Any, name: str
+) -> Tuple[KeyT, Any]:
     if is_list:
         return (elem_t if isinstance(elem_t, type) else Any), None
     if is_dict:
