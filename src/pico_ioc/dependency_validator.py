@@ -60,51 +60,66 @@ class DependencyValidator:
         errors: List[str] = []
 
         for k, md in self._metadata.items():
-            if md.infra == "configuration":
+            if self._should_skip_component(md):
                 continue
 
-            if not md.dependencies and md.infra not in ("configured", "component") and not md.override:
-                continue
-            if md.infra == "component" and md.concrete_class and md.concrete_class.__init__ is object.__init__:
-                continue
-
-            loc_name = f"component {_fmt(k)}"
-            if md.factory_method:
-                loc_name = f"factory method {md.factory_method}"
+            loc_name = f"factory method {md.factory_method}" if md.factory_method else f"component {_fmt(k)}"
 
             for dep in md.dependencies:
-                if dep.is_optional:
-                    continue
-
-                if dep.is_list:
-                    if dep.qualifier:
-                        if (
-                            not self._locator.collect_by_type(dep.key, dep.qualifier)
-                            and isinstance(dep.key, type)
-                            and not _skip_type(dep.key)
-                        ):
-                            errors.append(
-                                f"{_fmt(k)} ({loc_name}) expects List[{_fmt(dep.key)}] with qualifier '{dep.qualifier}' but no matching components exist"
-                            )
-                    continue
-
-                dep_key = dep.key
-                if isinstance(dep_key, str):
-                    key_found_by_name = self._find_md_for_name(dep_key)
-                    directly_bound = dep_key in self._metadata or self._factory.has(dep_key)
-                    if not key_found_by_name and not directly_bound:
-                        errors.append(f"{_fmt(k)} ({loc_name}) depends on string key '{dep_key}' which is not bound")
-                    continue
-
-                if isinstance(dep_key, type) and not _skip_type(dep_key):
-                    dep_key_found = self._factory.has(dep_key) or dep_key in self._metadata
-                    if not dep_key_found:
-                        assignable_md = self._find_md_for_type(dep_key)
-                        if assignable_md is None:
-                            by_name_key = self._find_md_for_name(getattr(dep_key, "__name__", ""))
-                            if by_name_key is None:
-                                errors.append(f"{_fmt(k)} ({loc_name}) depends on {_fmt(dep_key)} which is not bound")
-                    continue
+                error = self._validate_dependency(k, dep, loc_name)
+                if error:
+                    errors.append(error)
 
         if errors:
             raise InvalidBindingError(errors)
+
+    def _should_skip_component(self, md: ProviderMetadata) -> bool:
+        if md.infra == "configuration":
+            return True
+        if not md.dependencies and md.infra not in ("configured", "component") and not md.override:
+            return True
+        if md.infra == "component" and md.concrete_class and md.concrete_class.__init__ is object.__init__:
+            return True
+        return False
+
+    def _validate_dependency(self, k: KeyT, dep: DependencyRequest, loc_name: str) -> Optional[str]:
+        if dep.is_optional:
+            return None
+
+        if dep.is_list:
+            return self._validate_list_dep(k, dep, loc_name)
+
+        dep_key = dep.key
+        if isinstance(dep_key, str):
+            return self._validate_str_dep(k, dep_key, loc_name)
+
+        if isinstance(dep_key, type) and not _skip_type(dep_key):
+            return self._validate_type_dep(k, dep_key, loc_name)
+        return None
+
+    def _validate_list_dep(self, k: KeyT, dep: DependencyRequest, loc_name: str) -> Optional[str]:
+        if not dep.qualifier:
+            return None
+        if (
+            not self._locator.collect_by_type(dep.key, dep.qualifier)
+            and isinstance(dep.key, type)
+            and not _skip_type(dep.key)
+        ):
+            return f"{_fmt(k)} ({loc_name}) expects List[{_fmt(dep.key)}] with qualifier '{dep.qualifier}' but no matching components exist"
+        return None
+
+    def _validate_str_dep(self, k: KeyT, dep_key: str, loc_name: str) -> Optional[str]:
+        key_found_by_name = self._find_md_for_name(dep_key)
+        directly_bound = dep_key in self._metadata or self._factory.has(dep_key)
+        if not key_found_by_name and not directly_bound:
+            return f"{_fmt(k)} ({loc_name}) depends on string key '{dep_key}' which is not bound"
+        return None
+
+    def _validate_type_dep(self, k: KeyT, dep_key: type, loc_name: str) -> Optional[str]:
+        if self._factory.has(dep_key) or dep_key in self._metadata:
+            return None
+        if self._find_md_for_type(dep_key) is not None:
+            return None
+        if self._find_md_for_name(getattr(dep_key, "__name__", "")) is not None:
+            return None
+        return f"{_fmt(k)} ({loc_name}) depends on {_fmt(dep_key)} which is not bound"

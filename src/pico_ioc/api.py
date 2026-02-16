@@ -77,12 +77,7 @@ def init(
     custom_scanners: Optional[List[CustomScanner]] = None,
 ) -> PicoContainer:
     active = tuple(p.strip() for p in profiles if p)
-
-    allowed_set = set(a.strip() for a in allowed_profiles) if allowed_profiles is not None else None
-    if allowed_set is not None:
-        unknown = set(active) - allowed_set
-        if unknown:
-            raise ConfigurationError(f"Unknown profiles: {sorted(unknown)}; allowed: {sorted(allowed_set)}")
+    _validate_profiles(active, allowed_profiles)
 
     factory = ComponentFactory()
     caches = ScopedCaches()
@@ -118,33 +113,42 @@ def init(
     pico.attach_locator(locator)
     _fail_fast_cycle_check(pico)
 
-    if not validate_only:
-        eager_singletons = []
-        for key, md in locator._metadata.items():
-            if md.scope == SCOPE_SINGLETON and not md.lazy:
-                cache = pico._cache_for(key)
-                instance = cache.get(key)
-                if instance is None:
-                    instance = pico.get(key)
-                    eager_singletons.append(instance)
-                else:
-                    eager_singletons.append(instance)
-
-        configure_awaitables = []
-        for instance in eager_singletons:
-            res = pico._run_configure_methods(instance)
-            if inspect.isawaitable(res):
-                configure_awaitables.append(res)
-
-        if configure_awaitables:
-            raise ConfigurationError(
-                "Sync init() found eagerly loaded singletons with async @configure methods. "
-                "This can be caused by an async __ainit__ or async @configure. "
-                "Use an async main function and await pico.aget() for those components, "
-                "or mark them as lazy=True."
-            )
-
+    _eagerly_resolve_singletons(pico, locator)
     return pico
+
+
+def _validate_profiles(active: Tuple[str, ...], allowed_profiles: Optional[Iterable[str]]) -> None:
+    if allowed_profiles is None:
+        return
+    allowed_set = set(a.strip() for a in allowed_profiles)
+    unknown = set(active) - allowed_set
+    if unknown:
+        raise ConfigurationError(f"Unknown profiles: {sorted(unknown)}; allowed: {sorted(allowed_set)}")
+
+
+def _eagerly_resolve_singletons(pico: PicoContainer, locator: ComponentLocator) -> None:
+    eager_singletons = []
+    for key, md in locator._metadata.items():
+        if md.scope == SCOPE_SINGLETON and not md.lazy:
+            cache = pico._cache_for(key)
+            instance = cache.get(key)
+            if instance is None:
+                instance = pico.get(key)
+            eager_singletons.append(instance)
+
+    configure_awaitables = []
+    for instance in eager_singletons:
+        res = pico._run_configure_methods(instance)
+        if inspect.isawaitable(res):
+            configure_awaitables.append(res)
+
+    if configure_awaitables:
+        raise ConfigurationError(
+            "Sync init() found eagerly loaded singletons with async @configure methods. "
+            "This can be caused by an async __ainit__ or async @configure. "
+            "Use an async main function and await pico.aget() for those components, "
+            "or mark them as lazy=True."
+        )
 
 
 def _find_cycle(graph: Dict[KeyT, Tuple[KeyT, ...]]) -> Optional[Tuple[KeyT, ...]]:
