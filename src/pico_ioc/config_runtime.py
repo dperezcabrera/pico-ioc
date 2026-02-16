@@ -315,9 +315,7 @@ class ObjectGraphBuilder:
                 continue
             if name in node:
                 hint = init_hints.get(name, p.annotation)
-                kwargs[name] = self._build(
-                    node[name], hint if hint is not inspect._empty else Any, path + (name,)
-                )
+                kwargs[name] = self._build(node[name], hint if hint is not inspect._empty else Any, path + (name,))
         return t(**kwargs)
 
     def _split_annotated(self, t: Any) -> Tuple[Any, Tuple[Any, ...]]:
