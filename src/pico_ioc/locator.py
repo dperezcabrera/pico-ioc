@@ -28,6 +28,7 @@ class ComponentLocator:
         metadata: Mapping of resolution keys to :class:`ProviderMetadata`.
         indexes: Pre-built inverted indexes for fast attribute-based filtering.
     """
+
     def __init__(self, metadata: Dict[KeyT, ProviderMetadata], indexes: Dict[str, Dict[Any, List[KeyT]]]) -> None:
         self._metadata = metadata
         self._indexes = indexes

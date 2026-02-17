@@ -1,0 +1,1 @@
+nada de diffs, pon funciones completas bien tabuladas, indica la clase a la que peretenece si existe y el fichero, no pongas comentarios en el codigo
