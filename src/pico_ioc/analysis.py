@@ -52,6 +52,7 @@ class DependencyRequest:
         is_dict: ``True`` if the parameter expects a ``Dict[K, V]`` mapping.
         dict_key_type: The key type of the dict (e.g. ``str``, ``type``).
     """
+
     parameter_name: str
     key: KeyT
     is_list: bool = False

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pico-ioc Network Interactive</title>
+    <style>
+        /* CSS Integrado */
+        body {
+            cursor: none;
+            margin: 0;
+            overflow: hidden; /* Evita barras de desplazamiento */
+            background-color: #0d1a2d; /* El color oscuro del fondo */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            /* cursor: none; <-- Eliminado para que el cursor sea visible */
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .text-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* Centra el texto */
+            color: #e0ffff; /* Un cian muy claro para el texto */
+            font-size: 5em; /* Tamaño grande para el texto */
+            font-weight: bold;
+            text-shadow: 0 0 15px #00ffff, 0 0 30px #00ffff; /* Efecto glow */
+            pointer-events: none; /* Asegura que el ratón interactúe con el canvas debajo */
+            letter-spacing: 0.05em; /* Espaciado sutil entre letras */
+            white-space: nowrap; /* Evita que el texto se rompa en varias líneas */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="networkCanvas"></canvas>
+    <div class="text-overlay">pico-ioc</div>
+
+    <script>
+        // JavaScript Integrado
+        const canvas = document.getElementById('networkCanvas');
+        const ctx = canvas.getContext('2d');
+        let nodes = [];
+        const numNodes = 80; // ¡Más nodos! Aumentado de 45 a 80
+        const connectionDistance = 200; // Distancia máxima para conectar nodos (aumentada para más conexiones)
+        const repulsionRadius = 120; // Radio alrededor del cursor para repulsión
+        const repulsionStrength = 8; // Fuerza de repulsión
+        const friction = 0.96; // Fricción para ralentizar los nodos
+        const nodeBaseRadius = 2; // Radio base de los nodos
+        const nodeMaxRadius = 4; // Radio máximo (para el 3D)
+        const nodeSpeed = 0.5; // Velocidad de movimiento aleatorio inicial
+        const attractionStrength = 0.0005; // Fuerza para que los nodos no se alejen demasiado
+
+        let mouse = { x: null, y: null };
+
+        // --- Funciones de Utilidad ---
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (nodes.length === 0) {
+                initNodes();
+            } else {
+                nodes.forEach(node => {
+                    if (node.x < 0) node.x = 0;
+                    if (node.x > canvas.width) node.x = canvas.width;
+                    if (node.y < 0) node.y = 0;
+                    if (node.y > canvas.height) node.y = canvas.height;
+                });
+            }
+        }
+
+        // --- Clase Node ---
+        function Node(x, y, z) {
+            this.x = x;
+            this.y = y;
+            this.z = z; // Simula profundidad (0 = cerca, 100 = lejos)
+            this.radius = nodeBaseRadius + (nodeMaxRadius - nodeBaseRadius) * (1 - this.z / 100);
+            this.vx = (Math.random() - 0.5) * nodeSpeed;
+            this.vy = (Math.random() - 0.5) * nodeSpeed;
+            this.homeX = x;
+            this.homeY = y;
+        }
+
+        Node.prototype.draw = function() {
+            const scale = 1 - (this.z / 100);
+            const currentRadius = this.radius * scale;
+
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, currentRadius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0, 255, 255, ${0.4 + 0.6 * scale})`;
+            ctx.shadowBlur = 10 * scale;
+            ctx.shadowColor = '#00ffff';
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        };
+
+        Node.prototype.update = function() {
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // Repulsión del ratón
+            if (mouse.x !== null && mouse.y !== null) {
+                const dx = this.x - mouse.x;
+                const dy = this.y - mouse.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < repulsionRadius) {
+                    const angle = Math.atan2(dy, dx);
+                    const force = (repulsionRadius - dist) / repulsionRadius * repulsionStrength;
+                    this.vx += Math.cos(angle) * force;
+                    this.vy += Math.sin(angle) * force;
+                }
+            }
+
+            // Atracción general (para que no se dispersen demasiado y formen una red)
+            this.vx -= (this.x - this.homeX) * attractionStrength;
+            this.vy -= (this.y - this.homeY) * attractionStrength;
+
+            // Bordes del canvas (rebotar)
+            if (this.x < 0 || this.x > canvas.width) {
+                this.vx *= -1;
+                if (this.x < 0) this.x = 0;
+                if (this.x > canvas.width) this.x = canvas.width;
+            }
+            if (this.y < 0 || this.y > canvas.height) {
+                this.vy *= -1;
+                if (this.y < 0) this.y = 0;
+                if (this.y > canvas.height) this.y = canvas.height;
+            }
+
+            // Aplicar fricción
+            this.vx *= friction;
+            this.vy *= friction;
+
+            // Asegurarse de que no se detengan completamente
+            if (Math.abs(this.vx) < 0.01) this.vx = (Math.random() - 0.5) * 0.1;
+            if (Math.abs(this.vy) < 0.01) this.vy = (Math.random() - 0.5) * 0.1;
+        };
+
+        // --- Inicialización de Nodos ---
+        function initNodes() {
+            nodes = [];
+            for (let i = 0; i < numNodes; i++) {
+                nodes.push(new Node(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height,
+                    Math.random() * 100
+                ));
+            }
+        }
+
+        // --- Bucle de Animación ---
+        function animate() {
+            requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Borrar canvas
+
+            // Dibujar conexiones
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const node1 = nodes[i];
+                    const node2 = nodes[j];
+                    const dx = node1.x - node2.x;
+                    const dy = node1.y - node2.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < connectionDistance) {
+                        const opacity = 1 - (dist / connectionDistance);
+                        const avgZ = (node1.z + node2.z) / 2;
+                        const depthOpacity = 1 - (avgZ / 100);
+
+                        ctx.beginPath();
+                        ctx.moveTo(node1.x, node1.y);
+                        ctx.lineTo(node2.x, node2.y);
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${opacity * depthOpacity * 0.8})`;
+                        ctx.lineWidth = 1 * depthOpacity;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Actualizar y dibujar nodos
+            nodes.forEach(node => {
+                node.update();
+                node.draw();
+            });
+        }
+
+        // --- Eventos ---
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = event.clientX;
+            mouse.y = event.clientY;
+        });
+
+        window.addEventListener('mouseout', () => {
+            mouse.x = null; // Resetear la posición del ratón al salir del canvas
+            mouse.y = null;
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Inicio ---
+        resizeCanvas();
+        animate();
+    </script>
+</body>
+</html>

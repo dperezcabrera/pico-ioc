@@ -37,6 +37,7 @@ class ContextVarScope(ScopeProtocol):
     Args:
         var: The context variable that stores the scope identifier.
     """
+
     def __init__(self, var: contextvars.ContextVar) -> None:
         self._var = var
 
