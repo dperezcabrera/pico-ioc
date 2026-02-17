@@ -104,10 +104,10 @@ class PicoContainer(_ResolutionMixin):
 
     @staticmethod
     def _generate_container_id() -> str:
-        import random as _r
+        import secrets
         import time as _t
 
-        return f"c{_t.time_ns():x}{_r.randrange(1 << 16):04x}"
+        return f"c{_t.time_ns():x}{secrets.randbits(16):04x}"
 
     @classmethod
     def get_current(cls) -> Optional["PicoContainer"]:

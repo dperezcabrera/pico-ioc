@@ -68,8 +68,9 @@ def test_proxy_serialization_error():
     with pytest.raises(SerializationError):
         pickle.dumps(proxy)
 
-    with pytest.raises(SerializationError):
-        proxy.__setstate__({"data": b"bad_data"})
+    # __setstate__ no longer deserializes raw bytes; it only restores proxy internals
+    proxy.__setstate__({"state": {}})
+    assert object.__getattribute__(proxy, "_target") is None
 
 
 def test_gather_interceptors_edge_cases():

@@ -300,22 +300,15 @@ class TestUnifiedComponentProxySerialization:
 
         state = proxy.__getstate__()
 
-        assert "data" in state
+        assert "state" in state
 
-    def test_proxy_setstate_restores_target(self):
-        """__setstate__ restores the target object."""
-        target = {"key": "value"}
-        container = MagicMock()
-
-        proxy = UnifiedComponentProxy(container=container, target=target)
-
-        state = proxy.__getstate__()
-
-        # Create new proxy and restore
+    def test_proxy_setstate_restores_proxy_internals(self):
+        """__setstate__ restores proxy internal fields."""
         new_proxy = UnifiedComponentProxy.__new__(UnifiedComponentProxy)
-        new_proxy.__setstate__(state)
+        new_proxy.__setstate__({"state": {}})
 
-        assert new_proxy._get_real_object() == target
+        assert object.__getattribute__(new_proxy, "_container") is None
+        assert object.__getattribute__(new_proxy, "_target") is None
 
     def test_proxy_pickle_roundtrip(self):
         """Proxy survives pickle roundtrip - returns unpacked target."""
@@ -332,11 +325,13 @@ class TestUnifiedComponentProxySerialization:
 
     def test_proxy_unpicklable_target_raises(self):
         """Proxy with unpicklable target raises SerializationError."""
-        # Lambda cannot be pickled
-        target = lambda x: x
-        container = MagicMock()
 
-        proxy = UnifiedComponentProxy(container=container, target=target)
+        class Unpicklable:
+            def __getstate__(self):
+                raise TypeError("cannot serialize")
+
+        container = MagicMock()
+        proxy = UnifiedComponentProxy(container=container, target=Unpicklable())
 
         with pytest.raises(SerializationError):
             proxy.__getstate__()
