@@ -226,3 +226,9 @@ Exports the container's component dependency graph to a .dot file (Graphviz form
 - Scopes: Components can be singleton, request-scoped, or belong to custom scopes you register via init(custom_scopes=...).
 - Lifecycle: Decorate methods with @cleanup to have them called during cleanup; use @health for health checks.
 - Observability: Register observers via init(..., observers=[...]) to receive events (e.g., on_resolve, on_cache_hit) for monitoring.
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.container

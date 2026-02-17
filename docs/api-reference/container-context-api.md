@@ -117,3 +117,9 @@ Stats are useful for monitoring, debugging, and diagnostics, providing insight i
 - Pair `activate()` with `deactivate()` to clearly define lifecycle and prevent unintended usage.
 - Use profiles to segregate configurations and inspect them via `stats()` for validation.
 - Leverage the registry when coordinating multiple containers, such as in tests or multi-tenant scenarios.
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.api

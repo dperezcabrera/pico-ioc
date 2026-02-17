@@ -140,3 +140,9 @@ String constants
 - Treat the constants as stable identifiers; do not reassign or mutate them.
 - If you replace or wrap logging in your application, respect LOGGER_NAME to keep pico_ioc logs coherent.
 - The shared LOGGER uses standard Python logging; configuration follows normal logging practices (handlers, formatters, levels, propagation).
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.constants

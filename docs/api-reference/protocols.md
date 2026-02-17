@@ -179,3 +179,8 @@ Provided Implementations (for `configuration(...)`): `JsonTreeSource`, `YamlTree
 
 <!-- end list -->
 
+---
+
+## Auto-generated API
+
+::: pico_ioc.proxy_protocols
