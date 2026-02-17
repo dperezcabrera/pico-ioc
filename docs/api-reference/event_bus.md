@@ -138,3 +138,9 @@ class MyListener(AutoSubscriberMixin):
 - Integration:
   - The default `EventBus` instance is provided by scanning `pico_ioc.event_bus`.
   - Cleanup is automatic when using `PicoEventBusProvider` together with `@cleanup`.
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.event_bus

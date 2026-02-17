@@ -1,0 +1,4 @@
+pico-ioc
+pico-fastapi
+fastapi
+uvicorn
