@@ -160,3 +160,9 @@ The exact ordering and tie-breaking implementation depend on the version in your
 - Keep pico_name values consistent and meaningful; the selector uses them for tie-breaking.
 - Ensure ConfigurationManager accurately reflects availability (credentials, endpoints, quotas).
 - If you need custom ranking criteria, wrap or extend ProviderSelector to introduce your own weights or fields.
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.provider_selector
