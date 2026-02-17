@@ -1,5 +1,3 @@
-import pickle
-
 from .exceptions import SerializationError
 
 
@@ -168,7 +166,6 @@ class _ProxyProtocolMixin:
     def __reduce_ex__(self, protocol):
         o = self._get_real_object()
         try:
-            data = pickle.dumps(o, protocol=protocol)
-            return (pickle.loads, (data,))
+            return o.__reduce_ex__(protocol)
         except Exception as e:
             raise SerializationError(f"Proxy target is not serializable: {e}")
