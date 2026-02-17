@@ -2463,3 +2463,606 @@ class TestConfigRegistrarAutoDetectOptionalUnion:
         # Optional[int] = Union[int, None] -> origin is Union -> "tree"
         # This is correct: Union origin is caught at line 132
         assert mgr._auto_detect_mapping(SimpleCfg) == "tree"
+
+
+# ============================================================
+# Extra coverage: proxy_protocols.py
+# ============================================================
+
+
+class TestProxyProtocolsOperators:
+    """Lines 97, 100, 106, 109, 112, 139: Uncovered operator overloads."""
+
+    def _make_proxy(self, value):
+        from pico_ioc.proxy_protocols import _ProxyProtocolMixin
+
+        class SimpleProxy(_ProxyProtocolMixin):
+            def __init__(self, val):
+                self._val = val
+
+            def _get_real_object(self):
+                return self._val
+
+        return SimpleProxy(value)
+
+    def test_rfloordiv(self):
+        """Line 97: __rfloordiv__"""
+        proxy = self._make_proxy(3)
+        assert 10 // proxy == 3
+
+    def test_rmod(self):
+        """Line 100: __rmod__"""
+        proxy = self._make_proxy(3)
+        assert 10 % proxy == 1
+
+    def test_rpow(self):
+        """Line 106: __rpow__"""
+        proxy = self._make_proxy(3)
+        assert 2**proxy == 8
+
+    def test_rlshift(self):
+        """Line 109: __rlshift__"""
+        proxy = self._make_proxy(2)
+        assert 1 << proxy == 4
+
+    def test_rrshift(self):
+        """Line 112: __rrshift__"""
+        proxy = self._make_proxy(2)
+        assert 8 >> proxy == 2
+
+    def test_ne(self):
+        """Line 139: __ne__"""
+        proxy = self._make_proxy(42)
+        assert proxy != 99
+        assert not (proxy != 42)
+
+
+# ============================================================
+# Extra coverage: scope.py
+# ============================================================
+
+
+class TestScopeManagerActivateNoActivateMethod:
+    def test_scope_impl_without_activate_returns_none(self):
+        """Line 136: scope impl without 'activate' returns None."""
+        mgr = ScopeManager()
+        # Replace a scope impl with one that has no activate method
+        bare = MagicMock(spec=[])  # no methods at all
+        mgr._scopes["custom_bare"] = bare
+        result = mgr.activate("custom_bare", "id1")
+        assert result is None
+
+
+class TestScopedCachesCleanupObjectInspectError:
+    def test_cleanup_object_inspect_error(self):
+        """Lines 189-190: inspect.getmembers fails on object."""
+        caches = ScopedCaches()
+
+        class Explosive:
+            def __dir__(self):
+                raise RuntimeError("can't inspect")
+
+        # Should not raise - error is logged
+        caches._cleanup_object(Explosive())
+
+    def test_cleanup_container_error(self):
+        """Lines 202-203: container.items() raises exception."""
+        caches = ScopedCaches()
+
+        bad_container = MagicMock()
+        bad_container.items.side_effect = RuntimeError("broken")
+
+        # Should not raise - error is logged
+        caches._cleanup_container(bad_container)
+
+
+class TestScopedCachesShrinkEmptyBucket:
+    def test_shrink_nonexistent_scope(self):
+        """Line 240: shrink on scope with no bucket."""
+        caches = ScopedCaches()
+        # Should not raise
+        caches.shrink("request", 5)
+
+
+# ============================================================
+# Extra coverage: component_scanner.py
+# ============================================================
+
+
+class TestFactoryConditionFalse:
+    def test_factory_class_disabled_by_condition(self):
+        """Line 123: factory class fails condition check."""
+        from pico_ioc.component_scanner import ComponentScanner
+
+        mgr = ConfigurationManager(None)
+        scanner = ComponentScanner({"prod"}, {}, mgr)
+
+        # A factory class with a condition that doesn't match active profiles
+        from pico_ioc.decorators import factory
+
+        @factory()
+        class MyFactory:
+            pass
+
+        setattr(MyFactory, PICO_META, {"conditional": {"profiles": ["dev"]}})
+        # Should just return without registering
+        scanner._register_factory_class(MyFactory)
+        results = scanner.get_scan_results()
+        assert MyFactory not in [md.factory_class for _, _, md in results[0].get(MyFactory, [])]
+
+
+class TestDetectFactoryDepsException:
+    def test_detect_factory_deps_attribute_error(self):
+        """Lines 171-172: exception during attribute inspection in _detect_factory_deps."""
+        from pico_ioc.component_scanner import ComponentScanner
+
+        mgr = ConfigurationManager(None)
+        scanner = ComponentScanner(set(), {}, mgr)
+
+        class TrickyFactory:
+            @property
+            def problematic(self):
+                raise AttributeError("boom")
+
+        result = scanner._detect_factory_deps(TrickyFactory)
+        assert result is None
+
+
+class TestResolveProvidesMemberClassmethod:
+    def test_classmethod_provides(self):
+        """Line 184: classmethod branch in _resolve_provides_member."""
+        from pico_ioc.component_scanner import ComponentScanner
+        from pico_ioc.constants import PICO_INFRA, PICO_KEY
+
+        mgr = ConfigurationManager(None)
+        scanner = ComponentScanner(set(), {}, mgr)
+
+        class MyFactory:
+            @classmethod
+            def build(cls):
+                return "result"
+
+        # Mark the classmethod's __func__ as provides
+        setattr(MyFactory.build.__func__, PICO_INFRA, "provides")
+        setattr(MyFactory.build.__func__, PICO_KEY, "my_key")
+        setattr(MyFactory.build.__func__, PICO_META, {})
+
+        fn, kind = scanner._resolve_provides_member(MyFactory, "build")
+        assert kind == "class"
+        assert fn is not None
+
+
+class TestResolveProvidesMemberConditionFalse:
+    def test_provides_disabled_by_condition(self):
+        """Line 193: provides method fails condition check."""
+        from pico_ioc.component_scanner import ComponentScanner
+        from pico_ioc.constants import PICO_INFRA, PICO_KEY
+
+        mgr = ConfigurationManager(None)
+        scanner = ComponentScanner({"prod"}, {}, mgr)
+
+        class MyFactory:
+            @staticmethod
+            def build():
+                return "result"
+
+        setattr(MyFactory.build, PICO_INFRA, "provides")
+        setattr(MyFactory.build, PICO_KEY, "my_key")
+        setattr(MyFactory.build, PICO_META, {"conditional": {"profiles": ["dev"]}})
+
+        fn, kind = scanner._resolve_provides_member(MyFactory, "build")
+        assert fn is None
+        assert kind is None
+
+
+# ============================================================
+# Extra coverage: registrar.py
+# ============================================================
+
+
+class TestCanBeSelectedForNonType:
+    def test_non_type_selector(self):
+        """Line 24: _can_be_selected_for with non-type selector."""
+        from pico_ioc.registrar import _can_be_selected_for
+
+        assert _can_be_selected_for({}, "not_a_type") is False
+
+    def test_issubclass_exception(self):
+        """Lines 31-32: issubclass raises exception."""
+        from pico_ioc.registrar import _can_be_selected_for
+
+        md = MagicMock()
+        md.provided_type = type("Broken", (), {})
+        md.concrete_class = None
+
+        class BadMeta(type):
+            def __subclasscheck__(cls, subclass):
+                raise TypeError("broken")
+
+        selector = BadMeta("Selector", (), {})
+        result = _can_be_selected_for({"k": md}, selector)
+        assert result is False
+
+
+# ============================================================
+# Extra coverage: analysis.py
+# ============================================================
+
+
+class TestResolveKeyUnannotated:
+    def test_unannotated_param_uses_name(self):
+        """Lines 191-192: _resolve_key fallback when base_type is non-type/non-str and ann is _empty."""
+        from pico_ioc.analysis import _resolve_key
+
+        # base_type must NOT be a type or str, and ann must be _empty
+        # This triggers the line 191 branch
+        key, dict_key = _resolve_key(
+            is_list=False,
+            is_dict=False,
+            elem_t=None,
+            dict_key_t=None,
+            base_type=42,
+            ann=inspect._empty,
+            name="my_param",
+        )
+        assert key == "my_param"
+
+    def test_non_type_non_str_base_with_annotation(self):
+        """Line 193: base_type is non-type/non-str but ann is NOT _empty."""
+        from pico_ioc.analysis import _resolve_key
+
+        key, dict_key = _resolve_key(
+            is_list=False,
+            is_dict=False,
+            elem_t=None,
+            dict_key_t=None,
+            base_type=42,
+            ann="some_ann",
+            name="x",
+        )
+        assert key == 42
+
+
+# ============================================================
+# Extra coverage: event_bus.py
+# ============================================================
+
+
+class TestPublishSyncFromRunningLoop:
+    @pytest.mark.asyncio
+    async def test_publish_sync_from_running_loop(self):
+        """Line 148 (146): publish_sync from running event loop creates task."""
+        from pico_ioc.event_bus import Event, EventBus
+
+        class MyEvent(Event):
+            pass
+
+        bus = EventBus()
+        received = []
+
+        async def handler(event):
+            received.append(event)
+
+        bus.subscribe(MyEvent, handler)
+
+        # Call publish_sync from within running loop
+        bus.publish_sync(MyEvent())
+
+        # Give the task time to execute
+        await asyncio.sleep(0.05)
+        assert len(received) == 1
+        await bus.aclose()
+
+
+class TestEventBusCleanupNoLoop:
+    def test_cleanup_without_running_loop(self):
+        """Line 326: PicoEventBusProvider.shutdown without running loop."""
+        from pico_ioc.event_bus import EventBus, PicoEventBusProvider
+
+        provider = PicoEventBusProvider()
+        bus = EventBus()
+        # Should close the bus synchronously
+        provider.shutdown(bus)
+
+
+# ============================================================
+# Extra coverage: graph_export.py
+# ============================================================
+
+
+class TestGraphExportNonStringNonTypeKey:
+    def test_non_string_non_type_dep_key(self):
+        """Line 30: dep_key that is neither str nor type."""
+        from pico_ioc.graph_export import _map_dep_to_bound_key
+
+        loc = MagicMock()
+        loc._metadata = {}
+
+        # An integer key should be returned as-is (not str, not type)
+        result = _map_dep_to_bound_key(loc, 42)
+        assert result == 42
+
+    def test_issubclass_exception_in_find_subtype(self):
+        """Lines 41-42: issubclass exception in _find_subtype_key."""
+        from pico_ioc.graph_export import _find_subtype_key
+
+        md = MagicMock()
+        md.provided_type = None
+
+        class BadConcrete:
+            pass
+
+        # Make issubclass raise by using a broken metaclass
+        md.concrete_class = BadConcrete
+
+        class BadMeta(type):
+            def __subclasscheck__(cls, subclass):
+                raise TypeError("broken")
+
+        target = BadMeta("Target", (), {})
+        loc = MagicMock()
+        loc._metadata = {"k": md}
+
+        # Should return dep_key unchanged after exception
+        result = _find_subtype_key(loc, target)
+        assert result is target
+
+
+# ============================================================
+# Extra coverage: container.py
+# ============================================================
+
+
+class TestGetSignatureSafeWrapped:
+    def test_wrapped_fallback(self):
+        """Line 38: __wrapped__ fallback for signature."""
+        from pico_ioc.container import _get_signature_safe
+
+        def real_fn(a: int, b: str): ...
+
+        class BadCallable:
+            __wrapped__ = real_fn
+
+            def __call__(self):
+                pass
+
+        # Make __call__ signature fail but __wrapped__ works
+        obj = BadCallable()
+        # Patch to make first attempt fail
+        with patch("inspect.signature", side_effect=[TypeError("nope"), inspect.signature(real_fn)]):
+            sig = _get_signature_safe(obj)
+            assert "a" in sig.parameters
+
+
+class TestContainerCanonicalKeySubclass:
+    def _make_pico(self, factory, locator):
+        caches = ScopedCaches()
+        scopes = ScopeManager()
+        pico = PicoContainer(factory, caches, scopes)
+        pico._locator = locator
+        return pico
+
+    def test_canonical_key_finds_subclass(self):
+        """Lines 171, 174: _canonical_key finds subclass via issubclass."""
+
+        class Base:
+            pass
+
+        class Impl(Base):
+            pass
+
+        factory = ComponentFactory()
+        factory.bind(Impl, lambda: Impl())
+        # Add a non-type entry to trigger line 171 (continue)
+        md_str = ProviderMetadata(
+            key="str_key",
+            provided_type=None,
+            concrete_class=None,
+            factory_class=None,
+            factory_method=None,
+            qualifiers=set(),
+            primary=False,
+            lazy=False,
+            infra="component",
+            pico_name=None,
+            scope=SCOPE_SINGLETON,
+            dependencies=(),
+        )
+        md = ProviderMetadata(
+            key=Impl,
+            provided_type=Impl,
+            concrete_class=Impl,
+            factory_class=None,
+            factory_method=None,
+            qualifiers=set(),
+            primary=True,
+            lazy=False,
+            infra="component",
+            pico_name=None,
+            scope=SCOPE_SINGLETON,
+            dependencies=(),
+        )
+        locator = ComponentLocator({"str_key": md_str, Impl: md}, {})
+        pico = self._make_pico(factory, locator)
+
+        result = pico._canonical_key(Base)
+        assert result is Impl
+
+    def test_canonical_key_issubclass_exception(self):
+        """Lines 175-176: issubclass raises exception in _canonical_key."""
+
+        class BadMeta(type):
+            def __subclasscheck__(cls, subclass):
+                raise TypeError("broken")
+
+        Broken = BadMeta("Broken", (), {})
+
+        factory = ComponentFactory()
+        md = ProviderMetadata(
+            key=Broken,
+            provided_type=Broken,
+            concrete_class=Broken,
+            factory_class=None,
+            factory_method=None,
+            qualifiers=set(),
+            primary=True,
+            lazy=False,
+            infra="component",
+            pico_name=None,
+            scope=SCOPE_SINGLETON,
+            dependencies=(),
+        )
+        locator = ComponentLocator({Broken: md}, {})
+        pico = self._make_pico(factory, locator)
+
+        result = pico._canonical_key(int)
+        assert result is int
+
+
+class TestContainerAsyncCleanup:
+    @pytest.mark.asyncio
+    async def test_cleanup_all_async_with_event_bus(self):
+        """Lines 386-387: cleanup_all_async with EventBus in cache."""
+        from pico_ioc.event_bus import EventBus
+
+        factory = ComponentFactory()
+        caches = ScopedCaches()
+        scopes = ScopeManager()
+        pico = PicoContainer(factory, caches, scopes)
+
+        bus = EventBus()
+        pico._caches._singleton.put("bus_key", bus)
+
+        await pico.cleanup_all_async()
+
+
+# ============================================================
+# Extra coverage: dependency_validator.py
+# ============================================================
+
+
+class TestDependencyValidatorProtocolFallback:
+    def test_protocol_implementation_found(self):
+        """Lines 46-49: Protocol fallback via _implements_protocol."""
+        from typing import Protocol
+
+        # Non-runtime-checkable protocol - issubclass raises TypeError
+        # so cands stays empty, then _is_protocol fallback is used
+        class MyProto(Protocol):
+            def do_thing(self) -> str: ...
+
+        class MyImpl:
+            def do_thing(self) -> str:
+                return "done"
+
+        factory = ComponentFactory()
+        factory.bind(MyImpl, lambda: MyImpl())
+        md = ProviderMetadata(
+            key=MyImpl,
+            provided_type=MyImpl,
+            concrete_class=MyImpl,
+            factory_class=None,
+            factory_method=None,
+            qualifiers=set(),
+            primary=True,
+            lazy=False,
+            infra="component",
+            pico_name=None,
+            scope=SCOPE_SINGLETON,
+            dependencies=(),
+        )
+        locator = ComponentLocator({MyImpl: md}, {})
+        validator = DependencyValidator({MyImpl: md}, factory, locator)
+
+        result = validator._find_md_for_type(MyProto)
+        assert result is not None
+
+
+class TestValidateTypeDepReturnError:
+    def test_unbound_type_dep_returns_error_msg(self):
+        """Line 124: _validate_type_dep returns error for unbound type."""
+
+        class Missing:
+            pass
+
+        factory = ComponentFactory()
+        md_dict = {}
+        locator = ComponentLocator(md_dict, {})
+        validator = DependencyValidator(md_dict, factory, locator)
+
+        result = validator._validate_type_dep("SomeComponent", Missing, "some_param")
+        assert result is not None
+        assert "not bound" in result
+
+
+# ============================================================
+# Extra coverage: config_runtime.py
+# ============================================================
+
+
+class TestWalkPathInvalidRef:
+    def test_invalid_ref_path_raises(self):
+        """Line 76: invalid ref path in configuration."""
+        from pico_ioc.config_runtime import _walk_path
+
+        with pytest.raises(ConfigurationError, match="Invalid ref path"):
+            _walk_path({"a": {"b": 1}}, "a.c.d")
+
+
+class TestCoercePrimFallthrough:
+    def test_coerce_prim_unknown_type(self):
+        """Line 366: _coerce_prim with type that doesn't match str/int/float/bool."""
+        resolver = ConfigResolver(())
+        registry = TypeAdapterRegistry()
+        builder = ObjectGraphBuilder(resolver, registry)
+        # bytes is not handled, should return node as-is
+        result = builder._coerce_prim(b"hello", bytes, ("test",))
+        assert result == b"hello"
+
+
+class TestBuildNodeFallthrough:
+    def test_build_node_unknown_type(self):
+        """Line 263: _build_node with class that has __init__ (non-dataclass, non-enum, non-prim)."""
+        resolver = ConfigResolver(())
+        registry = TypeAdapterRegistry()
+        builder = ObjectGraphBuilder(resolver, registry)
+
+        class Custom:
+            def __init__(self):
+                pass
+
+        # hits hasattr(t, "__init__") -> _build_constructor
+        result = builder._build_type({}, Custom, ("test",))
+        assert isinstance(result, Custom)
+
+
+# ============================================================
+# Extra coverage: config_registrar.py
+# ============================================================
+
+
+class TestConfigRegistrarTreeMapping:
+    def test_tree_mapping_registration(self):
+        """Lines 177-198: register_configured_class with tree mapping."""
+
+        @dataclass
+        class NestedItem:
+            value: str = ""
+
+        @configured(prefix="app")
+        @dataclass
+        class AppConfig:
+            items: List[NestedItem] = field(default_factory=list)
+
+        config = ContextConfig(
+            flat_sources=(),
+            tree_sources=(DictSource({"app": {"items": [{"value": "x"}]}}),),
+            overrides={},
+        )
+        mgr = ConfigurationManager(config)
+
+        result = mgr.register_configured_class(AppConfig, enabled=True)
+        assert result is not None
+        key, provider, md = result
+        assert key is AppConfig
+        assert md.infra == "configured"
