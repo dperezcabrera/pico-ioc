@@ -139,3 +139,9 @@ Typical uses:
 - React to domain events.
 - Fire side effects in response to state changes.
 - Decouple producers and consumers.
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.decorators

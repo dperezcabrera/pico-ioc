@@ -179,3 +179,9 @@ The typical flow in your DI container:
 3. Invoke the callable with the resolved arguments.
 
 This module isolates signature parsing and annotation interpretation from resolution, making your container logic simpler and more consistent.
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.analysis

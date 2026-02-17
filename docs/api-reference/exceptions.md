@@ -267,3 +267,9 @@ When implementing custom providers, factories, modules, or event handlers, raise
 - Event handler failure wrapping: raise EventBusHandlerError(event_name, handler_name, cause)
 
 This consistency helps calling code provide better diagnostics and fallback behavior.
+
+---
+
+## Auto-generated API
+
+::: pico_ioc.exceptions
