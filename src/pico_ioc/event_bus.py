@@ -280,6 +280,7 @@ def subscribe(
     Returns:
         A decorator that attaches subscription metadata to the function.
     """
+
     def dec(fn: Callable[[Event], Any] | Callable[[Event], Awaitable[Any]]):
         subs: Iterable[Tuple[Type[Event], int, ExecPolicy, bool]] = getattr(fn, "_pico_subscriptions_", ())
         subs = list(subs)
@@ -297,6 +298,7 @@ class AutoSubscriberMixin:
     methods carrying ``@subscribe`` metadata are registered with the
     :class:`EventBus`.
     """
+
     @configure
     def _pico_autosubscribe(self, event_bus: EventBus) -> None:
         for _, attr in inspect.getmembers(self, predicate=callable):

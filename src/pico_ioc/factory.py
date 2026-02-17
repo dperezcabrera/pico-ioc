@@ -41,6 +41,7 @@ class ProviderMetadata:
         override: Whether this provider was registered via ``overrides``.
         scope: Lifecycle scope name.
     """
+
     key: KeyT
     provided_type: Optional[type]
     concrete_class: Optional[type]
@@ -115,6 +116,7 @@ class DeferredProvider:
     Raises:
         RuntimeError: If called before :meth:`attach`.
     """
+
     def __init__(self, builder: Callable[[Any, Any], Any]) -> None:
         self._builder = builder
         self._pico: Any = None

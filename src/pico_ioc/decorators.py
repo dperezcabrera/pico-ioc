@@ -109,6 +109,7 @@ def component(
         ... class InMemoryCache:
         ...     pass
     """
+
     def dec(c):
         setattr(c, PICO_INFRA, "component")
         setattr(c, PICO_NAME, name if name is not None else getattr(c, "__name__", str(c)))
@@ -176,6 +177,7 @@ def factory(
     Returns:
         The decorated class, unchanged, with pico metadata attached.
     """
+
     def dec(c):
         setattr(c, PICO_INFRA, "factory")
         setattr(c, PICO_NAME, name if name is not None else getattr(c, "__name__", str(c)))
@@ -229,6 +231,7 @@ def provides(*dargs, **dkwargs):
     Raises:
         TypeError: If the key cannot be inferred and is not provided.
     """
+
     def _apply(
         fn,
         key_hint,
