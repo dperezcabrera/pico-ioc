@@ -32,6 +32,7 @@ class EnvSource(ConfigSource):
         >>> src = EnvSource(prefix="DB_")
         >>> src.get("HOST")  # reads os.environ["DB_HOST"]
     """
+
     def __init__(self, prefix: str = "") -> None:
         self.prefix = prefix
 
