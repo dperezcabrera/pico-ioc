@@ -1,4 +1,0 @@
-Dame el comit de una linea en ingles para esta version junto a lo mismo para la tag, dame el comando git completo.
-junto al git push origin main y tag
-
-Dame una descripcion en ingles para esta release para usar en github
