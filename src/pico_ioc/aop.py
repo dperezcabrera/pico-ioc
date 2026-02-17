@@ -7,7 +7,6 @@ interception and lazy-loading transparently.
 """
 
 import inspect
-import pickle
 import threading
 from typing import Any, Callable, Dict, List, Protocol, Tuple, Union
 
@@ -253,10 +252,9 @@ class UnifiedComponentProxy(_ProxyProtocolMixin):
     def __getstate__(self):
         o = self._get_real_object()
         try:
-            data = pickle.dumps(o)
+            return {"state": o.__getstate__() if hasattr(o, "__getstate__") else o.__dict__}
         except Exception as e:
             raise SerializationError(f"Proxy target is not serializable: {e}")
-        return {"data": data}
 
     def __setstate__(self, state):
         object.__setattr__(self, "_container", None)
@@ -264,11 +262,8 @@ class UnifiedComponentProxy(_ProxyProtocolMixin):
         object.__setattr__(self, "_component_key", None)
         object.__setattr__(self, "_cache", {})
         object.__setattr__(self, "_lock", threading.RLock())
-        try:
-            obj = pickle.loads(state["data"])
-        except Exception as e:
-            raise SerializationError(f"Failed to restore proxy: {e}")
-        object.__setattr__(self, "_target", obj)
+        object.__setattr__(self, "_target", None)
+        # Target will be restored by pickle via __reduce_ex__ delegation
 
     def _get_real_object(self) -> Any:
         tgt = object.__getattribute__(self, "_target")
