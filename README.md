@@ -307,9 +307,9 @@ See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.
 
 -----
 
-## Claude Code Skills
+## AI Coding Skills
 
-Install [Claude Code](https://code.claude.com) skills for AI-assisted development with pico-ioc:
+Install [Claude Code](https://code.claude.com) or [OpenAI Codex](https://openai.com/index/introducing-codex/) skills for AI-assisted development with pico-ioc:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash -s -- ioc
