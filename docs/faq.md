@@ -569,6 +569,8 @@ def route(db: Database):  # Injected automatically
 
 ## Still stuck?
 
+- Check the [Troubleshooting guide](./troubleshooting.md) for symptom-first debugging
+- If you're using pico-boot, pico-fastapi, or pico-pydantic, see the [unified pico-boot troubleshooting guide](https://github.com/dperezcabrera/pico-boot/blob/main/docs/troubleshooting.md)
 - Check the [User Guide](./user-guide/README.md) for detailed explanations
 - See [Cookbook](./cookbook/README.md) for real-world patterns
 - Open an issue on [GitHub](https://github.com/dperezcabrera/pico-ioc/issues)
