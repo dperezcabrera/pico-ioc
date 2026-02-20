@@ -66,8 +66,9 @@ print(service.get_users())  # "data from DB"
 | 6 | **Architecture** | Design principles, internals | [architecture/](./architecture/README.md) |
 | 7 | **API Reference** | Decorators, exceptions, protocols | [api-reference/](./api-reference/README.md) |
 | 8 | **FAQ** | Common questions and solutions | [faq.md](./faq.md) |
-| 9 | **Examples** | Complete runnable applications | [examples/](./examples/README.md) |
-| 10 | **Learning Roadmap** | Step-by-step path from zero to advanced | [LEARN.md](./LEARN.md) |
+| 9 | **Troubleshooting** | Symptom-first debugging guide | [troubleshooting.md](./troubleshooting.md) |
+| 10 | **Examples** | Complete runnable applications | [examples/](./examples/README.md) |
+| 11 | **Learning Roadmap** | Step-by-step path from zero to advanced | [LEARN.md](./LEARN.md) |
 
 ---
 

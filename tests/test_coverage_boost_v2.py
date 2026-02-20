@@ -591,10 +591,8 @@ class TestRegisterConfiguredAutoMapping:
             "scope": SCOPE_SINGLETON,
         }
 
-        result = mgr.register_configured_class(AppCfg, enabled=True)
-        assert result is not None
-        key, provider, md = result
-        assert key is AppCfg
+        with pytest.raises(ConfigurationError, match="mapping='flat'.*auto-detected"):
+            mgr.register_configured_class(AppCfg, enabled=True)
 
     def test_register_configured_flat_non_dataclass_raises(self):
         mgr = ConfigurationManager(None)
@@ -1242,24 +1240,6 @@ class TestCoerceUnionInRegistrar:
         assert result == "hello"
 
 
-class TestLookupFunction:
-    """config_registrar.py lines 45-49: _lookup function."""
-
-    def test_lookup_finds_value(self):
-        from pico_ioc.config_registrar import _lookup
-
-        src = FlatDictSource({"KEY": "value"})
-        result = _lookup((src,), "KEY")
-        assert result == "value"
-
-    def test_lookup_returns_none(self):
-        from pico_ioc.config_registrar import _lookup
-
-        src = FlatDictSource({})
-        result = _lookup((src,), "MISSING")
-        assert result is None
-
-
 class TestBuildFlatWithValueOverride:
     """config_registrar.py lines 77-78, 84-86, 90-92, 93: _build_flat_instance edges."""
 
@@ -1332,7 +1312,7 @@ class TestAutoDetectMappingUnion:
 
 
 class TestRegisterConfiguredLine221:
-    """config_registrar.py line 221: unknown mapping returns None."""
+    """config_registrar.py: unknown mapping raises ConfigurationError."""
 
     def test_register_configured_unknown_mapping(self):
         mgr = ConfigurationManager(None)
@@ -1345,8 +1325,8 @@ class TestRegisterConfiguredLine221:
             "scope": SCOPE_SINGLETON,
         }
 
-        result = mgr.register_configured_class(SomeClass, enabled=True)
-        assert result is None
+        with pytest.raises(ConfigurationError, match="unknown mapping"):
+            mgr.register_configured_class(SomeClass, enabled=True)
 
 
 class TestApiScanPackage:
