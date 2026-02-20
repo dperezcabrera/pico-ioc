@@ -4,7 +4,7 @@ from typing import Annotated, Union
 
 import pytest
 
-from pico_ioc import DictSource, Discriminator, EnvSource, Value, configuration, configured, init
+from pico_ioc import DictSource, Discriminator, EnvSource, FlatDictSource, Value, configuration, configured, init
 
 
 @configured(prefix="TEST_", mapping="flat", lazy=True)
@@ -20,7 +20,7 @@ def test_value_overrides_flat_sources():
     os.environ["TEST_PORT"] = "1234"
     os.environ["TEST_TIMEOUT"] = "10"
 
-    ctx = configuration(EnvSource(prefix=""))
+    ctx = configuration(EnvSource(prefix=""), DictSource({}))
     container = init(modules=[__name__], config=ctx)
     cfg = container.get(FlatValueConfig)
 
@@ -43,7 +43,7 @@ class TreeValueConfig:
 
 def test_value_overrides_tree_sources():
     source_data = {"tree": {"host": "dict.host.com", "port": 1234, "timeout": 10}}
-    ctx = configuration(DictSource(source_data))
+    ctx = configuration(DictSource(source_data), FlatDictSource({}))
     container = init(modules=[__name__], config=ctx)
     cfg = container.get(TreeValueConfig)
 
@@ -61,7 +61,7 @@ class FlatPrecedenceConfig:
 def test_value_has_highest_precedence_over_overrides_and_env():
     os.environ["TEST_PORT"] = "1234"
 
-    ctx = configuration(EnvSource(prefix=""), overrides={"TEST_PORT": 5555})
+    ctx = configuration(EnvSource(prefix=""), DictSource({}), overrides={"TEST_PORT": 5555})
     container = init(modules=[__name__], config=ctx)
     cfg = container.get(FlatPrecedenceConfig)
 
@@ -78,7 +78,7 @@ class TreePrecedenceConfig:
 
 def test_value_has_highest_precedence_over_overrides_and_dict():
     source_data = {"tree": {"port": 1234}}
-    ctx = configuration(DictSource(source_data), overrides={"tree.port": 5555})
+    ctx = configuration(DictSource(source_data), FlatDictSource({}), overrides={"tree.port": 5555})
     container = init(modules=[__name__], config=ctx)
     cfg = container.get(TreePrecedenceConfig)
 
@@ -98,7 +98,7 @@ class ComplexValueConfig:
 
 def test_value_can_be_complex_object():
     source_data = {"tree": {"nested": {"id": "dynamic"}}}
-    ctx = configuration(DictSource(source_data))
+    ctx = configuration(DictSource(source_data), FlatDictSource({}))
     container = init(modules=[__name__], config=ctx)
     cfg = container.get(ComplexValueConfig)
 
@@ -126,7 +126,7 @@ class DiscriminatorValueConfig:
 
 def test_value_can_force_discriminator_kind():
     source_data = {"db": {"model": {"path": "/data/db.sqlite"}}}
-    ctx = configuration(DictSource(source_data))
+    ctx = configuration(DictSource(source_data), FlatDictSource({}))
     container = init(modules=[__name__], config=ctx)
     cfg = container.get(DiscriminatorValueConfig)
 

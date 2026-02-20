@@ -11,6 +11,7 @@ from pico_ioc import (
     ConfigurationError,
     DictSource,
     Discriminator,
+    FlatDictSource,
     JsonTreeSource,
     YamlTreeSource,
     component,
@@ -445,3 +446,99 @@ def test_string_injection_resolves_by_pico_name_or_classname():
 
     c = init([mod])
     assert isinstance(c.get(Needs).w, W)
+
+
+# --- fail-fast: mapping vs sources mismatch ---
+
+
+@dataclass
+class FlatOnly:
+    host: str
+    port: int = 8080
+
+
+def test_auto_flat_with_only_tree_source_raises():
+    """Auto-detected flat mapping + only DictSource → ConfigurationError."""
+
+    @configured(target=FlatOnly, prefix="app")
+    class Cfg:
+        pass
+
+    mod = types.ModuleType("test_mod")
+    setattr(mod, "Cfg", Cfg)
+
+    ctx = configuration(DictSource({"app": {"host": "localhost", "port": 3000}}))
+
+    with pytest.raises(ConfigurationError, match="mapping='flat'.*auto-detected"):
+        init([mod], config=ctx)
+
+
+def test_explicit_flat_with_only_tree_source_raises():
+    """Explicit mapping='flat' + only DictSource → ConfigurationError."""
+
+    @configured(target=FlatOnly, prefix="app", mapping="flat")
+    class Cfg:
+        pass
+
+    mod = types.ModuleType("test_mod")
+    setattr(mod, "Cfg", Cfg)
+
+    ctx = configuration(DictSource({"app": {"host": "localhost"}}))
+
+    with pytest.raises(ConfigurationError, match="mapping='flat'.*explicitly set"):
+        init([mod], config=ctx)
+
+
+def test_auto_flat_with_flat_source_works():
+    """Auto-detected flat mapping + FlatDictSource → works fine."""
+
+    @configured(target=FlatOnly, prefix="APP_")
+    class Cfg:
+        pass
+
+    mod = types.ModuleType("test_mod")
+    setattr(mod, "Cfg", Cfg)
+
+    ctx = configuration(FlatDictSource({"APP_HOST": "localhost", "APP_PORT": "9090"}))
+    container = init([mod], config=ctx)
+    settings = container.get(FlatOnly)
+
+    assert settings.host == "localhost"
+    assert settings.port == 9090
+
+
+def test_explicit_tree_with_only_flat_source_raises():
+    """Explicit mapping='tree' + only FlatDictSource → ConfigurationError."""
+
+    @configured(target=FlatOnly, prefix="app", mapping="tree")
+    class Cfg:
+        pass
+
+    mod = types.ModuleType("test_mod")
+    setattr(mod, "Cfg", Cfg)
+
+    ctx = configuration(FlatDictSource({"APP_HOST": "localhost"}))
+
+    with pytest.raises(ConfigurationError, match="mapping='tree'.*explicitly set"):
+        init([mod], config=ctx)
+
+
+def test_mixed_sources_no_error():
+    """Both flat and tree sources present → no error regardless of mapping."""
+
+    @configured(target=FlatOnly, prefix="app")
+    class Cfg:
+        pass
+
+    mod = types.ModuleType("test_mod")
+    setattr(mod, "Cfg", Cfg)
+
+    ctx = configuration(
+        DictSource({"app": {"host": "localhost", "port": 3000}}),
+        FlatDictSource({"appHOST": "localhost", "appPORT": "3000"}),
+    )
+    container = init([mod], config=ctx)
+    settings = container.get(FlatOnly)
+
+    assert settings.host == "localhost"
+    assert settings.port == 3000
