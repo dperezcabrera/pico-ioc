@@ -195,7 +195,7 @@ from pico_ioc import init
 from app.services import UserService
 
 # Scan modules containing components AND interceptors
-container = init(modules=["app.interceptors", "app.services"])
+container = init(modules=["app"])
 
 service = container.get(UserService)
 

@@ -39,7 +39,7 @@ pip install pico-ioc[yaml]
 2. **Module not included in `init()`**
    ```python
    # Make sure the module is scanned
-   container = init(modules=["myapp.services", "myapp.repos"])
+   container = init(modules=["myapp"])
    ```
 
 3. **Circular import** - Use string type hints:

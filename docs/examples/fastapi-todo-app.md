@@ -192,7 +192,7 @@ class TodoResponse(BaseModel):
 
 # Initialize container
 container = init(
-    modules=["todo_app.config", "todo_app.repositories", "todo_app.services"],
+    modules=["todo_app"],
     config=configuration()
 )
 
@@ -277,7 +277,7 @@ def test_container():
     from todo_app.repositories import InMemoryTodoRepository
 
     container = init(
-        modules=["todo_app.config", "todo_app.services"],
+        modules=["todo_app"],
         config=configuration(),
         overrides={
             InMemoryTodoRepository: FakeTodoRepository()

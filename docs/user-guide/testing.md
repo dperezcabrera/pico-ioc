@@ -206,7 +206,7 @@ You can combine both approaches. For example, activate the `"test"` profile to g
 Example:
 ```python
 container = init(
-    modules=["app.cache", "app.services"],
+    modules=["app"],
     profiles=("test",),
     overrides={
         # Force a specific mock for a single test scenario

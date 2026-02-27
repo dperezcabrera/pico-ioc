@@ -69,7 +69,7 @@ class Consumer:
 from pico_ioc import init
 from app.consumer import Consumer
 
-container = init(modules=["app.services", "app.consumer"])
+container = init(modules=["app"])
 consumer = container.get(Consumer) # Output: Loaded 2 services.
 ```
 
