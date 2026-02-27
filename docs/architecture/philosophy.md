@@ -107,7 +107,7 @@ pico-ioc follows the **composition root** pattern: there should be exactly one p
 from pico_ioc import init
 
 def main():
-    container = init(modules=["myapp.services", "myapp.repos"])
+    container = init(modules=["myapp"])
     app = container.get(App)
     app.run()
 ```

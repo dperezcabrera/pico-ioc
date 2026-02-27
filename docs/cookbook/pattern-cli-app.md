@@ -128,7 +128,7 @@ config_context = configuration(
 
 # Initialize the container with modules that define configuration and services
 container = init(
-    modules=["app.config", "app.services"],
+    modules=["app"],
     config=config_context
 )
 
