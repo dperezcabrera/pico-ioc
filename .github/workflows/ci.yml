@@ -61,7 +61,7 @@ jobs:
           ls -la .coverage.${{ matrix.python-version }}
 
       - name: Upload .coverage artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.python-version }}
           path: .coverage.${{ matrix.python-version }}
@@ -96,14 +96,14 @@ jobs:
           coverage html -d htmlcov --rcfile=.coveragerc
 
       - name: Upload combined coverage XML
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
           if-no-files-found: error
 
       - name: Upload HTML coverage report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-html
           path: htmlcov
