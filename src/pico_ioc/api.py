@@ -31,29 +31,24 @@ def _scan_package(package) -> Iterable[Any]:
         yield importlib.import_module(name)
 
 
+def _is_sequence(inputs: Any) -> bool:
+    return isinstance(inputs, Iterable) and not inspect.ismodule(inputs) and not isinstance(inputs, str)
+
+
+def _resolve_module(it: Any):
+    return importlib.import_module(it) if isinstance(it, str) else it
+
+
 def _iter_input_modules(inputs: Union[Any, Iterable[Any]]) -> Iterable[Any]:
-    seq = (
-        inputs
-        if isinstance(inputs, Iterable) and not inspect.ismodule(inputs) and not isinstance(inputs, str)
-        else [inputs]
-    )
+    seq = inputs if _is_sequence(inputs) else [inputs]
     seen: Set[str] = set()
     for it in seq:
-        if isinstance(it, str):
-            mod = importlib.import_module(it)
-        else:
-            mod = it
-        if hasattr(mod, "__path__"):
-            for sub in _scan_package(mod):
-                name = getattr(sub, "__name__", None)
-                if name and name not in seen:
-                    seen.add(name)
-                    yield sub
-        else:
-            name = getattr(mod, "__name__", None)
+        mod = _resolve_module(it)
+        for resolved in _scan_package(mod) if hasattr(mod, "__path__") else [mod]:
+            name = getattr(resolved, "__name__", None)
             if name and name not in seen:
                 seen.add(name)
-                yield mod
+                yield resolved
 
 
 def _normalize_override_provider(v: Any):
@@ -123,7 +118,7 @@ def init(
     Example:
         >>> from pico_ioc import init, configuration, DictSource
         >>> container = init(
-        ...     modules=["myapp.services", "myapp.repos"],
+        ...     modules=["myapp"],  # scans recursively
         ...     config=configuration(DictSource({"db": {"url": "sqlite://"}})),
         ... )
         >>> svc = container.get(MyService)
@@ -131,6 +126,20 @@ def init(
     active = tuple(p.strip() for p in profiles if p)
     _validate_profiles(active, allowed_profiles)
 
+    factory, registrar, pico = _create_container(
+        active, environ, logger, config, custom_scopes, custom_scanners, container_id, observers,
+    )
+
+    for m in _iter_input_modules(modules):
+        registrar.register_module(m)
+
+    _apply_overrides(factory, overrides)
+    registrar.finalize(overrides, pico_instance=pico)
+
+    return _wire_and_resolve(pico, registrar, validate_only)
+
+
+def _create_container(active, environ, logger, config, custom_scopes, custom_scanners, container_id, observers):
     factory = ComponentFactory()
     caches = ScopedCaches()
     scopes = ScopeManager()
@@ -145,26 +154,26 @@ def init(
         for scanner in custom_scanners:
             registrar.register_custom_scanner(scanner)
 
-    for m in _iter_input_modules(modules):
-        registrar.register_module(m)
+    return factory, registrar, pico
 
+
+def _apply_overrides(factory, overrides):
     if overrides:
         for k, v in overrides.items():
             prov, _ = _normalize_override_provider(v)
             factory.bind(k, prov)
 
-    registrar.finalize(overrides, pico_instance=pico)
+
+def _wire_and_resolve(pico, registrar, validate_only):
+    locator = registrar.locator()
     if validate_only:
-        locator = registrar.locator()
         pico.attach_locator(locator)
         _fail_fast_cycle_check(pico)
         return pico
 
-    locator = registrar.locator()
     registrar.attach_runtime(pico, locator)
     pico.attach_locator(locator)
     _fail_fast_cycle_check(pico)
-
     _eagerly_resolve_singletons(pico, locator)
     return pico
 

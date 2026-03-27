@@ -68,7 +68,7 @@ def test_container():
 
     # 2. Use 'overrides' to replace the real component
     container = init(
-        modules=["app.services"],  # Scan where UserService and PostgresDatabase live
+        modules=["app"],  # scans recursively
         overrides={
             # When any component asks for 'Database',
             # give them this 'MockDatabase' instance instead.
@@ -161,7 +161,7 @@ def test_container() -> PicoContainer:
     """A single container for the entire test session, configured for 'test'."""
     print("\n--- Initializing Test Container (Profile: test) ---")
     container = init(
-        modules=["app.cache"],  # Scan where cache components live
+        modules=["app"],  # scans recursively
         profiles=("test",)      # This activates the "test" profile
     )
     yield container
@@ -234,7 +234,7 @@ from pico_ioc import init
 
 @pytest.mark.asyncio
 async def test_async_service():
-    container = init(modules=["app.async_services"], profiles=("test",))
+    container = init(modules=["app"], profiles=("test",))  # scans recursively
     service = container.get(AsyncService)
     result = await service.do_work()
     assert result == "ok"

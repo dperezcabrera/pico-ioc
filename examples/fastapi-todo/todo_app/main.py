@@ -25,14 +25,8 @@ class TodoResponse(BaseModel):
         return cls(id=todo.id, title=todo.title, completed=todo.completed)
 
 
-container = init(
-    modules=[
-        "todo_app.config",
-        "todo_app.repositories",
-        "todo_app.services",
-    ],
-    config=configuration(),
-)
+# pico-ioc scans "todo_app" recursively — no need to list submodules
+container = init(modules=["todo_app"], config=configuration())
 
 
 @asynccontextmanager

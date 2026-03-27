@@ -88,7 +88,7 @@ _DEBOUNCE_SECONDS = 0.25
 
 # The global container variable that all threads will share.
 # We initialize it once at the start.
-container: PicoContainer = init(modules=["app.services"])
+container: PicoContainer = init(modules=["app"])  # scans recursively
 
 
 def get_current_container() -> PicoContainer:
@@ -127,7 +127,7 @@ def reload_container():
     try:
         # Build the new container *before* shutting
         # down the old one, to ensure a valid config.
-        new_container = init(modules=["app.services"])
+        new_container = init(modules=["app"])  # scans recursively
         
         # Safely swap the containers
         with _container_lock:

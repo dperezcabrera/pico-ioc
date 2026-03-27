@@ -111,7 +111,7 @@ domain_scanner = DomainScanner()
 
 # 2. Initialize the container
 container = init(
-    modules=["my_app.models"],
+    modules=["my_app"],  # scans recursively
     custom_scanners=[domain_scanner] # <-- Register the scanner
 )
 
