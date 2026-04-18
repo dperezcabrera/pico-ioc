@@ -82,7 +82,7 @@ jobs:
           echo "Commit: ${{ github.sha }}" >> site/build-info.txt
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: './site'
 
