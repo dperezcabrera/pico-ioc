@@ -1284,10 +1284,17 @@ class TestOptionalConstructorIntegration:
         scopes = ScopeManager()
         c = PicoContainer(fact, caches, scopes)
         md = ProviderMetadata(
-            key=cls, provided_type=cls, concrete_class=cls,
-            factory_class=None, factory_method=None,
-            qualifiers=set(), primary=True, lazy=False,
-            infra="component", pico_name=None, scope=SCOPE_SINGLETON,
+            key=cls,
+            provided_type=cls,
+            concrete_class=cls,
+            factory_class=None,
+            factory_method=None,
+            qualifiers=set(),
+            primary=True,
+            lazy=False,
+            infra="component",
+            pico_name=None,
+            scope=SCOPE_SINGLETON,
         )
         locator = ComponentLocator({cls: md}, {})
         c.attach_locator(locator)
@@ -1326,6 +1333,7 @@ class TestOptionalConstructorIntegration:
         """Sanity check: the patch must not silently swallow REQUIRED
         missing deps. A constructor parameter without a default and
         without `T | None` must still error out."""
+
         class AbsentDep:
             pass
 
@@ -1336,6 +1344,7 @@ class TestOptionalConstructorIntegration:
         c = self._make_container_with_class(ServiceRequiringDep)
         try:
             from pico_ioc.exceptions import ProviderNotFoundError
+
             with pytest.raises(ProviderNotFoundError):
                 c.get(ServiceRequiringDep)
         finally:

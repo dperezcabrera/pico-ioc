@@ -127,7 +127,14 @@ def init(
     _validate_profiles(active, allowed_profiles)
 
     factory, registrar, pico = _create_container(
-        active, environ, logger, config, custom_scopes, custom_scanners, container_id, observers,
+        active,
+        environ,
+        logger,
+        config,
+        custom_scopes,
+        custom_scanners,
+        container_id,
+        observers,
     )
 
     for m in _iter_input_modules(modules):
