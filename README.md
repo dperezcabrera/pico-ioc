@@ -305,7 +305,7 @@ tox
 
 See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
-**Latest:** [v2.2.4](./releases/v2.2.4.md) (2026-04-25) — fixes the eager
+**Latest:** [v2.2.5](./releases/v2.2.5.md) (2026-04-25) — fixes the eager
 singleton resolver to honor optional dependencies (`T | None` and
 parameters with defaults), matching ADR-0006. Previously these failed at
 instantiation time despite passing static validation.
