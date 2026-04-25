@@ -6,7 +6,7 @@
 
 ## Context
 
-Before **v2.0.0**, Pico-IoC offered two parallel mechanisms for configuration binding:
+Before **v2.0.0**, pico-ioc offered two parallel mechanisms for configuration binding:
 `@configuration` for flat sources and `@configured` for nested (tree) sources.
 Each required a different initialization argument (`config` vs `tree_config`), duplicating both user cognitive load and internal logic.
 Inconsistent ordering, normalization, and documentation made the developer experience error-prone.

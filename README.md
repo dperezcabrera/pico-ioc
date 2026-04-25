@@ -1,4 +1,4 @@
-# 📦 Pico-IoC: A Robust, Async-Native IoC Container for Python
+# 📦 pico-ioc: A Robust, Async-Native IoC Container for Python
 
 [![PyPI](https://img.shields.io/pypi/v/pico-ioc.svg)](https://pypi.org/project/pico-ioc/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dperezcabrera/pico-ioc)
@@ -12,7 +12,7 @@
 [![Docs](https://img.shields.io/badge/Docs-pico--ioc-blue?style=flat&logo=readthedocs&logoColor=white)](https://dperezcabrera.github.io/pico-ioc/)
 [![Interactive Lab](https://img.shields.io/badge/Learn-online-green?style=flat&logo=python&logoColor=white)](https://dperezcabrera.github.io/pico-learn/)
 
-**Pico-IoC** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
+**pico-ioc** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
 It brings Inversion of Control and dependency injection to Python in a deterministic, modern, and framework-agnostic way.
 
 > 🐍 Requires Python 3.11+
@@ -31,12 +31,12 @@ It brings Inversion of Control and dependency injection to Python in a determini
 
 ---
 
-## 🚀 Why Pico-IoC?
+## 🚀 Why pico-ioc?
 
 As Python systems evolve, wiring dependencies by hand becomes fragile and unmaintainable.
-Pico-IoC eliminates that friction by letting you declare how components relate — not how they’re created.
+pico-ioc eliminates that friction by letting you declare how components relate — not how they’re created.
 
-| Feature         | Manual Wiring                  | With Pico-IoC                   |
+| Feature         | Manual Wiring                  | With pico-ioc                   |
 | :-------------- | :----------------------------- | :------------------------------ |
 | Object creation | `svc = Service(Repo(Config()))` | `svc = container.get(Service)`  |
 | Replacing deps  | Monkey-patch                   | `overrides={Repo: FakeRepo()}`  |
@@ -184,7 +184,7 @@ Profiles are typically referenced in decorators or configuration mappings to inc
 
 ## ⚡ Async Components
 
-Pico-IoC supports async lifecycle and resolution.
+pico-ioc supports async lifecycle and resolution.
 
 ```python
 import asyncio
