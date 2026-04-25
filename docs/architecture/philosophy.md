@@ -139,7 +139,7 @@ pico-ioc is not the right tool for every Python project. Consider alternatives w
 
 ---
 
-## The pico-framework Ecosystem
+## The Pico Ecosystem
 
 pico-ioc is the foundation of a family of packages that integrate IoC with popular Python frameworks:
 

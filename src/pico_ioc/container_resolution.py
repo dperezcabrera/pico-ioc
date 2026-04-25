@@ -74,10 +74,14 @@ class _ResolutionMixin:
             if primary_key != dep.parameter_name:
                 try:
                     kwargs[dep.parameter_name] = self.get(dep.parameter_name)
+                    return
                 except Exception:
-                    raise first_error from None
-            else:
-                raise first_error from None
+                    pass
+            # Optional dependencies (param has a default OR T | None annotation)
+            # fall back to the function's default by leaving kwargs unset.
+            if dep.is_optional:
+                return
+            raise first_error from None
 
     def _maybe_wrap_with_aspects(self, key, instance: Any) -> Any:
         if isinstance(instance, UnifiedComponentProxy):

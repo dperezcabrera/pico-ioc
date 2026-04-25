@@ -8,7 +8,7 @@
 curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash -s -- ioc
 ```
 
-Or install all pico-framework skills:
+Or install all pico skills:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash
@@ -28,7 +28,7 @@ curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/instal
 
 ### `/add-component`
 
-Creates a new pico-ioc component with dependency injection. Use when you need to add services, factories, AOP interceptors, event subscribers, or `@configured` settings to a pico-framework project.
+Creates a new pico-ioc component with dependency injection. Use when you need to add services, factories, AOP interceptors, event subscribers, or `@configured` settings to a pico project.
 
 **Component types:** service (`@component`), factory (`@factory` + `@provides`), interceptor (`MethodInterceptor`), event subscriber (`@subscribe`), configured settings (`@configured`).
 
@@ -41,7 +41,7 @@ Creates a new pico-ioc component with dependency injection. Use when you need to
 
 ### `/add-tests`
 
-Generates tests for existing pico-framework components. Creates unit tests with mocks, integration tests with container setup, and proper assertions.
+Generates tests for existing pico components. Creates unit tests with mocks, integration tests with container setup, and proper assertions.
 
 ```
 /add-tests UserService

@@ -7,6 +7,27 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.2.4] - 2026-04-25
+
+### Fixed
+
+- **Optional dependency resolution**: `_resolve_single_dep` in `container_resolution.py` now honors `DependencyRequest.is_optional` and falls back to the parameter default when no provider exists for `T | None` / `Optional[T]` parameters or parameters with default values. Aligns the eager singleton resolver with ADR-0006 and the static `dependency_validator`. Previously the validator accepted the dependency as optional but the resolver re-raised `ProviderNotFoundError` at instantiation, breaking the common `audit: AuditAppender | None = None` pattern. Required dependencies (no default, no `T | None`) continue to raise — explicitly covered by a sanity test.
+
+### Changed
+
+- `container_resolution.py`: `_resolve_single_dep` adds an `if dep.is_optional: return` branch before the final re-raise.
+
+### Added
+
+- `tests/test_coverage_boost_v2.py`:
+  - `TestResolveSingleDepFallbackPaths::test_single_dep_optional_with_no_provider_leaves_kwargs_unset`
+  - `TestResolveSingleDepFallbackPaths::test_single_dep_optional_string_key_no_provider_leaves_kwargs_unset`
+  - `TestOptionalConstructorIntegration::test_optional_None_annotation_falls_back_to_default`
+  - `TestOptionalConstructorIntegration::test_param_with_default_value_falls_back_to_default`
+  - `TestOptionalConstructorIntegration::test_required_dependency_still_raises`
+
+---
+
 ## [2.2.3] - 2026-02-07
 
 ### Fixed

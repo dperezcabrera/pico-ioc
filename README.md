@@ -305,6 +305,11 @@ tox
 
 See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
+**Latest:** [v2.2.4](./releases/v2.2.4.md) (2026-04-25) — fixes the eager
+singleton resolver to honor optional dependencies (`T | None` and
+parameters with defaults), matching ADR-0006. Previously these failed at
+instantiation time despite passing static validation.
+
 -----
 
 ## AI Coding Skills
@@ -318,7 +323,7 @@ curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/instal
 | Command | Description |
 |---------|-------------|
 | `/add-component` | Add components, factories, interceptors, event subscribers, settings |
-| `/add-tests` | Generate tests for pico-framework components |
+| `/add-tests` | Generate tests for pico components |
 
 All skills: `curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash`
 

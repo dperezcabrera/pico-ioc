@@ -2,7 +2,7 @@ Read and follow ./AGENTS.md for project conventions.
 
 ## Pico Ecosystem Context
 
-pico-ioc is the **foundation** of the pico-framework ecosystem. All other packages depend on it:
+pico-ioc is the **foundation** of the pico ecosystem. All other packages depend on it:
 
 - pico-boot: orchestration & plugin discovery
 - pico-fastapi: FastAPI integration

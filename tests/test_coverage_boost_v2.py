@@ -1216,6 +1216,131 @@ class TestResolveSingleDepFallbackPaths:
             c._resolve_single_dep(dep_req, kwargs)
         c.shutdown()
 
+    def test_single_dep_optional_with_no_provider_leaves_kwargs_unset(self):
+        """`is_optional=True` + no provider → no raise, kwargs untouched.
+
+        Regression guard for ADR-0006: the eager singleton resolver must
+        honor `dep.is_optional` and let the parameter's default kick in.
+        Before the fix this path re-raised first_error even though the
+        static validator already accepted it as optional.
+        """
+        fact = ComponentFactory()
+        caches = ScopedCaches()
+        scopes = ScopeManager()
+
+        c = PicoContainer(fact, caches, scopes)
+        locator = ComponentLocator({}, {})
+        c.attach_locator(locator)
+
+        dep_req = DependencyRequest(
+            parameter_name="missing_dep",
+            key=float,
+            is_optional=True,
+        )
+        kwargs = {}
+        c._resolve_single_dep(dep_req, kwargs)
+        # Must NOT raise, and must NOT inject a stand-in value — Python's
+        # default-value machinery is what supplies the actual fallback.
+        assert "missing_dep" not in kwargs
+        c.shutdown()
+
+    def test_single_dep_optional_string_key_no_provider_leaves_kwargs_unset(self):
+        """Same path but with a string `key` equal to parameter_name."""
+        fact = ComponentFactory()
+        caches = ScopedCaches()
+        scopes = ScopeManager()
+
+        c = PicoContainer(fact, caches, scopes)
+        locator = ComponentLocator({}, {})
+        c.attach_locator(locator)
+
+        dep_req = DependencyRequest(
+            parameter_name="cfg",
+            key="cfg",
+            is_optional=True,
+        )
+        kwargs = {}
+        c._resolve_single_dep(dep_req, kwargs)
+        assert "cfg" not in kwargs
+        c.shutdown()
+
+
+class TestOptionalConstructorIntegration:
+    """End-to-end via build_class: a class whose constructor declares an
+    unsatisfied optional dependency must instantiate using the parameter
+    default, not crash on resolution.
+
+    This is the exact scenario from pico-approval that motivated the
+    container_resolution patch — services like AuditAppender appear as
+    `audit: AuditAppender | None = None` in collaborators that may run
+    without an audit log wired in.
+    """
+
+    def _make_container_with_class(self, cls):
+        """Build a container that knows how to construct `cls`, with no
+        provider for any of its dependencies registered."""
+        fact = ComponentFactory()
+        caches = ScopedCaches()
+        scopes = ScopeManager()
+        c = PicoContainer(fact, caches, scopes)
+        md = ProviderMetadata(
+            key=cls, provided_type=cls, concrete_class=cls,
+            factory_class=None, factory_method=None,
+            qualifiers=set(), primary=True, lazy=False,
+            infra="component", pico_name=None, scope=SCOPE_SINGLETON,
+        )
+        locator = ComponentLocator({cls: md}, {})
+        c.attach_locator(locator)
+        deps = analyze_callable_dependencies(cls.__init__)
+        fact.bind(cls, lambda: c.build_class(cls, locator, deps))
+        return c
+
+    def test_optional_None_annotation_falls_back_to_default(self):
+        class AbsentDep:
+            pass
+
+        class ServiceWithOptional:
+            def __init__(self, dep: Optional[AbsentDep] = None):
+                self.dep = dep
+
+        c = self._make_container_with_class(ServiceWithOptional)
+        try:
+            svc = c.get(ServiceWithOptional)
+            assert svc.dep is None
+        finally:
+            c.shutdown()
+
+    def test_param_with_default_value_falls_back_to_default(self):
+        class ServiceWithDefault:
+            def __init__(self, retries: int = 3):
+                self.retries = retries
+
+        c = self._make_container_with_class(ServiceWithDefault)
+        try:
+            svc = c.get(ServiceWithDefault)
+            assert svc.retries == 3
+        finally:
+            c.shutdown()
+
+    def test_required_dependency_still_raises(self):
+        """Sanity check: the patch must not silently swallow REQUIRED
+        missing deps. A constructor parameter without a default and
+        without `T | None` must still error out."""
+        class AbsentDep:
+            pass
+
+        class ServiceRequiringDep:
+            def __init__(self, dep: AbsentDep):
+                self.dep = dep
+
+        c = self._make_container_with_class(ServiceRequiringDep)
+        try:
+            from pico_ioc.exceptions import ProviderNotFoundError
+            with pytest.raises(ProviderNotFoundError):
+                c.get(ServiceRequiringDep)
+        finally:
+            c.shutdown()
+
 
 class TestCoerceUnionInRegistrar:
     """config_registrar.py lines 31-37: _coerce with Union/Optional types."""
