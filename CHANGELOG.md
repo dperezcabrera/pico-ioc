@@ -11,6 +11,15 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.2.7] - 2026-06-07
+
+### Fixed
+
+- **Optional `T | None` (PEP 604) dependencies were not injected on Python 3.11-3.13.** `_check_optional` in `analysis.py` only recognized `typing.Union`, but the `T | None` spelling has origin `types.UnionType` on Python < 3.14 (unified to `typing.Union` only in 3.14). As a result, a constructor parameter annotated `dep: SomeComponent | None = None` silently resolved to its `None` default instead of receiving the registered provider — including the self-injected `PicoContainer | None`. Both union spellings are now recognized, so `T | None` behaves identically to `Optional[T]` on all supported Python versions. `Optional[T]` was unaffected.
+- `tests/test_container_self_injection.py`: regression test asserting `Dependency | None` and `PicoContainer | None` are injected.
+
+---
+
 ## [2.2.6] - 2026-06-07
 
 ### Added

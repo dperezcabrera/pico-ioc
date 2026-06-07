@@ -8,6 +8,7 @@ dependencies at resolution time.
 import collections
 import collections.abc
 import inspect
+import types
 import typing
 from dataclasses import dataclass
 from typing import (
@@ -79,8 +80,13 @@ def _extract_annotated(ann: Any) -> Tuple[Any, Optional[str]]:
 
 
 def _check_optional(ann: Any) -> Tuple[Any, bool]:
+    # Both spellings of a union must be recognized: ``typing.Optional[T]`` /
+    # ``typing.Union[T, None]`` (origin ``typing.Union``) and the PEP 604
+    # ``T | None`` (origin ``types.UnionType`` on Python < 3.14; unified to
+    # ``typing.Union`` in 3.14). Missing the latter silently dropped the
+    # unwrap on 3.11-3.13, so ``T | None`` deps resolved to their default.
     origin = get_origin(ann)
-    if origin is Union:
+    if origin is Union or origin is types.UnionType:
         args = [a for a in get_args(ann) if a is not type(None)]
         if len(args) == 1:
             return args[0], True
