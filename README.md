@@ -85,7 +85,8 @@ Optional extras:
 **Scope LRU Eviction has been removed** to guarantee data integrity.
 
   * **Frameworks (pico-fastapi):** Handled automatically.
-  * **Manual usage:** You **must** explicitly call `container._caches.cleanup_scope("scope_name", scope_id)` when a context ends to prevent memory leaks.
+  * **Manual usage (recommended):** open the scope with `with container.scope("scope_name", scope_id, cleanup=True):` — on block exit the cached instances are evicted and their `@cleanup` hooks run automatically. *(Added in v2.2.6.)*
+  * **Manual usage (low-level):** alternatively, call `container._caches.cleanup_scope("scope_name", scope_id)` yourself when a context ends to prevent memory leaks.
 
 -----
 

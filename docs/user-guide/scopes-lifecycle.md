@@ -65,8 +65,9 @@ assert p1 is not p2  # They are different objects
 ### `scope="request"` (and other Context-Aware Scopes)
 
   - Definition: One instance per active scope ID. These scopes rely on Python's `contextvars` (see ADR-003). You typically activate these scopes in middleware (e.g., for an incoming HTTP request). For the duration of that request (identified by a unique ID), the container will create one instance of the component. If the same component is requested again within the same request, the cached instance is returned. A different request (with a different ID) will get its own separate instance.
-  - Built-in Context Scopes: `"request"`, `"session"`, `"transaction"`.
+  - Built-in Context Scopes: `"request"`, `"session"`, `"websocket"`, `"transaction"`. The `"request"`/`"session"`/`"websocket"` scopes are activated by **pico-fastapi** middleware; the `"transaction"` scope is activated by **pico-sqlalchemy**'s `TransactionalInterceptor`, tying a component's lifetime to one DB transaction (Unit-of-Work / identity-map). pico-ioc ships the scope machinery; those integrations drive activation.
   - Use Case: Essential for web applications. Perfect for holding request-specific state (like the current user's ID, permissions, or per-request database transaction objects) without resorting to global variables or passing context down call stacks manually.
+  - Tip: pass `cleanup=True` to `container.scope(name, id, cleanup=True)` so per-scope instances are evicted and their `@cleanup` hooks run when the block exits.
 
 <!-- end list -->
 

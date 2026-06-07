@@ -121,13 +121,21 @@ Deactivates a specific Scope using the token returned by activate_scope.
 
 ---
 
-### scope(name: str, scope_id: Any) -> ContextManager[PicoContainer]
+### scope(name: str, scope_id: Any, *, cleanup: bool = False) -> ContextManager[PicoContainer]
 
 Returns a context manager (with container.scope("request", "id-123"): ...) that activates a specific Scope for the duration of the with block. This is the preferred way to manage scopes like "request".
 
 - name: The name of the scope to activate.
 - scope_id: A unique identifier for this scope instance.
+- cleanup: If `True`, evict the instances cached under this `scope_id` when the block exits, running their `@cleanup` hooks. Use for short-lived scopes (request, transaction) so per-scope instances do not accumulate — the convenient alternative to calling `_caches.cleanup_scope(...)` by hand. Defaults to `False` (backwards-compatible).
 - Yields: The container instance (self).
+
+```python
+# Auto-cleanup on exit (no manual cleanup_scope call needed):
+with container.scope("request", request_id, cleanup=True):
+    handle(container.get(RequestContext))
+# request-scoped instances evicted + their @cleanup hooks run here
+```
 
 ---
 

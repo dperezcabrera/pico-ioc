@@ -46,14 +46,24 @@ with container.scope("tenant", other_tenant_id):
 
 ### 3. Clean up when a scope ends
 
-When a scope is no longer needed (e.g. the tenant disconnects), clean up
-its cached instances explicitly:
+For short-lived scopes, pass `cleanup=True` to `container.scope(...)` — the
+cached instances are evicted and their `@cleanup` methods run automatically
+when the block exits:
+
+```python
+with container.scope("tenant", tenant_id, cleanup=True):
+    container.get(TenantCache).data["key"] = "value"
+# TenantCache evicted + @cleanup hooks run here — no manual call needed
+```
+
+If you manage activation yourself (via `activate_scope`/`deactivate_scope`)
+rather than the context manager, clean up explicitly when the scope ends:
 
 ```python
 container._caches.cleanup_scope("tenant", tenant_id)
 ```
 
-This invokes all `@cleanup` methods on components stored under that scope ID.
+Both invoke all `@cleanup` methods on components stored under that scope ID.
 
 ## Explanation
 

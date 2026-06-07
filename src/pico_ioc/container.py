@@ -396,12 +396,17 @@ class PicoContainer(_ResolutionMixin):
         LOGGER.info(f"[{self.container_id[:8]}] {msg}")
 
     @contextmanager
-    def scope(self, name: str, scope_id: Any):
+    def scope(self, name: str, scope_id: Any, *, cleanup: bool = False):
         """Context manager that activates a scope for the duration of a block.
 
         Args:
             name: The scope name (e.g. ``"request"``).
             scope_id: A unique identifier for this scope instance.
+            cleanup: If ``True``, evict the instances cached under this
+                ``scope_id`` when the block exits, running their
+                ``@cleanup`` hooks. Use for short-lived scopes (request,
+                transaction) so per-scope instances do not accumulate.
+                Defaults to ``False`` for backwards compatibility.
 
         Yields:
             This container instance.
@@ -415,6 +420,8 @@ class PicoContainer(_ResolutionMixin):
             yield self
         finally:
             self.deactivate_scope(name, tok)
+            if cleanup:
+                self._caches.cleanup_scope(name, scope_id)
 
     def health_check(self) -> Dict[str, bool]:
         """Run all ``@health``-decorated methods and return their results.

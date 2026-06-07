@@ -7,6 +7,19 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [Unreleased]
+
+---
+
+## [2.2.6] - 2026-06-07
+
+### Added
+
+- **`container.scope(name, scope_id, *, cleanup=False)`**: optional keyword-only `cleanup` flag. When `True`, the instances cached under `scope_id` are evicted and their `@cleanup` hooks run on block exit — the convenient alternative to calling `container._caches.cleanup_scope(...)` by hand for short-lived scopes (request, transaction). Backwards-compatible: the default `False` preserves prior behavior, and positional callers `scope(name, id)` are unaffected (the flag is keyword-only).
+- `tests/test_scope_cleanup_param.py`: covers both the `cleanup=True` (evict + run hook + fresh instance on re-entry) and default `cleanup=False` (instance preserved) branches.
+
+---
+
 ## [2.2.5] - 2026-04-25
 
 ### Fixed

@@ -2,13 +2,14 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from pico_ioc import init, configuration
 from pico_fastapi import PicoFastAPI
+from pydantic import BaseModel
+
+from pico_ioc import configuration, init
 
 from .config import AppConfig
-from .services import TodoService
 from .models import Todo
+from .services import TodoService
 
 
 class TodoCreate(BaseModel):
