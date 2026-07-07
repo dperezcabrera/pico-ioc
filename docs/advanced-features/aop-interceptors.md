@@ -87,7 +87,7 @@ This decorator is applied directly to the methods you want to intercept. You pas
 
 ```python
 from pico_ioc import component, intercepted_by
-from pico_ioc.aop import MethodInterceptor, MethodCtx
+from pico_ioc import MethodInterceptor, MethodCtx
 
 # Assume LoggingInterceptor and TracingInterceptor are components
 # defined elsewhere and implement MethodInterceptor
@@ -124,7 +124,7 @@ import logging
 import time
 from typing import Any, Callable
 from pico_ioc import component
-from pico_ioc.aop import MethodCtx, MethodInterceptor
+from pico_ioc import MethodCtx, MethodInterceptor
 
 log = logging.getLogger(__name__)
 
@@ -270,7 +270,7 @@ import asyncio
 import logging
 from typing import Callable, Any
 from pico_ioc import component, intercepted_by
-from pico_ioc.aop import MethodInterceptor, MethodCtx
+from pico_ioc import MethodInterceptor, MethodCtx
 
 log = logging.getLogger(__name__)
 

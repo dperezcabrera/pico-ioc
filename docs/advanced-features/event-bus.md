@@ -49,7 +49,7 @@ An `Event` is a simple class (like a `dataclass`) that holds information about w
 
 ```python
 from dataclasses import dataclass
-from pico_ioc.event_bus import Event
+from pico_ioc import Event
 
 @dataclass
 class UserCreatedEvent(Event):
@@ -81,7 +81,7 @@ First, we define the event that will be published.
 ```python
 # events.py
 from dataclasses import dataclass
-from pico_ioc.event_bus import Event
+from pico_ioc import Event
 
 @dataclass
 class UserCreatedEvent(Event):
@@ -96,7 +96,7 @@ Now, `UserService` only needs to know about the `EventBus`. Its dependencies are
 ```python
 # services/user_service.py
 from pico_ioc import component
-from pico_ioc.event_bus import EventBus
+from pico_ioc import EventBus
 from .events import UserCreatedEvent
 
 # Assume Database is defined elsewhere
@@ -135,7 +135,7 @@ Next, we create our listener components. Use `AutoSubscriberMixin` to automatica
 # services/email_service.py
 import asyncio  # For simulation
 from pico_ioc import component
-from pico_ioc.event_bus import AutoSubscriberMixin, subscribe
+from pico_ioc import AutoSubscriberMixin, subscribe
 from ..events import UserCreatedEvent
 
 @component
@@ -156,7 +156,7 @@ class EmailService(AutoSubscriberMixin):
 # services/analytics_service.py
 import asyncio  # For simulation
 from pico_ioc import component
-from pico_ioc.event_bus import AutoSubscriberMixin, subscribe, ExecPolicy
+from pico_ioc import AutoSubscriberMixin, subscribe, ExecPolicy
 from ..events import UserCreatedEvent
 
 @component
@@ -281,7 +281,7 @@ Rule of Thumb: Always use `await bus.publish()` unless you specifically need the
 If you use `bus.post(...)`, you must manage the worker:
 
 ```python
-from pico_ioc.event_bus import EventBus
+from pico_ioc import EventBus
 
 bus = await container.aget(EventBus)
 await bus.start_worker()  # starts the background task to drain the queue

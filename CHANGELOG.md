@@ -27,6 +27,11 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
   fields keep the strict fail-fast error. This lets zero-config plugins
   (e.g. pico-actuator) work without demanding a config block.
 
+### Fixed
+
+- Doc examples now import `Event`, `EventBus`, `MethodInterceptor`, etc. from
+  the public `pico_ioc` API instead of internal modules.
+
 ---
 
 ## [2.2.7] - 2026-06-07
