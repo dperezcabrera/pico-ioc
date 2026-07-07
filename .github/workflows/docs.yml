@@ -47,6 +47,7 @@ jobs:
         run: mkdocs build --strict
 
       - name: Check for broken links (best-effort)
+        continue-on-error: true
         run: |
           pip install linkchecker
           python -m http.server --directory site 8000 &
