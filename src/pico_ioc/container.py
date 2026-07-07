@@ -158,6 +158,7 @@ class PicoContainer(_ResolutionMixin):
         Returns:
             ``True`` if a provider or cached instance exists for *key*.
         """
+        key = self._canonical_key(key)
         cache = self._cache_for(key)
         return cache.get(key) is not None or self._factory.has(key)
 
@@ -187,7 +188,7 @@ class PicoContainer(_ResolutionMixin):
 
         return key
 
-    def _resolve_or_create_internal(self, key: KeyT) -> Tuple[Any, float, bool]:
+    def _resolve_or_create_internal(self, key: KeyT) -> Tuple[Any, float, bool, KeyT]:
         key = self._canonical_key(key)
         cache = self._cache_for(key)
         cached = cache.get(key)
@@ -196,7 +197,7 @@ class PicoContainer(_ResolutionMixin):
             self.context.cache_hit_count += 1
             for o in self._observers:
                 o.on_cache_hit(key)
-            return cached, 0.0, True
+            return cached, 0.0, True, key
 
         t0 = time.perf_counter()
 
@@ -213,7 +214,7 @@ class PicoContainer(_ResolutionMixin):
                 raise ComponentCreationError(key, creation_error) from creation_error
 
             took_ms = (time.perf_counter() - t0) * 1000
-            return instance_or_awaitable, took_ms, False
+            return instance_or_awaitable, took_ms, False, key
 
         finally:
             self.deactivate(token_container)
@@ -262,7 +263,7 @@ class PicoContainer(_ResolutionMixin):
                 (use :meth:`aget` instead).
             ComponentCreationError: If the provider fails during creation.
         """
-        instance_or_awaitable, took_ms, was_cached = self._resolve_or_create_internal(key)
+        instance_or_awaitable, took_ms, was_cached, key = self._resolve_or_create_internal(key)
 
         if was_cached:
             return instance_or_awaitable
@@ -305,7 +306,7 @@ class PicoContainer(_ResolutionMixin):
             ProviderNotFoundError: If no provider is bound to *key*.
             ComponentCreationError: If the provider fails during creation.
         """
-        instance_or_awaitable, took_ms, was_cached = self._resolve_or_create_internal(key)
+        instance_or_awaitable, took_ms, was_cached, key = self._resolve_or_create_internal(key)
 
         instance = instance_or_awaitable
         if was_cached:
