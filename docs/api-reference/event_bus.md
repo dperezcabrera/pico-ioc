@@ -100,7 +100,7 @@ A decorator to mark methods as event handlers. Used with `AutoSubscriberMixin`.
 
 ```python
 from pico_ioc import component, subscribe
-from pico_ioc.event_bus import AutoSubscriberMixin, Event, ExecPolicy
+from pico_ioc import AutoSubscriberMixin, Event, ExecPolicy
 
 class MyEvent(Event):
     ...
