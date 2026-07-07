@@ -18,7 +18,6 @@ from pico_ioc.constants import PICO_META
 from pico_ioc.container import (
     PicoContainer,
     _build_resolution_graph,
-    _get_signature_safe,
     _iter_configure_methods,
     _needs_async_configure,
 )
@@ -30,50 +29,6 @@ from pico_ioc.scope import ScopedCaches, ScopeManager
 # ============================================================
 # Helper function tests - don't need container
 # ============================================================
-
-
-class TestGetSignatureSafeEdgeCases:
-    """Test _get_signature_safe edge cases."""
-
-    def test_signature_with_wrapped_attribute(self):
-        """Function with __wrapped__ falls back to wrapped signature."""
-
-        def original(x: int, y: str) -> bool:
-            return True
-
-        class BadCallable:
-            def __call__(self):
-                pass
-
-        bad = BadCallable()
-        bad.__wrapped__ = original
-
-        sig = _get_signature_safe(bad)
-        assert "x" in sig.parameters
-        assert "y" in sig.parameters
-
-    def test_signature_normal_function(self):
-        """Normal function returns signature directly."""
-
-        def normal_func(a: int, b: str = "default") -> None:
-            pass
-
-        sig = _get_signature_safe(normal_func)
-        assert "a" in sig.parameters
-        assert "b" in sig.parameters
-
-    def test_signature_raises_when_no_wrapped(self):
-        """_get_signature_safe raises when signature fails and no __wrapped__."""
-
-        class BadObj:
-            """Object that can't be introspected."""
-
-            pass
-
-        bad = BadObj()
-        # Should raise since no __wrapped__ and signature fails
-        with pytest.raises((ValueError, TypeError)):
-            _get_signature_safe(bad)
 
 
 class TestNeedsAsyncConfigure:

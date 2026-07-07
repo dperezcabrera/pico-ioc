@@ -2927,27 +2927,6 @@ class TestGraphExportNonStringNonTypeKey:
 # ============================================================
 
 
-class TestGetSignatureSafeWrapped:
-    def test_wrapped_fallback(self):
-        """Line 38: __wrapped__ fallback for signature."""
-        from pico_ioc.container import _get_signature_safe
-
-        def real_fn(a: int, b: str): ...
-
-        class BadCallable:
-            __wrapped__ = real_fn
-
-            def __call__(self):
-                pass
-
-        # Make __call__ signature fail but __wrapped__ works
-        obj = BadCallable()
-        # Patch to make first attempt fail
-        with patch("inspect.signature", side_effect=[TypeError("nope"), inspect.signature(real_fn)]):
-            sig = _get_signature_safe(obj)
-            assert "a" in sig.parameters
-
-
 class TestContainerCanonicalKeySubclass:
     def _make_pico(self, factory, locator):
         caches = ScopedCaches()

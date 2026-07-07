@@ -8,6 +8,8 @@ dependency graph export.
 
 import contextvars
 import inspect
+import secrets
+import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union, overload
 
@@ -23,20 +25,6 @@ from .locator import ComponentLocator
 from .scope import ScopedCaches, ScopeManager
 
 KeyT = Union[str, type]
-
-
-def _normalize_callable(obj):
-    return getattr(obj, "__func__", obj)
-
-
-def _get_signature_safe(callable_obj):
-    try:
-        return inspect.signature(callable_obj)
-    except (ValueError, TypeError):
-        wrapped = getattr(callable_obj, "__wrapped__", None)
-        if wrapped is not None:
-            return inspect.signature(wrapped)
-        raise
 
 
 def _needs_async_configure(obj: Any) -> bool:
@@ -98,17 +86,12 @@ class PicoContainer(_ResolutionMixin):
         self._config_manager: Optional[Any] = None
         self._observers = list(observers or [])
         self.container_id = container_id or self._generate_container_id()
-        import time as _t
-
-        self.context = PicoContainer._Ctx(container_id=self.container_id, profiles=profiles, created_at=_t.time())
+        self.context = PicoContainer._Ctx(container_id=self.container_id, profiles=profiles, created_at=time.time())
         PicoContainer._container_registry[self.container_id] = self
 
     @staticmethod
     def _generate_container_id() -> str:
-        import secrets
-        import time as _t
-
-        return f"c{_t.time_ns():x}{secrets.randbits(16):04x}"
+        return f"c{time.time_ns():x}{secrets.randbits(16):04x}"
 
     @classmethod
     def get_current(cls) -> Optional["PicoContainer"]:
@@ -215,9 +198,7 @@ class PicoContainer(_ResolutionMixin):
                 o.on_cache_hit(key)
             return cached, 0.0, True
 
-        import time as _tm
-
-        t0 = _tm.perf_counter()
+        t0 = time.perf_counter()
 
         token_container = self.activate()
         requester = None
@@ -231,7 +212,7 @@ class PicoContainer(_ResolutionMixin):
             except Exception as creation_error:
                 raise ComponentCreationError(key, creation_error) from creation_error
 
-            took_ms = (_tm.perf_counter() - t0) * 1000
+            took_ms = (time.perf_counter() - t0) * 1000
             return instance_or_awaitable, took_ms, False
 
         finally:
@@ -466,15 +447,13 @@ class PicoContainer(_ResolutionMixin):
             ``uptime_seconds``, ``total_resolves``, ``cache_hits``,
             ``cache_hit_rate``, and ``registered_components``.
         """
-        import time as _t
-
         resolves = self.context.resolve_count
         hits = self.context.cache_hit_count
         total = resolves + hits
         return {
             "container_id": self.container_id,
             "profiles": self.context.profiles,
-            "uptime_seconds": _t.time() - self.context.created_at,
+            "uptime_seconds": time.time() - self.context.created_at,
             "total_resolves": resolves,
             "cache_hits": hits,
             "cache_hit_rate": (hits / total) if total > 0 else 0.0,
