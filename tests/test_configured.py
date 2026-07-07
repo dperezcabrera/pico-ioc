@@ -321,6 +321,26 @@ def test_configured_error_on_missing_prefix():
     assert "Missing config prefix: missing.prefix" in str(e.value.cause)
 
 
+def test_configured_missing_prefix_builds_from_defaults():
+    @dataclass
+    class AllDefaults:
+        enabled: bool = True
+        path: str = "/actuator"
+
+    @configured(target=AllDefaults, prefix="missing.prefix", mapping="tree")
+    class ConfiguredAllDefaults:
+        pass
+
+    mod = types.ModuleType("test_mod")
+    setattr(mod, "ConfiguredAllDefaults", ConfiguredAllDefaults)
+
+    container = init(modules=[mod], config=configuration(DictSource({})))
+    settings = container.get(AllDefaults)
+
+    assert settings.enabled is True
+    assert settings.path == "/actuator"
+
+
 def test_configured_union_default_discriminator():
     @configured(target=PetOwnerDefault, prefix="pet_owner_default")
     class ConfiguredPetOwnerDefault:

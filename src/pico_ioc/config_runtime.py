@@ -170,30 +170,38 @@ class ObjectGraphBuilder:
         self._registry = registry
 
     def build_from_prefix(self, target_type: type, prefix: Optional[str]) -> Any:
-        node = self._resolver.subtree(prefix)
+        try:
+            node = self._resolver.subtree(prefix)
+        except ConfigurationError:
+            # A missing prefix is tolerable iff the target builds entirely
+            # from its defaults (zero-config plugins like pico-actuator).
+            # Types with required fields keep the strict fail-fast error.
+            try:
+                node = {}
+                inst = self._build(node, target_type, (prefix or "$root",))
+            except Exception:
+                raise ConfigurationError(f"Missing config prefix: {prefix}") from None
+            return self._annotate(inst, node, prefix)
         inst = self._build(node, target_type, ("$root" if not prefix else prefix,))
+        return self._annotate(inst, node, prefix)
+
+    def _annotate(self, inst: Any, node: Any, prefix: Optional[str]) -> Any:
         try:
             h = hashlib.sha256(canonicalize(node)).hexdigest()
+            meta = {
+                "config_hash": h,
+                "config_prefix": prefix,
+                "config_source_order": tuple(type(s).__name__ for s in self._resolver._sources),
+            }
             m = getattr(inst, PICO_META, None)
             if m is None:
-                setattr(
-                    inst,
-                    PICO_META,
-                    {
-                        "config_hash": h,
-                        "config_prefix": prefix,
-                        "config_source_order": tuple(type(s).__name__ for s in self._resolver._sources),
-                    },
-                )
+                setattr(inst, PICO_META, meta)
             else:
-                m.update(
-                    {
-                        "config_hash": h,
-                        "config_prefix": prefix,
-                        "config_source_order": tuple(type(s).__name__ for s in self._resolver._sources),
-                    }
-                )
+                m.update(meta)
         except Exception:
+            # Metadata annotation is best-effort: instances with __slots__ or
+            # frozen dataclasses reject attribute writes. The built config is
+            # valid either way; only provenance introspection is lost.
             pass
         return inst
 
@@ -244,6 +252,9 @@ class ObjectGraphBuilder:
                 try:
                     return self._build(node, cand, path)
                 except Exception:
+                    # Trial-and-error by design: a failed candidate just means
+                    # "not this union member". ConfigurationError below reports
+                    # the path once every candidate has been rejected.
                     continue
             raise ConfigurationError(f"No union match at {'.'.join(path)}")
 
@@ -259,6 +270,7 @@ class ObjectGraphBuilder:
             try:
                 return self._build(node, cand, path)
             except Exception:
+                # Same trial-and-error as above for dict nodes without $type.
                 continue
         raise ConfigurationError(f"No union match at {'.'.join(path)}")
 
@@ -278,6 +290,8 @@ class ObjectGraphBuilder:
             try:
                 return t[node]
             except Exception:
+                # Not a member *name*; fall through to match by *value*
+                # ("INFO" vs LogLevel.INFO = "info"). No match → error below.
                 for e in t:
                     if str(e.value) == node:
                         return e
@@ -293,6 +307,8 @@ class ObjectGraphBuilder:
         try:
             dc_hints = typing.get_type_hints(t, include_extras=True)
         except Exception:
+            # get_type_hints raises on unresolvable forward refs / missing
+            # optional imports; fall back to the raw f.type annotations.
             dc_hints = {}
         vals: Dict[str, Any] = {}
         for f in fields(t):
@@ -310,6 +326,8 @@ class ObjectGraphBuilder:
         try:
             init_hints = typing.get_type_hints(t.__init__, include_extras=True)
         except Exception:
+            # Same fallback as _build_dataclass: unresolvable hints degrade to
+            # the signature's raw annotations, never to a hard failure.
             init_hints = {}
         kwargs: Dict[str, Any] = {}
         for name, p in sig.parameters.items():
