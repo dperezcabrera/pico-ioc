@@ -14,6 +14,7 @@ ADR Index:
 - ADR-009: Flexible @provides for Static and Module-level Functions — Accepted — ./adr-0009-flexible-provides.md
 - ADR-010: Unified Configuration via @configured and ContextConfig — Accepted — ./adr-0010-unified-configuration.md
 - ADR-011: Extensible Component Scanning via Custom Scanners — Accepted — ./adr-0011-custom-scanners.md
+- ADR-012: Resolution Path in Dependency Errors — Proposed — ./adr-0012-resolution-path-in-errors.md
 - ADR-013: Hot Configuration Refresh — Accepted — ./adr-0013-hot-config-refresh.md
 
 Status legend:
