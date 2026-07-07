@@ -9,6 +9,10 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [Unreleased]
 
+---
+
+## [2.3.0] - 2026-07-07
+
 ### Added
 
 - Hot config refresh: `container.refresh_config()` re-reads all tree sources,
