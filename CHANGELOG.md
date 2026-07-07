@@ -11,6 +11,21 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.3.1] - 2026-07-07
+
+### Fixed
+
+- Singleton identity when resolving by base class or component name (#20):
+  the instance cache was checked under the canonical key but written under
+  the key passed to `get()`/`aget()`, so a cold-cache `get(Base)` (e.g. with
+  `lazy=True` components) orphaned its instance and a later resolution
+  created a second singleton. Post-creation caching, scope lookup, and
+  aspect wrapping now use the canonical key.
+- `container.has()` now canonicalizes its key, so it returns `True` for a
+  base class or `pico_name` that `get()` can resolve.
+
+---
+
 ## [2.3.0] - 2026-07-07
 
 ### Added
