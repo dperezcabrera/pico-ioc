@@ -19,6 +19,14 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
   old config — subscribers re-read what they need; new resolutions see the
   refreshed tree.
 
+### Changed
+
+- `@configured` types whose fields all have defaults no longer fail with
+  `Missing config prefix` when their prefix is absent from the configuration:
+  they are built from their defaults. Types with required (non-defaulted)
+  fields keep the strict fail-fast error. This lets zero-config plugins
+  (e.g. pico-actuator) work without demanding a config block.
+
 ---
 
 ## [2.2.7] - 2026-06-07
