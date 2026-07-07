@@ -16,10 +16,8 @@ from pico_ioc.constants import PICO_META
 from pico_ioc.container import (
     PicoContainer,
     _build_resolution_graph,
-    _get_signature_safe,
     _iter_configure_methods,
     _needs_async_configure,
-    _normalize_callable,
 )
 from pico_ioc.exceptions import AsyncResolutionError, ComponentCreationError, ConfigurationError, ProviderNotFoundError
 from pico_ioc.factory import ComponentFactory
@@ -108,50 +106,6 @@ class UnhealthyService:
 
 class TestContainerHelperFunctions:
     """Test helper functions in container module."""
-
-    def test_normalize_callable_with_func_attr(self):
-        """_normalize_callable returns __func__ if present."""
-
-        class MyClass:
-            def method(self):
-                pass
-
-        bound = MyClass().method
-        result = _normalize_callable(bound)
-        assert result == bound.__func__
-
-    def test_normalize_callable_without_func_attr(self):
-        """_normalize_callable returns obj if no __func__."""
-
-        def plain_func():
-            pass
-
-        result = _normalize_callable(plain_func)
-        assert result is plain_func
-
-    def test_get_signature_safe_normal(self):
-        """_get_signature_safe works with normal functions."""
-
-        def my_func(a: int, b: str) -> bool:
-            pass
-
-        sig = _get_signature_safe(my_func)
-        assert "a" in sig.parameters
-        assert "b" in sig.parameters
-
-    def test_get_signature_safe_wrapped(self):
-        """_get_signature_safe falls back to __wrapped__."""
-
-        def original(a: int) -> int:
-            return a
-
-        def wrapper(*args, **kwargs):
-            return original(*args, **kwargs)
-
-        wrapper.__wrapped__ = original
-
-        sig = _get_signature_safe(wrapper)
-        assert "a" in sig.parameters
 
     def test_needs_async_configure_true(self):
         """_needs_async_configure detects async configure methods."""

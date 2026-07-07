@@ -5,16 +5,11 @@ querying registered providers by qualifier, primary flag, infra type,
 and other indexed attributes.
 """
 
-import inspect
 from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
 from .factory import ProviderMetadata
 
 KeyT = Union[str, type]
-
-
-def _get_signature_static(fn):
-    return inspect.signature(fn)
 
 
 class ComponentLocator:
