@@ -49,6 +49,7 @@ pico-ioc eliminates that friction by letting you declare how components relate â
 ## ðŸ§© Highlights (v2.2+)
 
 - **Unified Configuration**: Use `@configured` to bind both flat (ENV-like) and tree (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
+- **Hot config refresh**: `container.refresh_config()` re-reads tree sources and publishes a `ConfigChanged` event with the changed prefixes.
 - **Extensible Scanning**: Use `CustomScanner` to hook into the discovery phase and register functions or custom decorators (ADR-0011).
 - **Async-aware AOP**: Method interceptors via `@intercepted_by`.
 - **Scoped resolution**: singleton, prototype, request, session, transaction, and custom scopes.

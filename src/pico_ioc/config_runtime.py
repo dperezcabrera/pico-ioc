@@ -129,6 +129,17 @@ class ConfigResolver:
             self._tree = acc
         return self._tree
 
+    def refresh(self) -> frozenset:
+        """Re-read all sources and return the top-level prefixes that changed."""
+        old = self.tree()
+        self._tree = None
+        new = self.tree()
+        return frozenset(
+            k
+            for k in set(old) | set(new)
+            if k not in old or k not in new or canonicalize(old[k]) != canonicalize(new[k])
+        )
+
     def subtree(self, prefix: Optional[str]) -> Any:
         t = self.tree()
         if not prefix:

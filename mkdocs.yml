@@ -209,6 +209,7 @@ nav:
       - ADR-009 Flexible Provides: adr/adr-0009-flexible-provides.md
       - ADR-010 Unified Configuration: adr/adr-0010-unified-configuration.md
       - ADR-011 Custom Scanners: adr/adr-0011-custom-scanners.md
+      - ADR-013 Hot Config Refresh: adr/adr-0013-hot-config-refresh.md
 
   - AI Coding Skills: skills.md
 

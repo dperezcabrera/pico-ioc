@@ -336,7 +336,7 @@ At this level, you use pico-ioc as the backbone for full application architectur
 - **Multi-tenant**: Use `scope="request"` with per-tenant configuration
 - **Feature toggles**: Use AOP interceptors to enable/disable features at runtime
 - **Structured logging**: Attach request context via interceptors
-- **Hot-reload configuration**: Watch config files and refresh the container
+- **Hot-reload configuration**: Watch config files and call `container.refresh_config()`; components react to the `ConfigChanged` event
 
 See the [Cookbook](./cookbook/README.md) for complete, runnable examples of each pattern.
 

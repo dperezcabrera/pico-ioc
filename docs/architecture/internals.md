@@ -121,6 +121,7 @@ Managed primarily by config_registrar.py and config_runtime.py, based on the Con
     2. Performs a deep merge according to precedence rules.
     3. Walks the merged tree to interpolate variables (${ENV:VAR}, ${ref:path}).
     4. Caches the final, resolved configuration tree.
+    5. On `container.refresh_config()`, re-runs steps 1–3, swaps the cached tree, and reports the top-level prefixes whose subtree changed (diffed via `canonicalize()`), which the container publishes as a `ConfigChanged` event.
   * `ObjectGraphBuilder`: Used by the provider for @configured(mapping="tree") components.
     1. Gets the relevant sub-tree from ConfigResolver using the prefix.
     2. Recursively walks the target type (e.g., a dataclass) and the config sub-tree.
