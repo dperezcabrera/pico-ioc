@@ -211,6 +211,7 @@ nav:
       - ADR-011 Custom Scanners: adr/adr-0011-custom-scanners.md
       - ADR-013 Hot Config Refresh: adr/adr-0013-hot-config-refresh.md
 
+  - Built for the AI Era: ai-ready.md
   - AI Coding Skills: skills.md
 
   - API Reference:

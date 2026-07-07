@@ -2,6 +2,10 @@
 
 `pico-ioc` is a lightweight, async-native Inversion of Control (IoC) container for Python 3.11+. It brings enterprise-grade dependency injection, configuration binding, and AOP to the Python ecosystem.
 
+The pico ecosystem is [built for the AI era](ai-ready.md): every module ships
+machine-readable conventions, installable AI coding skills, and scaffolds that
+generate AI-maintainable projects from the first commit.
+
 ---
 
 ## Quick Install

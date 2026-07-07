@@ -17,6 +17,8 @@ It brings Inversion of Control and dependency injection to Python in a determini
 
 > 🐍 Requires Python 3.11+
 
+The pico ecosystem is [**built for the AI era**](https://dperezcabrera.github.io/pico-ioc/ai-ready/): machine-readable conventions in every repo, installable [AI coding skills](https://github.com/dperezcabrera/pico-skills), and [scaffolds](https://dperezcabrera.github.io/pico-initializer/) that generate AI-maintainable projects from the first commit.
+
 ---
 
 ## ⚖️ Core Principles
