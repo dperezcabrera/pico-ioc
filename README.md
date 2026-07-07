@@ -309,10 +309,10 @@ tox
 
 See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
-**Latest:** [v2.2.5](./releases/v2.2.5.md) (2026-04-25) — fixes the eager
-singleton resolver to honor optional dependencies (`T | None` and
-parameters with defaults), matching ADR-0006. Previously these failed at
-instantiation time despite passing static validation.
+**Latest:** [v2.3.1](https://github.com/dperezcabrera/pico-ioc/releases/tag/v2.3.1) (2026-07-07) — fixes
+singleton identity when resolving by base class or component name (#20):
+the cache was written under the requested key instead of the canonical
+one, so cold-cache resolutions could create a second singleton.
 
 -----
 
