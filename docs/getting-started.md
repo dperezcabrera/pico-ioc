@@ -1,6 +1,6 @@
 # Getting Started: 5-Minute Tutorial
 
-Welcome to `pico-ioc`! 🚀
+Welcome to `pico-ioc`!
 
 This guide will get you installed and running your first dependency-injected application in less than 5 minutes. We'll go from an empty file to a fully-wired application.
 

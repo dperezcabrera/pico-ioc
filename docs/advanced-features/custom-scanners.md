@@ -1,4 +1,4 @@
-# Advanced: Custom Component Scanners 🔎
+# Advanced: Custom Component Scanners
 
 The core `pico-ioc` scanner automatically discovers components marked with decorators like `@component`, `@factory`, `@provides`, and `@configured`.
 

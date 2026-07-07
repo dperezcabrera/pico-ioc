@@ -6,7 +6,7 @@ Dependency Injection isn't just about wiring components together; it's also abou
 
 ---
 
-## 1. Scopes: Controlling Instance Lifecycles ♻️
+## 1. Scopes: Controlling Instance Lifecycles
 
 The scope of a component defines how many instances of it will exist and how long they will live. You set the scope using the `scope="..."` parameter in the main registration decorators (`@component`, `@factory`, `@provides`).
 
@@ -138,7 +138,7 @@ finally:
 
 -----
 
-## 2\. Lifecycle Hooks: `@configure` and `@cleanup` ⚙️
+## 2\. Lifecycle Hooks: `@configure` and `@cleanup`
 
 Sometimes, creating an object via `__init__` isn't enough. You might need to:
 
@@ -227,7 +227,7 @@ asyncio.run(main())
 
 -----
 
-## 3\. Lazy Instantiation: `lazy=True` 🛋️
+## 3\. Lazy Instantiation: `lazy=True`
 
 By default, `pico-ioc` performs eager validation at startup (`init()`). It checks that all dependencies can be resolved. For singleton components, it usually creates them immediately (or soon after startup).
 

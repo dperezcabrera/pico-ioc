@@ -1,4 +1,4 @@
-# Testing Applications 🧪
+# Testing Applications
 
 One of the greatest benefits of using Dependency Injection is that your code becomes highly testable.
 

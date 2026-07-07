@@ -102,12 +102,12 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 - **Python Version**: Bumped minimum Python from 3.10 to 3.11 (`requires-python >= 3.11`). Removed Python 3.10 classifier.
 
-### Internal 🔧
+### Internal
 
 - **Scope Constants**: Replaced all hardcoded `"singleton"` and `"prototype"` string literals across `aop.py`, `api.py`, `container.py`, `scope.py`, `registrar.py`, `locator.py`, and `component_scanner.py` with `SCOPE_SINGLETON` and `SCOPE_PROTOTYPE` constants from `constants.py`.
 - Simplified import lists in `registrar.py`, `locator.py`, and `config_registrar.py`.
 
-### Docs 📚
+### Docs
 
 - Added `docs/faq.md` with common questions and troubleshooting.
 - Added `docs/examples/fastapi-todo-app.md` — full FastAPI + pico-ioc tutorial.
@@ -118,13 +118,13 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [2.2.1] - 2026-02-03
 
-### Fixed 🧩
+### Fixed
 
 - **DOT Graph Export**: Fixed incorrect variable reference in `export_graph()` where dependency edges used `{child}` instead of `{cid}`, causing malformed DOT output when visualizing the dependency graph.
 - **Race Condition in Lazy Proxy**: Fixed a race condition in `UnifiedComponentProxy._async_init_if_needed()` where concurrent async access could trigger duplicate object creation. The fix implements proper double-check locking and moves `@configure` execution outside the critical section to prevent deadlocks.
 - **Silent Cleanup Failures**: Replaced silent `except Exception: pass` blocks in `ScopedCaches` cleanup methods with proper logging. Cleanup method failures are now logged at WARNING level, aiding debugging of resource leaks without crashing the application.
 
-### Internal 🔧
+### Internal
 
 - Added `logging` import and `_logger` instance to `scope.py` for structured error reporting during component cleanup.
 
@@ -132,7 +132,7 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [2.2.0] - 2025-11-29
 
-### Added ✨
+### Added
 - **Extensible Component Scanning (ADR-0011):** Introduced the `CustomScanner` protocol and `custom_scanners` parameter in `init()`. This opens the discovery phase to third-party extensions, allowing registration of components based on custom decorators or base classes.
 - **Function-First Scanning:** Updated `ComponentScanner` to evaluate `CustomScanner` logic against *all* module members (classes and functions) before applying native logic. This enables extensions to register standalone functions (e.g., `@task`) as components.
 - **Async Shutdown:** Added `container.ashutdown()` (awaitable). This fills a critical gap in the async lifecycle, ensuring that `async def @cleanup` methods are properly awaited during application teardown.
@@ -140,7 +140,7 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 ### Changed
 - **Internal Cleanup:** Removed the deprecated `max_scopes_per_type` parameter from `ScopedCaches`, reflecting the removal of LRU eviction in v2.1.3.
 
-### Docs 📚
+### Docs
 - **Major Restructuring:** Rebuilt `mkdocs.yml` navigation to include all available documentation pages.
 - **New Content:** Added missing guides for **Integrations** (Celery), **Advanced Features** (Self-Injection, AOP Proxies, Custom Scanners), and **Architecture** (Runtime Model).
 - **Corrections:** Fixed discrepancies in asset filenames (`extra.js`) and standardized the format of Architecture Decision Records (ADRs).
@@ -170,7 +170,7 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [2.1.2] - 2025-11-10
 
-### Added ✨
+### Added
 
 * **Collection & Mapping Injection:** Constructors can now request collection-like dependencies and dictionaries:
 
@@ -189,17 +189,17 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
   * `Dict[Any, V]` → chooses sensible defaults (`pico_name` → string key → class name).
 * **Type imports & internals:** Expanded typing/runtime imports to support the new analysis and resolution paths.
 
-### Fixed 🧩
+### Fixed
 
 * **Protocol matching:** `ComponentLocator` now checks attribute presence (including annotated attributes), reducing false positives when matching `Protocol` types.
 * **Resolution guard:** `_resolve_args` safely no-ops when the locator is unavailable, avoiding edge-case errors during early initialization.
 
-### Docs 📚
+### Docs
 
 * **README:** Removed the deprecated *Integrations* entry from the docs index.
 * **Architecture:** Corrected ADR links to `../adr/README.md` and references to the ADR workflow.
 
-### Tests 🧪
+### Tests
 
 * **New:** `tests/test_collection_injection.py` covering:
 
@@ -213,7 +213,7 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ### Added
 
-* ✨ Inline Field Overrides: Added support for overriding configuration fields directly in `@configured` classes using `Annotated[..., Value(...)]` (documented in ADR-0010).
+* Inline Field Overrides: Added support for overriding configuration fields directly in `@configured` classes using `Annotated[..., Value(...)]` (documented in ADR-0010).
 * Container Self-Injection: `PicoContainer` is now registered as a singleton and can be injected into other components.
 * Flexible `@provides`: `@provides` now supports module-level functions, `@staticmethod`, and `@classmethod` (ADR-0009), allowing for stateless providers without requiring a `@factory` instance.
 * New `websocket` Scope: Added a new default scope named `websocket` to the `ScopeManager`, based on `contextvars`.
@@ -246,7 +246,7 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [2.1.0] - 2025-10-28
 
-### Added ✨
+### Added
 
 * Unified Configuration Builder (`configuration(...)`): Introduced a new top-level function `configuration(...)` that accepts various sources (`EnvSource`, `DictSource`, `JsonTreeSource`, `YamlTreeSource`, `FlatDictSource`, etc.) and `overrides` to produce an immutable `ContextConfig` object. This centralizes configuration definition and precedence rules (ADR-0010).
 * `ContextConfig` Object: A new object encapsulating the fully processed configuration state, passed to `init(config=...)`.
@@ -256,23 +256,23 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
     * Supports unified normalization rules for keys (e.g., `ENV_VAR_NAME` <-> `field_name`, `ENV_VAR__NESTED` <-> `parent.nested`).
     * Integrates seamlessly with both flat and tree sources managed by `ContextConfig`.
 
-### Changed ⚠️
+### Changed
 
 * `init()` Signature: The `config` and `tree_config` parameters have been removed. Configuration is now passed solely through the new `config: Optional[ContextConfig]` parameter (ADR-0010).
 * Configuration Precedence: Configuration loading and precedence are now strictly defined by the order of sources passed to the `configuration(...)` builder, followed by its `overrides` parameter, and finally `Annotated[..., Value(...)]` (ADR-0010).
 
-### Removed ❌
+### Removed
 
 * `@configuration` Decorator: This decorator, previously used for flat key-value binding, has been completely removed in favor of the unified `@configured` decorator (ADR-0010).
 * Separate `config` (flat) and `tree_config` arguments in `init()`.
 
-### Documentation 📚
+### Documentation
 
 * Updated all documentation (User Guide, API Reference, Examples, ADRs) to reflect the unified configuration system based on `@configured`, `configuration(...)`, and `ContextConfig`.
 * Added `docs/specs/spec-configuration.md` detailing the unified configuration rules.
 * Added migration notes related to removing `@configuration`.
 
-### Breaking Changes ⚠️
+### Breaking Changes
 
 * This release introduces significant breaking changes related to configuration management, requiring migration from the old `@configuration` decorator and `init()` arguments to the new `@configured` modes and `configuration(...)` builder (ADR-0010).
 
@@ -308,24 +308,24 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [2.0.2] - 2025-10-26
 
-### Fixed 🧩
+### Fixed
 
 * `@provides` Decorator Execution
   Corrected an issue where the `@provides` decorator executed its wrapped function prematurely during module import, leading to runtime errors like `TypeError: Service() takes no arguments`.
   The decorator now properly registers provider metadata without invoking the function until dependency resolution time.
 
-### Added ✨
+### Added
 
 * `FlatDictSource` Configuration Provider
   Introduced a lightweight configuration source for flat in-memory dictionaries.
   Supports optional key prefixing and case sensitivity control for simple, programmatic configuration injection.
 
-### Internal 🔧
+### Internal
 
 * Updated type imports and registration logic in `api.py` to support `Mapping` for the new configuration source.
 * Added `FlatDictSource` to the public API (`__all__` and import namespace).
 
-### Notes 📝
+### Notes
 
 * Fully backward compatible.
 * This patch release focuses on decorator correctness and configuration flexibility improvements.
@@ -334,30 +334,30 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [2.0.1] - 2025-10-25
 
-### Added ✨
+### Added
 
-- ADR-0009: Flexible `@provides` Support  
+- ADR-0009: Flexible `@provides` Support
   Implemented support for using `@provides` in additional contexts:
-  - `@staticmethod` methods within `@factory` classes  
-  - `@classmethod` methods within `@factory` classes  
-  - Module-level functions  
+  - `@staticmethod` methods within `@factory` classes
+  - `@classmethod` methods within `@factory` classes
+  - Module-level functions
   These new provider types are discovered automatically during module scanning and participate fully in dependency resolution, validation, and graph generation.
 
-- Dependency Graph and Validation Enhancements  
-  - `_build_resolution_graph` now includes edges for all `@provides` functions, regardless of where they are defined.  
-  - Fail-fast validation checks now cover static/class/module-level providers, reporting missing bindings consistently.  
+- Dependency Graph and Validation Enhancements
+  - `_build_resolution_graph` now includes edges for all `@provides` functions, regardless of where they are defined.
+  - Fail-fast validation checks now cover static/class/module-level providers, reporting missing bindings consistently.
   - Scope inference and promotion logic apply equally to these new provider types.
 
-### Documentation 📚
+### Documentation
 
-- Expanded `docs/overview.md` to document the new flexible provider options (`@staticmethod`, `@classmethod`, module-level functions).  
-- Updated `docs/guide.md` with practical examples showing when to use each style of provider.  
+- Expanded `docs/overview.md` to document the new flexible provider options (`@staticmethod`, `@classmethod`, module-level functions).
+- Updated `docs/guide.md` with practical examples showing when to use each style of provider.
 - Linked ADR-0009 for design rationale and migration guidance.
 
-### Notes 📝
+### Notes
 
-- This is a minor feature release introducing a major ergonomics improvement (ADR-0009).  
-- Fully backward compatible with existing factories, components, and configuration mechanisms.  
+- This is a minor feature release introducing a major ergonomics improvement (ADR-0009).
+- Fully backward compatible with existing factories, components, and configuration mechanisms.
 - Encourages a lighter, more Pythonic style for simple provider declarations.
 
 
@@ -367,7 +367,7 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 This version marks a significant redesign and the first major public release, establishing the core architecture and feature set based on the principles outlined in the Architecture Decision Records (ADRs).
 
-### 🚀 Highlights
+### Highlights
 
 * Async-Native Core: Introduced first-class `async`/`await` support across component resolution (`container.aget`), initialization (`__ainit__`), lifecycle hooks (`@configure`, `@cleanup`), AOP interceptors, and the event bus (ADR-0001).
 * Tree-Based Configuration: Added `@configured` decorator and `TreeSource` protocol for binding complex, nested configuration (YAML/JSON) to dataclass graphs, including interpolation and type coercion (ADR-0002).
@@ -379,7 +379,7 @@ This version marks a significant redesign and the first major public release, es
 * Explicit Circular Dependency Handling: Implemented detection and fail-fast for circular dependencies, requiring explicit resolution patterns (ADR-0008).
 * Unified Decorator API: Consolidated component metadata into parameterized decorators (`@component`, `@factory`, `@provides`), removing older stacked decorators (ADR-0009).
 
-### ✨ Added
+### Added
 
 * Core registration decorators: `@component`, `@factory`, `@provides`.
 * Configuration decorators: `@configuration` (flat key-value) and `@configured` (tree-based).
@@ -400,16 +400,16 @@ This version marks a significant redesign and the first major public release, es
 * Configuration sources: `EnvSource`, `FileSource` (flat); `JsonTreeSource`, `YamlTreeSource`, `DictSource` (tree).
 * Protocols for extension: `MethodInterceptor`, `ContainerObserver`, `ScopeProtocol`, `ConfigSource`, `TreeSource`.
 
-### ⚠️ Breaking Changes
+### Breaking Changes
 
 * Complete redesign compared to any prior internal/unreleased versions. APIs are not backward compatible.
 * Requires Python 3.10+.
 
-### 📚 Docs
+### Docs
 
 * Established new documentation structure including ADRs, Architecture, User Guide, Advanced Features, Cookbook, Integrations, and API Reference.
 
-### 🧪 Testing
+### Testing
 
 * Added comprehensive test suite covering core features, async behavior, AOP, configuration, scopes, and error handling.
 * Introduced patterns for testing with overrides and profiles.

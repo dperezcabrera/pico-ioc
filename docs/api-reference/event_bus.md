@@ -1,4 +1,4 @@
-# `EventBus` API Reference 📨
+# `EventBus` API Reference
 
 The `EventBus` provides a lightweight, asynchronous pub–sub mechanism for decoupling components. It is provided by default when scanning the `pico_ioc.event_bus` module.
 

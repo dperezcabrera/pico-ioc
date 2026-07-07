@@ -1,4 +1,4 @@
-# Exporting the Dependency Graph 📈
+# Exporting the Dependency Graph
 
 Understanding the full dependency graph of your application can be crucial for debugging, refactoring, and verifying the architecture. `pico-ioc` provides a utility to export a representation of the dependency graph of an initialized container in the Graphviz DOT format.
 

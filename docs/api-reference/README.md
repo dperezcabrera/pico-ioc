@@ -4,7 +4,7 @@ This section provides a concise summary of all public APIs, designed for quick l
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 * [1. Glossary (Definitions)](./glossary.md)
 * [2. Decorators Reference](./decorators.md)

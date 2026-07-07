@@ -1,4 +1,4 @@
-# Advanced: AOP & Interceptors 🎭
+# Advanced: AOP & Interceptors
 
 Aspect-Oriented Programming (AOP) is a powerful technique for separating cross-cutting concerns (like logging, tracing, caching, or security checks) from your core business logic.
 
@@ -34,7 +34,7 @@ class UserService:
 
 The core job of create_user is just creating the user. The logging and tracing are important, but they obscure the business logic and need to be repeated in many other methods.
 
-Solution: pico_ioc allows you to extract these technical concerns into reusable MethodInterceptor components. You then apply them declaratively to your business methods using the @intercepted_by decorator. Your business methods become clean and focused again. ✨
+Solution: pico_ioc allows you to extract these technical concerns into reusable MethodInterceptor components. You then apply them declaratively to your business methods using the @intercepted_by decorator. Your business methods become clean and focused again.
 
 -----
 

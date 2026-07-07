@@ -4,7 +4,7 @@ This section provides practical recipes for advanced configuration patterns usin
 
 ---
 
-## 🧩 Pin a Single Field While Loading the Rest from ENV / YAML
+## Pin a Single Field While Loading the Rest from ENV / YAML
 
 You can use `Annotated[..., Value(...)]` to lock a field value regardless of the environment or configuration source.
 This is useful for constants that must remain fixed (e.g., internal timeouts, embedded defaults, or CI-only overrides).
@@ -42,7 +42,7 @@ Key idea:
 
 ---
 
-## ⚙️ Combine `Value(...)` with Discriminated Unions
+## Combine `Value(...)` with Discriminated Unions
 
 You can mix `Value(...)` and `Discriminator(...)` to fix the subtype of a union field while still sourcing the subtype’s internal fields dynamically.
 
@@ -93,7 +93,7 @@ How it works:
 
 ---
 
-## 🧱 Pin Nested Fields in Tree-Mapped Configs
+## Pin Nested Fields in Tree-Mapped Configs
 
 You can also pin specific fields inside nested dataclasses when using hierarchical mapping. This lets you lock internal defaults (like TTLs) while still loading the rest from your configuration sources.
 
@@ -143,7 +143,7 @@ Notes:
 
 ---
 
-✅ Takeaways:
+Takeaways:
 - `Annotated[..., Value(...)]` provides a clean, declarative way to hard-code configuration decisions while keeping the rest of your configuration dynamic and environment-driven.
 - `Value(...)` has the highest precedence and disables further lookups for that field.
 - With `Discriminator(...)`, you can lock a union’s discriminator while still sourcing the subtype’s fields from your configuration.
