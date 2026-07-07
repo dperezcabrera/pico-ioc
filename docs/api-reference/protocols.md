@@ -102,7 +102,7 @@ class CustomScanner(Protocol):
   - `scan(self, obj: Any) -> Optional[Tuple[KeyT, Provider, ProviderMetadata]]`:
         - Called only if `should_scan` returned `True`.
         - Must return a tuple containing the registration key, a deferred provider, and the provider's metadata, or `None` if it decides not to register it.
-        
+
 ---
 
 ## `ScopeProtocol`

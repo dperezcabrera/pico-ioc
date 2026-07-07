@@ -6,7 +6,7 @@ These core principles guided its architecture:
 
 ---
 
-## 1. Fail-Fast at Startup ⚡
+## 1. Fail-Fast at Startup
 
 Principle: Detect configuration and dependency wiring errors immediately during application initialization (init()) rather than encountering them at runtime during operation (e.g., during a user request).
 
@@ -20,7 +20,7 @@ Trade-off: This eager validation adds a small overhead to application startup ti
 
 ---
 
-## 2. Observability First 🔭
+## 2. Observability First
 
 Principle: In complex or distributed systems, understanding the container’s internal state, behavior, and context is crucial for debugging, monitoring, and performance tuning. Observability features should be integral, not bolted on later.
 
@@ -34,7 +34,7 @@ Implementation (ADR-004):
 
 ---
 
-## 3. Async-Native asyncio 🔄
+## 3. Async-Native asyncio
 
 Principle: Asynchronous programming with asyncio is standard for I/O-bound Python applications. A modern DI container must fully embrace async/await throughout the component lifecycle without resorting to thread pools for core operations or blocking the event loop.
 
@@ -48,7 +48,7 @@ Implementation (ADR-001):
 
 ---
 
-## 4. Explicit Configuration over Convention ✨
+## 4. Explicit Configuration over Convention
 
 Principle: Critical configuration and dependency wiring should be explicit and discoverable through decorators and type hints, minimizing reliance on implicit naming conventions or complex classpath scanning rules. Explicitness improves clarity and maintainability.
 
@@ -64,7 +64,7 @@ Trade-off: This principle favors clarity over maximum terseness, resulting in mo
 
 ---
 
-## 5. Separation of Concerns (SoC) 🧩
+## 5. Separation of Concerns (SoC)
 
 Principle: Promote loose coupling and high cohesion by providing tools that help developers separate different kinds of logic (e.g., business logic, infrastructure concerns, configuration management).
 
@@ -78,7 +78,7 @@ Implementation:
 
 ---
 
-## 6. Explicit Handling of Circular Dependencies ♻️ (ADR-008)
+## 6. Explicit Handling of Circular Dependencies (ADR-008)
 
 Principle: Circular dependencies should be treated as an explicit design decision, not resolved implicitly by the container through potentially fragile mechanisms like automatic proxy injection into constructors. The container must detect cycles and require developers to break them using clear, defined patterns.
 

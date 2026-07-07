@@ -1,4 +1,4 @@
-# 📦 pico-ioc: A Robust, Async-Native IoC Container for Python
+# pico-ioc: A Robust, Async-Native IoC Container for Python
 
 [![PyPI](https://img.shields.io/pypi/v/pico-ioc.svg)](https://pypi.org/project/pico-ioc/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dperezcabrera/pico-ioc)
@@ -15,13 +15,13 @@
 **pico-ioc** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
 It brings Inversion of Control and dependency injection to Python in a deterministic, modern, and framework-agnostic way.
 
-> 🐍 Requires Python 3.11+
+> Requires Python 3.11+
 
 The pico ecosystem is [**built for the AI era**](https://dperezcabrera.github.io/pico-ioc/ai-ready/): machine-readable conventions in every repo, installable [AI coding skills](https://github.com/dperezcabrera/pico-skills), and [scaffolds](https://dperezcabrera.github.io/pico-initializer/) that generate AI-maintainable projects from the first commit.
 
 ---
 
-## ⚖️ Core Principles
+## Core Principles
 
 - Single Purpose – Do one thing: dependency management.
 - Declarative – Use simple decorators (`@component`, `@factory`, `@provides`, `@configured`) instead of complex config files.
@@ -33,7 +33,7 @@ The pico ecosystem is [**built for the AI era**](https://dperezcabrera.github.io
 
 ---
 
-## 🚀 Why pico-ioc?
+## Why pico-ioc?
 
 As Python systems evolve, wiring dependencies by hand becomes fragile and unmaintainable.
 pico-ioc eliminates that friction by letting you declare how components relate — not how they’re created.
@@ -48,7 +48,7 @@ pico-ioc eliminates that friction by letting you declare how components relate �
 
 ---
 
-## 🧩 Highlights (v2.2+)
+## Highlights (v2.2+)
 
 - **Unified Configuration**: Use `@configured` to bind both flat (ENV-like) and tree (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
 - **Hot config refresh**: `container.refresh_config()` re-reads tree sources and publishes a `ConfigChanged` event with the changed prefixes.
@@ -60,7 +60,7 @@ pico-ioc eliminates that friction by letting you declare how components relate �
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
 pip install pico-ioc
@@ -82,7 +82,7 @@ Optional extras:
 
 -----
 
-### ⚠️ Important Note
+### Important Note
 
 **Breaking Behavior in Scope Management (v2.1.3+):**
 **Scope LRU Eviction has been removed** to guarantee data integrity.
@@ -93,7 +93,7 @@ Optional extras:
 
 -----
 
-## ⚙️ Quick Example (Unified Configuration)
+## Quick Example (Unified Configuration)
 
 ```python
 import os
@@ -148,7 +148,7 @@ fetching from postgresql://user:pass@host/db
 
 -----
 
-## 🧪 Testing with Overrides
+## Testing with Overrides
 
 ```python
 class FakeRepo:
@@ -170,7 +170,7 @@ assert svc.run() == "fake-data"
 
 -----
 
-## 🧰 Profiles
+## Profiles
 
 Use profiles to enable/disable components or configuration branches conditionally.
 
@@ -186,7 +186,7 @@ Profiles are typically referenced in decorators or configuration mappings to inc
 
 -----
 
-## ⚡ Async Components
+## Async Components
 
 pico-ioc supports async lifecycle and resolution.
 
@@ -220,7 +220,7 @@ asyncio.run(main())
 
 -----
 
-## 🩺 Lifecycle & AOP
+## Lifecycle & AOP
 
 ```python
 import time
@@ -258,7 +258,7 @@ print(f"Result: {result}")
 
 -----
 
-## 👁️ Observability & Cleanup
+## Observability & Cleanup
 
   - Export a dependency graph in DOT format:
 
@@ -281,7 +281,7 @@ Use cleanup in application shutdown hooks to release resources deterministically
 
 -----
 
-## 📖 Documentation
+## Documentation
 
 The full documentation is available within the `docs/` directory of the project repository. Start with `docs/README.md` for navigation.
 
@@ -296,7 +296,7 @@ The full documentation is available within the `docs/` directory of the project 
 
 -----
 
-## 🧩 Development
+## Development
 
 ```bash
 pip install tox
@@ -305,7 +305,7 @@ tox
 
 -----
 
-## 🧾 Changelog
+## Changelog
 
 See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
@@ -335,7 +335,7 @@ See [pico-skills](https://github.com/dperezcabrera/pico-skills) for details.
 
 -----
 
-## 📜 License
+## License
 
 MIT — [LICENSE](./LICENSE)
 

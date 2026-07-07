@@ -11,23 +11,23 @@ This comparison helps you understand `pico-ioc`'s strengths and typical use case
 | Feature | pico-ioc | dependency-injector | punq |
 | :--- | :---: | :---: | :---: |
 | **Primary Style** | Decorators + TH¹ | Declarative Code² | Decorators + TH¹ |
-| **Type Hint Based** | ✅ Yes | ⚠️ Partial³ | ✅ Yes |
-| **Startup Validation** | ✅ Yes (Eager) | ❌ No (Runtime) | ❌ No (Runtime) |
-| **Circular Dep. Check** | ✅ Yes (Startup) | ✅ Yes (Runtime) | ✅ Yes (Runtime) |
-| **Async Support** | ✅ Native (`aget`) | ✅ Yes⁴ | ❌ No |
-| **AOP (Interceptors)** | ✅ Built-in | ❌ No | ❌ No |
-| **Scopes (Singleton)** | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Scopes (Prototype)** | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Scopes (ContextVar)** | ✅ Built-in | ✅ Yes | ❌ No |
-| **Configuration Binding** | ✅ Unified Tree+Flat | ✅ Basic (KV) | ❌ Manual |
-| **Qualifiers/Tags** | ✅ Yes | ✅ Yes (Providers) | ❌ No |
-| **List Injection** | ✅ Yes (Native) | ✅ Yes (`List`) | ❌ No |
-| **Dictionary Injection** | ✅ Yes (Native) | ✅ Yes (`Dict`) | ❌ No |
-| **Lazy Loading (`lazy`)** | ✅ Built-in | ✅ Yes | ❌ No |
-| **Conditional Binding** | ✅ Full (Profile+) | ✅ Basic (Config) | ❌ No |
-| **Observability (Context)**| ✅ Built-in | ❌ Manual | ❌ Manual |
-| **Observability (Stats)** | ✅ Built-in | ❌ Manual | ❌ Manual |
-| **Testing Overrides** | ✅ `init(overrides)` | ✅ Yes | ✅ Yes |
+| **Type Hint Based** | Yes | Partial³ | Yes |
+| **Startup Validation** | Yes (Eager) | No (Runtime) | No (Runtime) |
+| **Circular Dep. Check** | Yes (Startup) | Yes (Runtime) | Yes (Runtime) |
+| **Async Support** | Native (`aget`) | Yes⁴ | No |
+| **AOP (Interceptors)** | Built-in | No | No |
+| **Scopes (Singleton)** | Yes | Yes | Yes |
+| **Scopes (Prototype)** | Yes | Yes | Yes |
+| **Scopes (ContextVar)** | Built-in | Yes | No |
+| **Configuration Binding** | Unified Tree+Flat | Basic (KV) | Manual |
+| **Qualifiers/Tags** | Yes | Yes (Providers) | No |
+| **List Injection** | Yes (Native) | Yes (`List`) | No |
+| **Dictionary Injection** | Yes (Native) | Yes (`Dict`) | No |
+| **Lazy Loading (`lazy`)** | Built-in | Yes | No |
+| **Conditional Binding** | Full (Profile+) | Basic (Config) | No |
+| **Observability (Context)**| Built-in | Manual | Manual |
+| **Observability (Stats)** | Built-in | Manual | Manual |
+| **Testing Overrides** | `init(overrides)` | Yes | Yes |
 | **Python Version** | 3.11+ | 3.7+ | 3.7+ |
 
 **Notes:**

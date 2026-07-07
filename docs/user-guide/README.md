@@ -4,7 +4,7 @@ Welcome to the main User Guide. This section covers the 80% of features you will
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 * [1. Core Concepts: `@component`, `@factory`, `@provides`](./core-concepts.md)
 * [2. Configuration: Basic Concepts](./configuration-basic.md)

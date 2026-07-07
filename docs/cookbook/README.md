@@ -1,10 +1,10 @@
-# Cookbook (Patterns) 🧑‍🍳
+# Cookbook (Patterns)
 
 The Cookbook provides complete, end-to-end architectural patterns that show how pico-ioc’s features compose in real-world systems.
 
 ---
 
-## 📖 Patterns Overview
+## Patterns Overview
 
 | Pattern | Description | File |
 |--------|-------------|------|
@@ -20,7 +20,7 @@ The Cookbook provides complete, end-to-end architectural patterns that show how 
 
 ---
 
-## 🔧 How to Use
+## How to Use
 
 1. Pick a pattern that fits your scenario.
 2. Copy the module layout and minimal container scaffolding.
@@ -33,7 +33,7 @@ The Cookbook provides complete, end-to-end architectural patterns that show how 
 ---
 
 
-## 🧩 Pattern Categories
+## Pattern Categories
 
 
 **Application Architecture**
@@ -58,7 +58,7 @@ The Cookbook provides complete, end-to-end architectural patterns that show how 
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 - Propose a new pattern or improvement by keeping:
   - Clear problem definition

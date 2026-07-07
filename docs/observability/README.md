@@ -8,7 +8,7 @@ This section gives you an overview of what you can observe, how to trace contain
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 * [1. Container Context: `as_current` (Multi-Container)](./container-context.md)
 * [2. Observers & Metrics: `stats` (KPIs and Tracing Hooks)](./observers-metrics.md)
