@@ -95,6 +95,7 @@ class PicoContainer(_ResolutionMixin):
         self._caches = caches
         self.scopes = scopes
         self._locator: Optional[ComponentLocator] = None
+        self._config_manager: Optional[Any] = None
         self._observers = list(observers or [])
         self.container_id = container_id or self._generate_container_id()
         import time as _t
@@ -141,6 +142,24 @@ class PicoContainer(_ResolutionMixin):
 
     def attach_locator(self, locator: ComponentLocator) -> None:
         self._locator = locator
+
+    def attach_config_manager(self, config_manager: Any) -> None:
+        self._config_manager = config_manager
+
+    def refresh_config(self) -> frozenset:
+        """Re-read tree config sources and publish :class:`ConfigChanged` if anything changed.
+
+        Returns the changed top-level prefixes. Already-created components keep
+        their old config; subscribers to ``ConfigChanged`` re-read what they need.
+        """
+        from .event_bus import ConfigChanged, EventBus
+
+        if self._config_manager is None:
+            return frozenset()
+        changed = self._config_manager.refresh()
+        if changed and self.has(EventBus):
+            self.get(EventBus).publish_sync(ConfigChanged(prefixes=changed))
+        return changed
 
     def _cache_for(self, key: KeyT):
         md = self._locator._metadata.get(key) if self._locator else None

@@ -24,7 +24,7 @@ from .config_runtime import Discriminator, Value
 from .config_sources import DictSource, JsonTreeSource, YamlTreeSource
 from .constants import LOGGER, LOGGER_NAME, PICO_INFRA, PICO_KEY, PICO_META, PICO_NAME
 from .container import PicoContainer
-from .event_bus import AutoSubscriberMixin, ErrorPolicy, Event, EventBus, ExecPolicy, subscribe
+from .event_bus import AutoSubscriberMixin, ConfigChanged, ErrorPolicy, Event, EventBus, ExecPolicy, subscribe
 from .exceptions import (
     AsyncResolutionError,
     ComponentCreationError,
@@ -90,6 +90,7 @@ __all__ = [
     "ExecPolicy",
     "ErrorPolicy",
     "Event",
+    "ConfigChanged",
     "subscribe",
     "AutoSubscriberMixin",
     "JsonTreeSource",

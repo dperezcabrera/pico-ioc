@@ -64,6 +64,7 @@ class Registrar:
         return loc
 
     def attach_runtime(self, pico, locator: ComponentLocator) -> None:
+        pico.attach_config_manager(self._config_manager)
         for deferred in self._deferred:
             deferred.attach(pico, locator)
         for key, md in list(self._metadata.items()):

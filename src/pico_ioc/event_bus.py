@@ -59,6 +59,17 @@ class Event:
     ...
 
 
+@dataclass(frozen=True)
+class ConfigChanged(Event):
+    """Published by ``container.refresh_config()`` when tree sources changed.
+
+    Attributes:
+        prefixes: Top-level config prefixes whose subtree changed.
+    """
+
+    prefixes: frozenset
+
+
 @dataclass(order=True)
 class _Subscriber:
     sort_index: int = field(init=False, repr=False, compare=True)

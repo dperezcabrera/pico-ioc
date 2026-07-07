@@ -293,7 +293,33 @@ class HttpConfig:
 
 ---
 
-## 7. Tips and Conventions
+## 7. Hot Refresh
+
+Tree sources are pull-based: `container.refresh_config()` re-reads them,
+swaps the merged tree, and — when something changed — publishes a
+`ConfigChanged(prefixes=...)` event on the `EventBus` with the top-level
+prefixes whose subtree changed. It returns that same `frozenset` (empty when
+nothing changed).
+
+```python
+from pico_ioc import ConfigChanged, EventBus
+
+changed = container.refresh_config()   # e.g. frozenset({"db"})
+
+container.get(EventBus).subscribe(ConfigChanged, on_config_changed)
+```
+
+Semantics to keep in mind:
+
+- Already-created components keep the values they were built with. Components
+  that need live values subscribe to `ConfigChanged` and re-read their config.
+- New resolutions (components created after the refresh) see the new tree.
+- Only tree sources participate; flat sources (`EnvSource`, `FlatDictSource`)
+  are read live at build time and have no diffable snapshot.
+- The trigger lives outside the container: a file watcher, an HTTP endpoint,
+  or a poller simply calls `refresh_config()`.
+
+## 8. Tips and Conventions
 
 - Keep prefixes consistent:
   - Flat: `MYAPP_` for env.

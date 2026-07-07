@@ -9,6 +9,16 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Hot config refresh: `container.refresh_config()` re-reads all tree sources,
+  swaps the merged tree, and publishes a `ConfigChanged(prefixes=...)` event
+  on the `EventBus` with the top-level prefixes whose subtree changed.
+  Sources stay pull-based; external triggers (file watcher, HTTP endpoint,
+  poller) just call `refresh_config()`. Already-created components keep their
+  old config — subscribers re-read what they need; new resolutions see the
+  refreshed tree.
+
 ---
 
 ## [2.2.7] - 2026-06-07

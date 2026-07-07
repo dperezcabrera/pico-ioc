@@ -78,6 +78,15 @@ Checks if a provider is registered for the given Key or if an instance exists in
 
 ---
 
+### refresh_config() -> frozenset
+
+Re-reads all tree configuration sources and swaps the merged tree. If anything changed and an `EventBus` is registered, publishes `ConfigChanged(prefixes=...)` with the top-level prefixes whose subtree changed.
+
+- Returns: The changed top-level prefixes (empty `frozenset` when nothing changed or no configuration was provided).
+- Note: Already-created components keep their old config; subscribers to `ConfigChanged` re-read what they need. New resolutions see the refreshed tree. See [Configuration Binding — Hot Refresh](../user-guide/configuration-binding.md#7-hot-refresh).
+
+---
+
 ### activate() -> contextvars.Token
 
 Manually activates this container in the current context. Returns a token needed for deactivate(). Prefer using with container.as_current():.

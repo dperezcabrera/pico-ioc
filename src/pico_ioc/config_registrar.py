@@ -54,6 +54,10 @@ class ConfigurationManager:
         self._adapters = TypeAdapterRegistry()
         self._graph = ObjectGraphBuilder(self._resolver, self._adapters)
 
+    def refresh(self) -> frozenset:
+        """Re-read tree sources; return the changed top-level prefixes."""
+        return self._resolver.refresh()
+
     def _lookup_flat(self, key: str) -> Optional[str]:
         if key in self._overrides:
             return str(self._overrides[key])

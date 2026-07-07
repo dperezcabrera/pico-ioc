@@ -119,6 +119,24 @@ class MyListener(AutoSubscriberMixin):
 
 -----
 
+## Built-in Events
+
+### `ConfigChanged`
+
+Frozen dataclass published by `container.refresh_config()` when tree configuration sources changed.
+
+- `prefixes: frozenset` — top-level config prefixes whose subtree changed.
+
+```python
+from pico_ioc import ConfigChanged, EventBus
+
+container.get(EventBus).subscribe(ConfigChanged, lambda e: print(e.prefixes))
+```
+
+See [Configuration Binding — Hot Refresh](../user-guide/configuration-binding.md#7-hot-refresh).
+
+-----
+
 ## Exceptions
 
 | Exception | Raised When |
