@@ -309,7 +309,7 @@ tox
 
 See [CHANGELOG.md](./CHANGELOG.md) — Significant redesigns and features in v2.0+.
 
-**Latest:** [v2.3.1](https://github.com/dperezcabrera/pico-ioc/releases/tag/v2.3.1) (2026-07-07) — fixes
+**Latest:** [v2.3.2](https://github.com/dperezcabrera/pico-ioc/releases/tag/v2.3.2) (2026-07-10) — fixes lazy components with async @configure resolved via aget(), and defers lazy materialization to first use
 singleton identity when resolving by base class or component name (#20):
 the cache was written under the requested key instead of the canonical
 one, so cold-cache resolutions could create a second singleton.
