@@ -116,6 +116,12 @@ changes). Without pico-boot, list the module in `init(modules=[...])`.
 | pico-client-auth | JWT validation + RBAC | `@requires_role`, `@requires_scope`, `@allow_anonymous` |
 | pico-server-auth | Embeddable auth server (JWT, wallet login, JWKS) | config prefix `server_auth` |
 | pico-agent | LLM agents and tools | `@agent`, `@tool` |
+| pico-scheduling | Interval + cron scheduled methods | `@scheduled(every=/cron=)`; config prefix `scheduling` |
+| pico-httpx | Declarative HTTP clients | `@http_client`, `@get`/`@post`/`@put`/`@delete`/`@patch`; config prefix `http` |
+| pico-data-redis | Redis client + distributed cache backend | injectable `redis.Redis`, `RedisCacheBackend`; config prefix `redis` |
+| pico-rabbitmq | RabbitMQ events / fan-out / topic routing | `@consumer`, `@publisher`, `@publish`; config prefix `rabbitmq` |
+| pico-kafka | Kafka streams + consumer groups | `@kafka_consumer`, `@kafka_producer`, `@produce`; config prefix `kafka` |
+| pico-testing | Pytest plugin: isolated containers | `make_container` fixture, `@pytest.mark.pico_auto_plugins` |
 
 ### Tooling and companions
 
