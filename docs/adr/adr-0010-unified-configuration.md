@@ -31,7 +31,7 @@ Configuration is unified around a single decorator (`@configured`) and a single 
 
    * Signature:
 
-     ```python
+     ```text
      @configured(prefix: str = "", mapping: Literal["auto","flat","tree"] = "auto")
      ```
    * Auto-detection rules:
