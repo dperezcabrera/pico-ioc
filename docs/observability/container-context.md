@@ -181,6 +181,7 @@ live = init(modules=[...])
 
 # Handle a request with the live container
 with live.as_current():
+    ...
     # process_request()
 
 # Create a new container (e.g., after code/config changes)
@@ -188,6 +189,7 @@ new_live = init(modules=[...])
 
 # Atomically switch context for new requests
 with new_live.as_current():
+    ...
     # process_request()
 
 # Gracefully stop the old container

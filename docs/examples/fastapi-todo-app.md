@@ -171,7 +171,6 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from pico_ioc import init, configuration
-from pico_fastapi import PicoFastAPI
 
 from .config import AppConfig
 from .services import TodoService
@@ -202,9 +201,9 @@ async def lifespan(app: FastAPI):
     yield
     await container.ashutdown()
 
-app = FastAPI(lifespan=lifespan)
-pico = PicoFastAPI(container)
-pico.install(app)
+# pico-fastapi builds the app from the container: @controller classes
+# register their routes automatically.
+app = container.get(FastAPI)
 
 # Get config for app title
 app_config = container.get(AppConfig)
@@ -245,7 +244,7 @@ def delete_todo(todo_id: UUID, service: TodoService):
 
 ## Step 6: Tests (`tests/test_api.py`)
 
-```python
+```text
 # todo_app/tests/test_api.py
 import pytest
 from fastapi.testclient import TestClient
@@ -289,8 +288,7 @@ def test_container():
 @pytest.fixture
 def client(test_container):
     from fastapi import FastAPI
-    from pico_fastapi import PicoFastAPI
-    from todo_app.main import (
+        from todo_app.main import (
         create_todo, list_todos, get_todo,
         complete_todo, delete_todo, TodoCreate, TodoResponse
     )
