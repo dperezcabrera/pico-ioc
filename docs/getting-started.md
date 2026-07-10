@@ -203,3 +203,5 @@ Now you're ready to explore the core features in the User Guide:
   - Missing `@component` on a dependency class.
   - Typos in type hints.
   - Circular dependencies between components.
+
+**See it in context**: the [flagship use case](https://dperezcabrera.github.io/pico-boot/flagship/) wires pico-ioc into a full order platform together with the rest of the ecosystem.
