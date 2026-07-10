@@ -9,6 +9,14 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+- `aget()` of a lazy component with async `@configure` no longer raises: `inspect.isawaitable` on the lazy proxy touched `__class__` and forced synchronous materialization. Same guard applied to `get()`, so lazy components now materialize on first use instead of at resolution time.
+
+### Added
+
+- Regression tests for error contracts: sync access to async-configured lazies, `ContainerObserver` callbacks, `refresh_config()` without tree sources.
+
 ---
 
 ## [2.3.1] - 2026-07-07
