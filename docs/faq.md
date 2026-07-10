@@ -110,11 +110,11 @@ container = init(modules=[__name__], config=configuration())
 ### Q: How do I load configuration from YAML?
 
 ```python
-from pico_ioc import configuration, YamlSource
+from pico_ioc import configuration, YamlTreeSource
 
 config = configuration(
-    YamlSource("config.yaml"),
-    YamlSource("config.local.yaml", required=False)  # Optional override
+    YamlTreeSource("config.yaml"),
+    YamlTreeSource("config.local.yaml", required=False)  # Optional override
 )
 container = init(modules=[__name__], config=config)
 ```

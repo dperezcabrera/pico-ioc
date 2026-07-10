@@ -41,7 +41,7 @@ Below are example usage patterns reflecting the runtime model. They demonstrate 
 ### Create a container and inspect identity
 
 ```python
-from pico_ioc import Container
+from pico_ioc import PicoContainer
 
 container_a = Container()
 container_b = Container()

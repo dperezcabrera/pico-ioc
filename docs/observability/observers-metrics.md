@@ -73,7 +73,8 @@ Implement the `ContainerObserver` protocol. You only need to implement the metho
 ```python
 # tracing.py
 import time
-from pico_ioc import ContainerObserver, KeyT
+from pico_ioc import ContainerObserver
+from pico_ioc.aop import KeyT
 
 # A simple observer that just logs events
 class MyTracer(ContainerObserver):
