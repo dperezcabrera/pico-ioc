@@ -230,7 +230,7 @@ from pico_ioc import component, init, intercepted_by, MethodInterceptor, MethodC
 @component
 class LogInterceptor(MethodInterceptor):
     def invoke(self, ctx: MethodCtx, call_next):
-        print(f"→ calling {ctx.cls.__name__}.{ctx.name}")
+        print(f" calling {ctx.cls.__name__}.{ctx.name}")
         start = time.perf_counter()
         try:
             res = call_next(ctx)

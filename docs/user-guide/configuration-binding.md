@@ -286,8 +286,8 @@ class HttpConfig:
 
 - Missing required keys: If a required field (without default) is missing, binding fails with a descriptive error.
 - Type coercion:
-  - Numbers: `"8080"` → `int(8080)`
-  - Booleans: `"true"/"false"`, `"1"/"0"` → `bool`
+  - Numbers: `"8080"`  `int(8080)`
+  - Booleans: `"true"/"false"`, `"1"/"0"`  `bool`
   - Lists/dicts (tree sources): parsed according to the structured format (YAML/JSON).
 - Union and discriminator mismatches produce errors indicating the offending path and expected variants.
 

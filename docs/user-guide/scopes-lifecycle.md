@@ -132,7 +132,7 @@ try:
     service = container.get(MyService)
 finally:
     container.deactivate_scope("request", token)
-    # 🛑 CRITICAL: You must explicitly clean up the scope data!
+    #  CRITICAL: You must explicitly clean up the scope data!
     container._caches.cleanup_scope("request", scope_id)
 ```
 
