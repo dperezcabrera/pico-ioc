@@ -269,7 +269,9 @@ class PicoContainer(_ResolutionMixin):
             return instance_or_awaitable
 
         instance = instance_or_awaitable
-        if inspect.isawaitable(instance):
+        # isawaitable on a lazy proxy touches __class__ and would materialize
+        # it synchronously; proxies are never awaitables, so skip the check.
+        if not isinstance(instance, UnifiedComponentProxy) and inspect.isawaitable(instance):
             raise AsyncResolutionError(key)
 
         md = self._locator._metadata.get(key) if self._locator else None
@@ -314,7 +316,7 @@ class PicoContainer(_ResolutionMixin):
                 await instance._async_init_if_needed()
             return instance
 
-        if inspect.isawaitable(instance_or_awaitable):
+        if not isinstance(instance, UnifiedComponentProxy) and inspect.isawaitable(instance_or_awaitable):
             instance = await instance_or_awaitable
 
         md = self._locator._metadata.get(key) if self._locator else None
