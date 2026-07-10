@@ -7,6 +7,14 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.3.3] - 2026-07-10
+
+### Fixed
+
+- `shutdown()` and `ashutdown()` are idempotent and thread-safe. The ASGI lifespan (pico-fastapi) and application code can both call `shutdown()` — concurrently, from different threads — which interleaved `@cleanup` methods and could hang or crash resources owned by background threads. Root cause of the aiokafka teardown hang observed in the flagship level-2 validation. Only the first caller proceeds; every other call returns immediately.
+
+---
+
 ## [2.3.2] - 2026-07-10
 
 ### Fixed

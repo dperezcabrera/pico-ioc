@@ -9,6 +9,7 @@ dependency graph export.
 import contextvars
 import inspect
 import secrets
+import threading
 import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union, overload
@@ -85,6 +86,8 @@ class PicoContainer(_ResolutionMixin):
         self._locator: Optional[ComponentLocator] = None
         self._config_manager: Optional[Any] = None
         self._observers = list(observers or [])
+        self._shutdown_guard = threading.Lock()
+        self._is_shut_down = False
         self.container_id = container_id or self._generate_container_id()
         self.context = PicoContainer._Ctx(container_id=self.container_id, profiles=profiles, created_at=time.time())
         PicoContainer._container_registry[self.container_id] = self
@@ -463,12 +466,25 @@ class PicoContainer(_ResolutionMixin):
             "registered_components": len(self._locator._metadata) if self._locator else 0,
         }
 
+    def _begin_shutdown(self) -> bool:
+        """Claim the (single) shutdown. Idempotent and thread-safe: the ASGI
+        lifespan and application code may both call shutdown concurrently
+        (uvicorn thread vs main thread); only the first claimer proceeds."""
+        with self._shutdown_guard:
+            if self._is_shut_down:
+                return False
+            self._is_shut_down = True
+            return True
+
     def shutdown(self) -> None:
         """Synchronously shut down the container.
 
         Calls all ``@cleanup`` methods and removes the container from the
-        global registry.
+        global registry. Safe to call more than once and from multiple
+        threads: cleanup runs exactly once.
         """
+        if not self._begin_shutdown():
+            return
         self.cleanup_all()
         PicoContainer._container_registry.pop(self.container_id, None)
 
@@ -476,8 +492,11 @@ class PicoContainer(_ResolutionMixin):
         """Asynchronously shut down the container.
 
         Awaits async ``@cleanup`` methods, closes the ``EventBus``, and
-        removes the container from the global registry.
+        removes the container from the global registry. Safe to call more
+        than once: cleanup runs exactly once.
         """
+        if not self._begin_shutdown():
+            return
         await self.cleanup_all_async()
         PicoContainer._container_registry.pop(self.container_id, None)
 
