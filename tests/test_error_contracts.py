@@ -69,3 +69,33 @@ def test_refresh_config_without_tree_sources_is_empty():
 def test_refresh_config_with_flat_only_config_is_empty():
     container = init(modules=[__name__], config=configuration(DictSource({})))
     assert container.refresh_config() == frozenset()
+
+
+_cleanup_calls = []
+
+
+@component
+class Closeable:
+    from pico_ioc import cleanup
+
+    @cleanup
+    def close(self):
+        import threading
+
+        _cleanup_calls.append(threading.current_thread().name)
+
+
+def test_shutdown_is_idempotent_and_thread_safe():
+    import threading
+
+    _cleanup_calls.clear()
+    container = init(modules=[__name__])
+    container.get(Closeable)
+
+    threads = [threading.Thread(target=container.shutdown) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    container.shutdown()
+    assert len(_cleanup_calls) == 1, _cleanup_calls
