@@ -15,19 +15,19 @@ class UserService:
     # Assume db and tracer are injected
     
     def create_user(self, username: str):
-        # ⚠️ Technical Concern: Logging Entry
+        # ️ Technical Concern: Logging Entry
         log.info(f"Entering create_user with username: {username}")
         
-        # ⚠️ Technical Concern: Performance Tracing
+        # ️ Technical Concern: Performance Tracing
         with tracer.start_span("create_user") as span:
             span.set_attribute("username", username)
             
-            # ✅ Business Logic: The actual work
+            #  Business Logic: The actual work
             print(f"Creating user {username}...")
             user = User(name=username)
             db.save(user)  # Simulate saving
             
-            # ⚠️ Technical Concern: Logging Exit
+            # ️ Technical Concern: Logging Exit
             log.info(f"Exiting create_user, returning user ID: {user.id}")
             return user
 ```
@@ -178,7 +178,7 @@ class UserService:
 
     @intercepted_by(LoggingInterceptor)  # <-- Apply the interceptor
     def create_user(self, username: str):
-        # ✅ This is PURE business logic now!
+        #  This is PURE business logic now!
         print(f"Creating user {username}...")
         user = User(name=username)
         db.save(user)  # Simulate saving

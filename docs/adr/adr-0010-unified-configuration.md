@@ -22,7 +22,7 @@ Introducing `Annotated[..., Value(...)]` provides an explicit, type-safe, and fr
 
 ## Decision
 
-Configuration is unified around a single decorator (`@configured`) and a single runtime entry point (`configuration(...) → ContextConfig → init(config=...)`).
+Configuration is unified around a single decorator (`@configured`) and a single runtime entry point (`configuration(...)  ContextConfig  init(config=...)`).
 
 1. Remove `@configuration`.
    Only `@configured` remains.
@@ -36,11 +36,11 @@ Configuration is unified around a single decorator (`@configured`) and a single 
      ```
    * Auto-detection rules:
 
-     * If any field is a dataclass, list, dict, or `Union` → treat as `tree`.
-     * If all fields are primitives (`str`, `int`, `float`, `bool`) → treat as `flat`.
+     * If any field is a dataclass, list, dict, or `Union`  treat as `tree`.
+     * If all fields are primitives (`str`, `int`, `float`, `bool`)  treat as `flat`.
      * Explicit `mapping` always overrides auto-detection.
 
-3. Introduce `configuration(...)` → `ContextConfig`:
+3. Introduce `configuration(...)`  `ContextConfig`:
 
    * Accepts an ordered list of configuration sources (environment, YAML, JSON, dicts, CLI adapters, etc.).
    * Supports `overrides` and explicit values for final patching.
@@ -75,7 +75,7 @@ Configuration is unified around a single decorator (`@configured`) and a single 
 ### Positive
 
 * Cleaner Mental Model:
-  One decorator (`@configured`) and one initialization path (`configuration(...) → ContextConfig`) for all configuration types.
+  One decorator (`@configured`) and one initialization path (`configuration(...)  ContextConfig`) for all configuration types.
 
 * Deterministic Configuration:
   Explicit, documented precedence across heterogeneous sources, with `Value(...)` providing the top-level override.
@@ -84,7 +84,7 @@ Configuration is unified around a single decorator (`@configured`) and a single 
   `Annotated[..., Value(...)]` offers a standard Pythonic way to hard-code constants or test values without relying on environment setup.
 
 * First-Class ENV Integration:
-  Environment sources remain intuitive, with predictable normalization rules (`APP_DB_URL` → `app.db.url`).
+  Environment sources remain intuitive, with predictable normalization rules (`APP_DB_URL`  `app.db.url`).
 
 * Unified Mapping Strategy:
   Flat vs. tree behavior becomes a runtime mode, not a separate decorator, reducing conceptual duplication.

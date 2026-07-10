@@ -22,7 +22,7 @@ Two designs were considered:
 
 Resolver-level refresh (option 2):
 
-1. `ConfigResolver.refresh()` re-runs load → merge → interpolate, diffs the old
+1. `ConfigResolver.refresh()` re-runs load  merge  interpolate, diffs the old
    and new trees per top-level prefix using the existing `canonicalize()`
    fingerprint, swaps the cached tree, and returns the changed prefixes as a
    `frozenset`.

@@ -92,16 +92,16 @@ KeyT = Union[str, type]
 Provider = Callable[[], Any]
 
 class CustomScanner(Protocol):
-    def should_scan(self, obj: Any) -> bool: ...
-    def scan(self, obj: Any) -> Optional[Tuple[KeyT, Provider, ProviderMetadata]]: ...
+    def should_scan(self, obj: Any) -> bool: ...
+    def scan(self, obj: Any) -> Optional[Tuple[KeyT, Provider, ProviderMetadata]]: ...
 ```
 
   - `should_scan(self, obj: Any) -> bool`:
-        - Called for every object inspected during module scanning (classes, protocols).
-        - Should return `True` if this scanner is interested in processing the object.
+        - Called for every object inspected during module scanning (classes, protocols).
+        - Should return `True` if this scanner is interested in processing the object.
   - `scan(self, obj: Any) -> Optional[Tuple[KeyT, Provider, ProviderMetadata]]`:
-        - Called only if `should_scan` returned `True`.
-        - Must return a tuple containing the registration key, a deferred provider, and the provider's metadata, or `None` if it decides not to register it.
+        - Called only if `should_scan` returned `True`.
+        - Must return a tuple containing the registration key, a deferred provider, and the provider's metadata, or `None` if it decides not to register it.
 
 ---
 

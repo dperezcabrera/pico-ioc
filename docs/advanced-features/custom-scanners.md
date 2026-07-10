@@ -30,9 +30,9 @@ from typing import Callable, Any
 CUSTOM_DOMAIN_MARKER = "_custom_domain_marker"
 
 def domain_model(cls: type) -> type:
-    """Marks a class as a domain component."""
-    setattr(cls, CUSTOM_DOMAIN_MARKER, True)
-    return cls
+    """Marks a class as a domain component."""
+    setattr(cls, CUSTOM_DOMAIN_MARKER, True)
+    return cls
 ```
 
 ### Step 2: Implement the CustomScanner
@@ -44,43 +44,43 @@ The scanner checks for the marker and constructs a `DeferredProvider` and `Provi
 import inspect
 from typing import Any, Optional, Tuple
 from pico_ioc import (
-    CustomScanner, DeferredProvider, ProviderMetadata, analyze_callable_dependencies
+    CustomScanner, DeferredProvider, ProviderMetadata, analyze_callable_dependencies
 )
 from .decorators import CUSTOM_DOMAIN_MARKER
 
 class DomainScanner(CustomScanner):
-    def should_scan(self, obj: Any) -> bool:
-        # Only interested in classes decorated with our marker
-        return inspect.isclass(obj) and getattr(obj, CUSTOM_DOMAIN_MARKER, False)
+    def should_scan(self, obj: Any) -> bool:
+        # Only interested in classes decorated with our marker
+        return inspect.isclass(obj) and getattr(obj, CUSTOM_DOMAIN_MARKER, False)
 
-    def scan(self, cls: type) -> Optional[Tuple[type, DeferredProvider, ProviderMetadata]]:
-        # 1. Determine the component's dependencies (from __init__)
-        deps = analyze_callable_dependencies(cls.__init__)
-        
-        # 2. Define the Provider
-        # The builder function uses pico.build_class to create the instance
-        provider = DeferredProvider(
-            lambda pico, loc, c=cls, d=deps: pico.build_class(c, loc, d)
-        )
-        
-        # 3. Define the Metadata
-        metadata = ProviderMetadata(
-            key=cls,
-            provided_type=cls,
-            concrete_class=cls,
-            factory_class=None,
-            factory_method=None,
-            qualifiers=set(),
-            primary=False,
-            lazy=False,
-            infra="custom-domain",
-            pico_name=getattr(cls, "__name__", None),
-            scope="prototype", # Force prototype scope for domain models
-            dependencies=deps
-        )
+    def scan(self, cls: type) -> Optional[Tuple[type, DeferredProvider, ProviderMetadata]]:
+        # 1. Determine the component's dependencies (from __init__)
+        deps = analyze_callable_dependencies(cls.__init__)
+        
+        # 2. Define the Provider
+        # The builder function uses pico.build_class to create the instance
+        provider = DeferredProvider(
+            lambda pico, loc, c=cls, d=deps: pico.build_class(c, loc, d)
+        )
+        
+        # 3. Define the Metadata
+        metadata = ProviderMetadata(
+            key=cls,
+            provided_type=cls,
+            concrete_class=cls,
+            factory_class=None,
+            factory_method=None,
+            qualifiers=set(),
+            primary=False,
+            lazy=False,
+            infra="custom-domain",
+            pico_name=getattr(cls, "__name__", None),
+            scope="prototype", # Force prototype scope for domain models
+            dependencies=deps
+        )
 
-        # 4. Return the registration tuple
-        return cls, provider, metadata
+        # 4. Return the registration tuple
+        return cls, provider, metadata
 ```
 
 ### Step 3: Apply and Run
@@ -93,13 +93,13 @@ from custom_domain_lib.decorators import domain_model
 
 # Assume another service exists
 class UserService:
-    pass
+    pass
 
 @domain_model # <-- The custom decorator
 class UserEntity:
-    def __init__(self, user_service: UserService):
-        self.user_service = user_service
-        print("UserEntity CREATED via DomainScanner!")
+    def __init__(self, user_service: UserService):
+        self.user_service = user_service
+        print("UserEntity CREATED via DomainScanner!")
 
 # main.py
 from pico_ioc import init
@@ -111,8 +111,8 @@ domain_scanner = DomainScanner()
 
 # 2. Initialize the container
 container = init(
-    modules=["my_app"],  # scans recursively
-    custom_scanners=[domain_scanner] # <-- Register the scanner
+    modules=["my_app"],  # scans recursively
+    custom_scanners=[domain_scanner] # <-- Register the scanner
 )
 
 # 3. Resolve the custom component
