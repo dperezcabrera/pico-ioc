@@ -316,22 +316,29 @@ one, so cold-cache resolutions could create a second singleton.
 
 -----
 
-## AI Coding Skills
+## Built for AI-assisted development
 
-Install [Claude Code](https://code.claude.com) or [OpenAI Codex](https://openai.com/index/introducing-codex/) skills for AI-assisted development with pico-ioc:
+pico-ioc is designed for a workflow where humans and coding agents build software together. Architecture, conventions and integration patterns are explicit enough that an agent can extend an application without introducing a parallel, incompatible style — and can verify its own changes before proposing them.
+
+The verification loop comes first:
+
+- **[pico-testing](https://github.com/dperezcabrera/pico-testing)** gives any agent (or human) a three-line feedback loop: containers are isolated from the environment by default, the module under test is declared once, and `make_container`/`make_client` boot exactly what the test names. A change is not done until this loop is green.
+- **[pico-initializer](https://github.com/dperezcabrera/pico-initializer)** scaffolds runnable projects with the canonical layout, so every project starts on the same conventions instead of inventing them.
+- **[pico-examples](https://github.com/dperezcabrera/pico-examples)** are reference applications with hermetic test suites plus real-infrastructure smoke tests (Docker Compose, Kubernetes) - each failure path shown is asserted by a test.
+- **[pico-learn](https://dperezcabrera.github.io/pico-learn/)** turns the patterns into executable lessons; every lab runs green in CI against the pinned published wheels.
+- **[pico-skills](https://github.com/dperezcabrera/pico-skills)** gives coding agents task-specific instructions (`/add-component`, `/add-tests`, controllers, repositories, integrations).
+
+Every package in the ecosystem ships the artifacts an agent needs to stay on-architecture: `AGENTS.md` with the working conventions, `llms.txt` indexing the docs for machine consumption, architecture decisions recorded in `docs/`, and documented behaviour pinned by regression tests - with coverage tracked per module on Codecov and 0.0% duplication across the fleet on SonarCloud.
+
+Releases are gated the same way: nothing is published without the full ecosystem booting together and exercising a complete application flow against real infrastructure (PostgreSQL, Redis, RabbitMQ, Kafka). Versioning is strict SemVer with per-release compatibility notes in every changelog.
+
+Install the agent skills for [Claude Code](https://code.claude.com) or [OpenAI Codex](https://openai.com/index/introducing-codex/):
 
 ```bash
 curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash -s -- ioc
 ```
 
-| Command | Description |
-|---------|-------------|
-| `/add-component` | Add components, factories, interceptors, event subscribers, settings |
-| `/add-tests` | Generate tests for pico components |
-
-All skills: `curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash`
-
-See [pico-skills](https://github.com/dperezcabrera/pico-skills) for details.
+All skills: `curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/install.sh | bash` - see [pico-skills](https://github.com/dperezcabrera/pico-skills).
 
 -----
 
