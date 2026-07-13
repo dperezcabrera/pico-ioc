@@ -119,6 +119,24 @@ config = configuration(
 container = init(modules=[__name__], config=config)
 ```
 
+### Q: How do I inject secrets or URLs from the environment into a config file?
+
+Pass `expand_env=True` to any tree source and use `${VAR}` / `${VAR:default}` placeholders in the file:
+
+```python
+from pico_ioc import configuration, YamlTreeSource
+
+config = configuration(YamlTreeSource("config.yaml", expand_env=True))
+```
+
+```yaml
+# config.yaml
+database:
+  url: ${DATABASE_URL:sqlite+aiosqlite:///./app.db}
+```
+
+`${VAR}` uses the environment variable, `${VAR:default}` falls back, and an unset variable with no default becomes an empty string. This keeps deployment values (secrets, URLs) out of the file while a single config works across environments.
+
 ### Q: What's the precedence order for configuration sources?
 
 Later sources override earlier ones:
