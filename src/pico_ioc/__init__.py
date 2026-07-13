@@ -21,7 +21,7 @@ from .api import (
 from .component_scanner import CustomScanner
 from .config_builder import ContextConfig, EnvSource, FileSource, FlatDictSource, configuration
 from .config_runtime import Discriminator, Value
-from .config_sources import DictSource, JsonTreeSource, YamlTreeSource
+from .config_sources import DictSource, JsonTreeSource, YamlTreeSource, expand_env
 from .constants import LOGGER, LOGGER_NAME, PICO_INFRA, PICO_KEY, PICO_META, PICO_NAME
 from .container import PicoContainer
 from .event_bus import AutoSubscriberMixin, ConfigChanged, ErrorPolicy, Event, EventBus, ExecPolicy, subscribe
@@ -96,6 +96,7 @@ __all__ = [
     "JsonTreeSource",
     "YamlTreeSource",
     "DictSource",
+    "expand_env",
     "Discriminator",
     "Value",
     "DependencyRequest",
