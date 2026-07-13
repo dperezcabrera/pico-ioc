@@ -7,6 +7,12 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.3.4] - 2026-07-13
+
+### Added
+
+- `expand_env=True` on `DictSource`, `JsonTreeSource` and `YamlTreeSource` resolves `${VAR}` and `${VAR:default}` placeholders from the environment (recursively over strings, mappings and lists). The standalone `expand_env()` helper is exported too. Lets one config file carry deployment-specific values (secrets, URLs) injected at boot without a hand-rolled parser in each application's entry point.
+
 ## [2.3.3] - 2026-07-10
 
 ### Fixed
