@@ -1,0 +1,23 @@
+name: llms.txt
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Fails if llms.txt is stale — i.e. the public API changed but the generated
+# AI-first reference was not regenerated. Regenerate locally with:
+#   curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/tools/gen-llms-txt.py -o /tmp/gen.py && python3 /tmp/gen.py . --write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Regenerate and verify llms.txt is current
+        run: |
+          curl -sL https://raw.githubusercontent.com/dperezcabrera/pico-skills/main/tools/gen-llms-txt.py -o /tmp/gen-llms-txt.py
+          python3 /tmp/gen-llms-txt.py . --write
+          git diff --exit-code llms.txt
