@@ -85,11 +85,10 @@ class ContainerObserver(Protocol):
 Used for extending the component scanning process to automatically register components based on custom decorators, base classes, or logic that `pico-ioc`'s built-in scanner doesn't support. Instances are passed to `init(custom_scanners=[...])`.
 
 ```python
-from typing import Any, Callable, Protocol, Optional, Tuple, Union
-from pico_ioc.factory import ProviderMetadata
+from typing import Protocol, Optional, Tuple, Union
+from pico_ioc import Provider, ProviderMetadata
 
 KeyT = Union[str, type]
-Provider = Callable[[], Any]
 
 class CustomScanner(Protocol):
     def should_scan(self, obj: Any) -> bool: ...
