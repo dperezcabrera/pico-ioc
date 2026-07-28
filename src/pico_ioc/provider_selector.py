@@ -1,7 +1,7 @@
 from typing import Dict, List, Tuple, Union
 
+from ._providers import Provider, ProviderMetadata
 from .config_registrar import ConfigurationManager
-from .factory import Provider, ProviderMetadata
 
 KeyT = Union[str, type]
 

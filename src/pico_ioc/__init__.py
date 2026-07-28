@@ -6,6 +6,7 @@ directly from ``pico_ioc``::
     from pico_ioc import component, init, configuration, DictSource
 """
 
+from ._providers import ComponentFactory, DeferredProvider, Provider, ProviderMetadata
 from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import ContainerObserver, MethodCtx, MethodInterceptor, UnifiedComponentProxy, health, intercepted_by
 from .api import (
@@ -37,7 +38,6 @@ from .exceptions import (
     SerializationError,
     ValidationError,
 )
-from .factory import ComponentFactory, DeferredProvider, ProviderMetadata
 from .locator import ComponentLocator
 from .scope import ContextVarScope, ScopedCaches, ScopeManager, ScopeProtocol
 
@@ -72,6 +72,7 @@ __all__ = [
     "ProviderMetadata",
     "ComponentFactory",
     "DeferredProvider",
+    "Provider",
     "MethodCtx",
     "MethodInterceptor",
     "intercepted_by",

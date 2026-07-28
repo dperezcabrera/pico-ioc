@@ -7,7 +7,7 @@ and other indexed attributes.
 
 from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
-from .factory import ProviderMetadata
+from ._providers import ProviderMetadata
 
 KeyT = Union[str, type]
 
