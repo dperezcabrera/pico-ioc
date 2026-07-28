@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pico_ioc import component, configure, configured, init
+from pico_ioc import ComponentFactory, DeferredProvider, ProviderMetadata, component, configure, configured, init
 from pico_ioc.analysis import DependencyRequest, analyze_callable_dependencies
 from pico_ioc.config_builder import ContextConfig, FlatDictSource, configuration
 from pico_ioc.config_registrar import ConfigurationManager
@@ -31,7 +31,6 @@ from pico_ioc.constants import PICO_META, SCOPE_SINGLETON
 from pico_ioc.container import PicoContainer
 from pico_ioc.dependency_validator import DependencyValidator
 from pico_ioc.exceptions import ConfigurationError, InvalidBindingError
-from pico_ioc.factory import ComponentFactory, DeferredProvider, ProviderMetadata
 from pico_ioc.locator import ComponentLocator
 from pico_ioc.scope import ScopedCaches, ScopeManager
 

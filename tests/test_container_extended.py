@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pico_ioc import cleanup, component, configure, factory, init, provides
+from pico_ioc import ComponentFactory, cleanup, component, configure, factory, init, provides
 from pico_ioc.aop import ContainerObserver, health
 from pico_ioc.constants import PICO_META
 from pico_ioc.container import (
@@ -20,7 +20,6 @@ from pico_ioc.container import (
     _needs_async_configure,
 )
 from pico_ioc.exceptions import AsyncResolutionError, ComponentCreationError, ConfigurationError, ProviderNotFoundError
-from pico_ioc.factory import ComponentFactory
 from pico_ioc.scope import ScopedCaches, ScopeManager
 
 

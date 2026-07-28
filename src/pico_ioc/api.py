@@ -10,6 +10,7 @@ import logging
 import pkgutil
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
 
+from ._providers import ComponentFactory, ProviderMetadata
 from .aop import ContainerObserver
 from .component_scanner import CustomScanner
 from .config_builder import ContextConfig, configuration
@@ -17,7 +18,6 @@ from .constants import SCOPE_SINGLETON
 from .container import PicoContainer
 from .decorators import Qualifier, cleanup, component, configure, configured, factory, provides
 from .exceptions import ConfigurationError, InvalidBindingError
-from .factory import ComponentFactory, ProviderMetadata
 from .locator import ComponentLocator
 from .registrar import Registrar
 from .scope import ScopedCaches, ScopeManager

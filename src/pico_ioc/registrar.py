@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from ._providers import ComponentFactory, DeferredProvider, ProviderMetadata
 from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import UnifiedComponentProxy
 from .component_scanner import ComponentScanner, CustomScanner
@@ -11,7 +12,6 @@ from .config_runtime import TreeSource
 from .constants import LOGGER, PICO_INFRA, PICO_META, PICO_NAME, SCOPE_SINGLETON
 from .container import PicoContainer
 from .dependency_validator import DependencyValidator
-from .factory import ComponentFactory, DeferredProvider, ProviderMetadata
 from .locator import ComponentLocator
 from .provider_selector import ProviderSelector
 

@@ -14,12 +14,12 @@ import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar, Union, overload
 
+from ._providers import ComponentFactory, ProviderMetadata
 from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import ContainerObserver, UnifiedComponentProxy
 from .constants import LOGGER, PICO_META, SCOPE_SINGLETON
 from .container_resolution import _ResolutionMixin
 from .exceptions import AsyncResolutionError, ComponentCreationError, ProviderNotFoundError
-from .factory import ComponentFactory
 from .graph_export import _build_resolution_graph
 from .graph_export import export_graph as _export_graph
 from .locator import ComponentLocator
@@ -165,6 +165,21 @@ class PicoContainer(_ResolutionMixin):
         key = self._canonical_key(key)
         cache = self._cache_for(key)
         return cache.get(key) is not None or self._factory.has(key)
+
+    def keys(self) -> List[KeyT]:
+        """Return all registered component keys (types and string names).
+
+        The public way to enumerate the registry without reaching into the
+        locator. Empty if no locator is attached.
+        """
+        return self._locator.keys() if self._locator else []
+
+    def metadata_for(self, key: KeyT) -> Optional[ProviderMetadata]:
+        """Return the :class:`ProviderMetadata` bound to *key*, or ``None``.
+
+        Read-only introspection: treat the result as immutable.
+        """
+        return self._locator._metadata.get(key) if self._locator else None
 
     def _canonical_key(self, key: KeyT) -> KeyT:
         if self._factory.has(key):

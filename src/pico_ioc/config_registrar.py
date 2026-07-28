@@ -2,12 +2,12 @@ import typing
 from dataclasses import MISSING, fields, is_dataclass
 from typing import Annotated, Any, Callable, Dict, List, Optional, Tuple, Union, get_args, get_origin
 
+from ._providers import DeferredProvider, ProviderMetadata
 from .analysis import analyze_callable_dependencies
 from .config_builder import ContextConfig, Value
 from .config_runtime import ConfigResolver, ObjectGraphBuilder, TreeSource, TypeAdapterRegistry
 from .constants import PICO_META, SCOPE_SINGLETON
 from .exceptions import ConfigurationError
-from .factory import DeferredProvider, ProviderMetadata
 
 KeyT = Union[str, type]
 Provider = Callable[[], Any]

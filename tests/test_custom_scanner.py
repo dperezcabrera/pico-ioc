@@ -3,8 +3,7 @@ from typing import Any, Callable, Optional, Tuple
 
 import pytest
 
-from pico_ioc import init
-from pico_ioc.factory import DeferredProvider, ProviderMetadata
+from pico_ioc import DeferredProvider, ProviderMetadata, init
 
 
 class PlainService:
