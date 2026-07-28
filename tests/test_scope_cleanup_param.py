@@ -44,6 +44,25 @@ def test_cleanup_true_evicts_and_runs_hook():
         c.shutdown()
 
 
+def test_public_cleanup_scope_runs_hooks_across_activate_deactivate():
+    # The seam ASGI middleware needs: activate on enter, deactivate + cleanup
+    # on exit, without a single `with` block. No reaching into container._caches.
+    ReqScoped.created = ReqScoped.cleaned = 0
+    c = _fresh_container()
+    try:
+        tok = c.activate_scope("request", "r1")
+        first = c.get(ReqScoped).id
+        c.deactivate_scope("request", tok)
+        c.cleanup_scope("request", "r1")
+        assert ReqScoped.cleaned == 1, "cleanup_scope must run the @cleanup hook"
+
+        tok = c.activate_scope("request", "r1")
+        assert c.get(ReqScoped).id != first  # evicted -> fresh instance
+        c.deactivate_scope("request", tok)
+    finally:
+        c.shutdown()
+
+
 def test_cleanup_false_is_default_and_preserves_instance():
     ReqScoped.created = ReqScoped.cleaned = 0
     c = _fresh_container()
