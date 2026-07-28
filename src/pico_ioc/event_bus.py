@@ -12,7 +12,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple, Type
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 
 from .api import cleanup, configure, factory, provides
 from .exceptions import EventBusClosedError, EventBusError, EventBusHandlerError, EventBusQueueFullError
@@ -268,9 +268,12 @@ class EventBus:
             log.exception("%s", ex)
 
 
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
 def subscribe(
     event_type: Type[Event], *, priority: int = 0, policy: ExecPolicy = ExecPolicy.INLINE, once: bool = False
-):
+) -> Callable[[_F], _F]:
     """Decorator that marks a method for auto-subscription via ``AutoSubscriberMixin``.
 
     Apply to methods on a ``@component`` class that mixes in
@@ -292,7 +295,7 @@ def subscribe(
         A decorator that attaches subscription metadata to the function.
     """
 
-    def dec(fn: Callable[[Event], Any] | Callable[[Event], Awaitable[Any]]):
+    def dec(fn: _F) -> _F:
         subs: Iterable[Tuple[Type[Event], int, ExecPolicy, bool]] = getattr(fn, "_pico_subscriptions_", ())
         subs = list(subs)
         subs.append((event_type, int(priority), policy, bool(once)))
