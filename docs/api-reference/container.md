@@ -58,6 +58,8 @@ Synchronously retrieves or creates a component instance for the given Key. Raise
 - key: The class type or string name of the component to retrieve.
 - Returns: The component instance.
 
+Typed: when called with a class, `get` is inferred as that class (`get(UserService) -> UserService`) rather than `Any`, so IDEs and type-checkers resolve the component. String keys still return `Any`.
+
 ---
 
 ### aget(key: KeyT) -> Any
@@ -75,6 +77,23 @@ Checks if a provider is registered for the given Key or if an instance exists in
 
 - key: The class type or string name to check.
 - Returns: True if the key can be resolved, False otherwise.
+
+---
+
+### keys() -> list[KeyT]
+
+Returns all registered component keys (class types and string names). The public way to enumerate the registry — use it instead of reaching into the internal locator. Empty if no locator is attached.
+
+- Returns: A list of the registered keys.
+
+---
+
+### metadata_for(key: KeyT) -> Optional[ProviderMetadata]
+
+Returns the `ProviderMetadata` bound to the given Key, or `None` if the key is not registered. Read-only introspection — treat the result as immutable.
+
+- key: The class type or string name to look up.
+- Returns: The provider metadata, or `None`.
 
 ---
 

@@ -50,6 +50,8 @@ pico-ioc eliminates that friction by letting you declare how components relate â
 
 ## Highlights (v2.2+)
 
+- **Typed resolution** (v2.4): `container.get(UserService)` is inferred as `UserService`, not `Any` â€” IDE autocomplete and type-checkers resolve the component.
+- **Public introspection** (v2.4): `container.keys()` and `container.metadata_for(key)` enumerate the registry without reaching into the container internals.
 - **Unified Configuration**: Use `@configured` to bind both flat (ENV-like) and tree (YAML/JSON) sources via the `configuration(...)` builder (ADR-0010).
 - **Hot config refresh**: `container.refresh_config()` re-reads tree sources and publishes a `ConfigChanged` event with the changed prefixes.
 - **Extensible Scanning**: Use `CustomScanner` to hook into the discovery phase and register functions or custom decorators (ADR-0011).
