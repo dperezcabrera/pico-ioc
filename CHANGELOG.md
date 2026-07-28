@@ -7,6 +7,26 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [2.4.0] - 2026-07-28
+
+### Added
+
+- `container.keys()` returns the registered component keys (types and string names), and `container.metadata_for(key)` returns the `ProviderMetadata` bound to a key (or `None`). A public introspection seam so integrations no longer reach into `container._locator._metadata`. pico-fastapi's controller discovery now uses it.
+- `Provider` (the `Callable[[], Any]` provider alias) is exported. The full custom-scanner ABI — `Provider`, `ProviderMetadata`, `DeferredProvider`, `ComponentFactory` — is importable from the top-level `pico_ioc`.
+
+### Changed
+
+- `get` and `aget` are typed: `container.get(UserService)` is inferred as `UserService` instead of `Any`, so IDEs and type-checkers resolve the component. String keys still return `Any`. Pure typing change, no runtime impact.
+- `@subscribe` preserves the decorated handler's signature for type-checkers and no longer emits a false type error on handlers annotated with a specific `Event` subclass.
+
+### Fixed
+
+- `@factory` no longer triggers a spurious `reportCallIssue` ("Module is not callable") in pyright. It was caused by the internal `factory` submodule shadowing the `factory` decorator name.
+
+### Removed
+
+- The internal module `pico_ioc.factory` was renamed to the private `pico_ioc._providers`. Its public symbols (`ComponentFactory`, `ProviderMetadata`, `DeferredProvider`, `Provider`) are unchanged and remain importable from the top-level `pico_ioc`. Only code importing from the undocumented `pico_ioc.factory` path must switch to `from pico_ioc import ...`.
+
 ## [2.3.4] - 2026-07-13
 
 ### Added

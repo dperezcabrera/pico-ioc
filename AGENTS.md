@@ -28,7 +28,7 @@ src/pico_ioc/
   registrar.py             # Registrar — scans decorated classes and registers providers
   component_scanner.py     # ComponentScanner — recursive package import + component discovery
   scope.py                 # ScopeProtocol, ScopeManager, ContextVarScope, ScopedCaches
-  factory.py               # ProviderMetadata, DeferredProvider, ComponentFactory type aliases
+  _providers.py            # ProviderMetadata, DeferredProvider, Provider, ComponentFactory (private module; symbols re-exported from pico_ioc)
   dependency_validator.py  # Startup validation: cycle detection, missing providers
   provider_selector.py     # ProviderSelector — config-driven multi-provider resolution
   aop.py                   # AOP: MethodCtx, MethodInterceptor, UnifiedComponentProxy, health()
