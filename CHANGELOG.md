@@ -7,6 +7,12 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `container.cleanup_scope(name, scope_id)` evicts the instances cached under a scope id and runs their `@cleanup` hooks — the public counterpart to `scope(..., cleanup=True)` for lifecycles that span separate activate/deactivate calls (e.g. ASGI middleware), so integrations no longer reach into `container._caches`.
+
 ## [2.4.0] - 2026-07-28
 
 ### Added

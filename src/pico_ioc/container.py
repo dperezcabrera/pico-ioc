@@ -418,6 +418,16 @@ class PicoContainer(_ResolutionMixin):
     def deactivate_scope(self, name: str, token: Optional[contextvars.Token]) -> None:
         self.scopes.deactivate(name, token)
 
+    def cleanup_scope(self, name: str, scope_id: Any) -> None:
+        """Evict the instances cached under ``(name, scope_id)``, running their
+        ``@cleanup`` hooks.
+
+        The public counterpart to ``scope(..., cleanup=True)`` for when the
+        scope lifecycle spans separate activate/deactivate calls (e.g. ASGI
+        middleware) instead of a single ``with`` block.
+        """
+        self._caches.cleanup_scope(name, scope_id)
+
     def info(self, msg: str) -> None:
         LOGGER.info(f"[{self.container_id[:8]}] {msg}")
 
@@ -447,7 +457,7 @@ class PicoContainer(_ResolutionMixin):
         finally:
             self.deactivate_scope(name, tok)
             if cleanup:
-                self._caches.cleanup_scope(name, scope_id)
+                self.cleanup_scope(name, scope_id)
 
     def health_check(self) -> Dict[str, bool]:
         """Run all ``@health``-decorated methods and return their results.
