@@ -77,6 +77,7 @@ del os.environ['APP_DB_URL']
 - `class ProviderMetadata` — Immutable descriptor for a registered provider.
 - `class ComponentFactory` — Simple key-to-provider registry.
 - `class DeferredProvider` — A provider whose execution is deferred until the container is ready.
+- `Provider`
 - `class MethodCtx` — Invocation context passed to interceptors.
 - `class MethodInterceptor(Protocol)` — Protocol that interceptors must implement.
 - `intercepted_by(*interceptor_classes: type['MethodInterceptor'])` — Decorator that attaches interceptors to a method.
