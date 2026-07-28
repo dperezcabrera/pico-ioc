@@ -12,7 +12,7 @@ import secrets
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union, overload
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar, Union, overload
 
 from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import ContainerObserver, UnifiedComponentProxy
@@ -26,6 +26,7 @@ from .locator import ComponentLocator
 from .scope import ScopedCaches, ScopeManager
 
 KeyT = Union[str, type]
+T = TypeVar("T")
 
 
 def _needs_async_configure(obj: Any) -> bool:
@@ -248,7 +249,7 @@ class PicoContainer(_ResolutionMixin):
         return runner()
 
     @overload
-    def get(self, key: type) -> Any: ...
+    def get(self, key: type[T]) -> T: ...
     @overload
     def get(self, key: str) -> Any: ...
     def get(self, key: KeyT) -> Any:
@@ -294,6 +295,10 @@ class PicoContainer(_ResolutionMixin):
 
         return final_instance
 
+    @overload
+    async def aget(self, key: type[T]) -> T: ...
+    @overload
+    async def aget(self, key: str) -> Any: ...
     async def aget(self, key: KeyT) -> Any:
         """Resolve a component asynchronously.
 
