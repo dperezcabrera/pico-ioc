@@ -115,7 +115,6 @@ changes). Without pico-boot, list the module in `init(modules=[...])`.
 | pico-otel | OpenTelemetry traces + metrics | `OtelSettings`; config prefix `otel` |
 | pico-client-auth | JWT validation + RBAC | `@requires_role`, `@requires_scope`, `@allow_anonymous` |
 | pico-server-auth | Embeddable auth server (JWT, wallet login, JWKS) | config prefix `server_auth` |
-| pico-agent | LLM agents and tools | `@agent`, `@tool` |
 | pico-scheduling | Interval + cron scheduled methods | `@scheduled(every=/cron=)`; config prefix `scheduling` |
 | pico-httpx | Declarative HTTP clients | `@http_client`, `@get`/`@post`/`@put`/`@delete`/`@patch`; config prefix `http` |
 | pico-data-redis | Redis client + distributed cache backend | injectable `redis.Redis`, `RedisCacheBackend`; config prefix `redis` |
