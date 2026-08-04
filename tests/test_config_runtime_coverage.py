@@ -80,3 +80,39 @@ def test_object_builder_prim_errors():
 
     with pytest.raises(ConfigurationError, match="Expected bool"):
         builder._build("not_bool", bool, ("root",))
+
+
+def test_missing_env_var_is_not_mistaken_for_a_missing_prefix():
+    """A broken ${ENV:...} must surface as itself, not fall back to defaults.
+
+    The missing-prefix guard used to swallow every ConfigurationError, so an
+    unset env var silently produced a defaults-only object and the operator
+    saw an unrelated error further downstream.
+    """
+
+    @dataclass
+    class Settings:
+        secret: str = "default-secret"
+
+    from pico_ioc.config_sources import DictSource
+
+    resolver = ConfigResolver((DictSource({"app": {"secret": "${ENV:DEFINITELY_UNSET_VAR}"}}),))
+    builder = ObjectGraphBuilder(resolver, TypeAdapterRegistry())
+
+    with pytest.raises(ConfigurationError, match="Missing ENV var DEFINITELY_UNSET_VAR"):
+        builder.build_from_prefix(Settings, "app")
+
+
+def test_absent_prefix_still_falls_back_to_defaults():
+    """The guard's real purpose is preserved: zero-config plugins still build."""
+
+    @dataclass
+    class Settings:
+        host: str = "localhost"
+
+    from pico_ioc.config_sources import DictSource
+
+    resolver = ConfigResolver((DictSource({"other": {}}),))
+    builder = ObjectGraphBuilder(resolver, TypeAdapterRegistry())
+
+    assert builder.build_from_prefix(Settings, "absent").host == "localhost"

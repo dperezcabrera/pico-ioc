@@ -170,6 +170,10 @@ class ObjectGraphBuilder:
         self._registry = registry
 
     def build_from_prefix(self, target_type: type, prefix: Optional[str]) -> Any:
+        # Resolve (and interpolate) the tree outside the guard below: a broken
+        # ${ENV:...} or ${ref:...} must surface as itself, not be mistaken for
+        # an absent prefix and silently replaced by defaults.
+        self._resolver.tree()
         try:
             node = self._resolver.subtree(prefix)
         except ConfigurationError:

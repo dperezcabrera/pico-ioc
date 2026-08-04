@@ -9,6 +9,12 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-08-04
+
+### Fixed
+
+- A failed `${ENV:VAR}` or `${ref:path}` interpolation is no longer mistaken for an absent config prefix. The missing-prefix fallback caught every `ConfigurationError`, so an unset environment variable silently produced a defaults-only object and surfaced later as an unrelated error somewhere else in the graph. `Missing ENV var VAR` now reaches the caller, as the FAQ has always documented.
+
 ## [2.5.0] - 2026-08-04
 
 ### Added
