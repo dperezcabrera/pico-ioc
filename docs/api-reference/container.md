@@ -155,7 +155,7 @@ Returns a context manager (with container.scope("request", "id-123"): ...) that 
 
 - name: The name of the scope to activate.
 - scope_id: A unique identifier for this scope instance.
-- cleanup: If `True`, evict the instances cached under this `scope_id` when the block exits, running their `@cleanup` hooks. Use for short-lived scopes (request, transaction) so per-scope instances do not accumulate — the convenient alternative to calling `_caches.cleanup_scope(...)` by hand. Defaults to `False` (backwards-compatible).
+- cleanup: If `True`, evict the instances cached under this `scope_id` when the block exits, running their `@cleanup` hooks. Use for short-lived scopes (request, transaction) so per-scope instances do not accumulate — the convenient alternative to calling `cleanup_scope(...)` by hand. Defaults to `False` (backwards-compatible).
 - Yields: The container instance (self).
 
 ```python
@@ -163,6 +163,24 @@ Returns a context manager (with container.scope("request", "id-123"): ...) that 
 with container.scope("request", request_id, cleanup=True):
     handle(container.get(RequestContext))
 # request-scoped instances evicted + their @cleanup hooks run here
+```
+
+---
+
+### cleanup_scope(name: str, scope_id: Any) -> None
+
+Evicts the instances cached under `(name, scope_id)`, running their `@cleanup` hooks. The public counterpart to `scope(..., cleanup=True)` for lifecycles that span separate `activate_scope`/`deactivate_scope` calls, such as ASGI middleware. *(Added in v2.4.1.)*
+
+- name: The name of the scope.
+- scope_id: The identifier whose cached instances are evicted.
+
+```python
+token = container.activate_scope("request", request_id)
+try:
+    handle(container.get(RequestContext))
+finally:
+    container.deactivate_scope("request", token)
+    container.cleanup_scope("request", request_id)
 ```
 
 ---

@@ -60,7 +60,7 @@ If you manage activation yourself (via `activate_scope`/`deactivate_scope`)
 rather than the context manager, clean up explicitly when the scope ends:
 
 ```python
-container._caches.cleanup_scope("tenant", tenant_id)
+container.cleanup_scope("tenant", tenant_id)
 ```
 
 Both invoke all `@cleanup` methods on components stored under that scope ID.
