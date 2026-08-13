@@ -14,7 +14,7 @@ By the end of this tutorial, you will understand the three most fundamental APIs
 
 ## 1. Installation
 
-`pico-ioc` requires Python 3.11 or newer.
+`pico-ioc` requires Python 3.11 or newer. Every release is tested on 3.11, 3.12, 3.13 and 3.14.
 
 You can install it directly from PyPI using `pip`:
 
