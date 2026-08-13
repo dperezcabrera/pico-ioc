@@ -15,7 +15,7 @@
 **pico-ioc** is a **lightweight, async-ready, decorator-driven IoC container** built for clarity, testability, and performance.
 It brings Inversion of Control and dependency injection to Python in a deterministic, modern, and framework-agnostic way.
 
-> Requires Python 3.11+
+> Requires Python 3.11+ (tested on 3.11, 3.12, 3.13 and 3.14)
 
 The pico ecosystem is [**built for the AI era**](https://dperezcabrera.github.io/pico-ioc/ai-ready/): machine-readable conventions in every repo, installable [AI coding skills](https://github.com/dperezcabrera/pico-skills), and [scaffolds](https://dperezcabrera.github.io/pico-initializer/) that generate AI-maintainable projects from the first commit.
 

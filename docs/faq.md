@@ -8,7 +8,7 @@ Common questions and solutions for pico-ioc.
 
 ### Q: What Python versions are supported?
 
-**A:** Python 3.11 or newer. We use modern type hints that require 3.11+.
+**A:** Python 3.11 or newer. We use modern type hints that require 3.11+. Every release is tested on 3.11, 3.12, 3.13 and 3.14.
 
 ### Q: How do I enable YAML configuration support?
 
