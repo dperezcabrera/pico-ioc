@@ -211,6 +211,7 @@ nav:
       - ADR-011 Custom Scanners: adr/adr-0011-custom-scanners.md
       - ADR-012 Resolution Path (Proposed): adr/adr-0012-resolution-path-in-errors.md
       - ADR-013 Hot Config Refresh: adr/adr-0013-hot-config-refresh.md
+      - ADR-014 API Stability (Proposed): adr/adr-0014-api-stability-and-deprecation.md
 
   - Built for the AI Era: ai-ready.md
   - AI Coding Skills: skills.md
