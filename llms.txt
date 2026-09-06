@@ -112,7 +112,7 @@ del os.environ['APP_DB_URL']
 ## Docs
 
 - docs/LEARN.md
-- docs/adr/ (14 pages)
+- docs/adr/ (15 pages)
 - docs/advanced-features/ (9 pages)
 - docs/ai-ready.md
 - docs/api-reference/ (11 pages)
