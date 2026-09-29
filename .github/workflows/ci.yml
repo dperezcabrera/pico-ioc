@@ -43,6 +43,42 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
+  # The oldest versions pyproject.toml admits must work too: pin every declared
+  # ">=" floor (runtime and extras, not dev tooling) and run the suite on the
+  # oldest supported Python.
+  floors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: pip install tox
+      - name: Pin every declared dependency floor
+        run: |
+          python - > "$RUNNER_TEMP/floors.txt" <<'EOF'
+          import re, tomllib
+          p = tomllib.load(open("pyproject.toml", "rb"))["project"]
+          reqs = p.get("dependencies", []) + [
+              r for extra, rs in p.get("optional-dependencies", {}).items()
+              if extra not in ("dev", "test", "tests", "docs") for r in rs
+          ]
+          pins = {}
+          for r in reqs:
+              m = re.match(r"\s*([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?\s*>=\s*([0-9][^,;\s]*)", r)
+              if m and m.group(1).lower() != p["name"].lower():
+                  pins[m.group(1).lower()] = m.group(2)
+          print("".join(f"{k}=={v}\n" for k, v in sorted(pins.items())), end="")
+          EOF
+          cat "$RUNNER_TEMP/floors.txt"
+      - name: Run the suite at the floors
+        env:
+          PIP_CONSTRAINT: ${{ runner.temp }}/floors.txt
+          SETUPTOOLS_SCM_PRETEND_VERSION: "0.1.0"
+        run: tox -e py311
+
   coverage:
     needs: tests
     runs-on: ubuntu-latest
