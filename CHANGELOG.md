@@ -9,6 +9,10 @@ and this project adheres to Semantic Versioning (https://semver.org/spec/v2.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+- The lifecycle scans (`@configure`, `@cleanup`, `@health`) no longer evaluate properties of the objects they inspect. `inspect.getmembers` on the instance ran every property, so a provided third-party object whose property raises until it is set up (for example `MCPServer.session_manager` in mcp 2.x) made `init()` fail. The scan now reads the class statically and binds only the marked methods.
+
 ## [2.5.1] - 2026-08-04
 
 ### Fixed

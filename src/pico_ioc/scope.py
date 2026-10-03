@@ -11,6 +11,7 @@ import inspect
 import logging
 from typing import Any, Dict, Optional, Tuple
 
+from ._members import pico_methods
 from .constants import SCOPE_PROTOTYPE, SCOPE_SINGLETON
 from .exceptions import ScopeError
 
@@ -170,22 +171,16 @@ class ScopedCaches:
 
     def _cleanup_object(self, obj: Any) -> None:
         try:
-            from .constants import PICO_META
-        except Exception:
-            PICO_META = "_pico_meta"
-        try:
-            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
-                meta = getattr(m, PICO_META, {})
-                if meta.get("cleanup", False):
-                    try:
-                        m()
-                    except Exception as e:
-                        _logger.warning(
-                            "Cleanup method %s.%s failed: %s",
-                            type(obj).__name__,
-                            getattr(m, "__name__", "<unknown>"),
-                            e,
-                        )
+            for _, m in pico_methods(obj, "cleanup"):
+                try:
+                    m()
+                except Exception as e:
+                    _logger.warning(
+                        "Cleanup method %s.%s failed: %s",
+                        type(obj).__name__,
+                        getattr(m, "__name__", "<unknown>"),
+                        e,
+                    )
         except Exception as e:
             _logger.debug("Failed to inspect object for cleanup: %s", e)
 

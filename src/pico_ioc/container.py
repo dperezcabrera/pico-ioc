@@ -14,6 +14,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar, Union, overload
 
+from ._members import pico_methods
 from ._providers import ComponentFactory, ProviderMetadata
 from .analysis import DependencyRequest, analyze_callable_dependencies
 from .aop import ContainerObserver, UnifiedComponentProxy
@@ -30,18 +31,12 @@ T = TypeVar("T")
 
 
 def _needs_async_configure(obj: Any) -> bool:
-    for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
-        meta = getattr(m, PICO_META, {})
-        if meta.get("configure", False) and inspect.iscoroutinefunction(m):
-            return True
-    return False
+    return any(inspect.iscoroutinefunction(m) for m in _iter_configure_methods(obj))
 
 
 def _iter_configure_methods(obj: Any):
-    for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
-        meta = getattr(m, PICO_META, {})
-        if meta.get("configure", False):
-            yield m
+    for _, m in pico_methods(obj, "configure"):
+        yield m
 
 
 class PicoContainer(_ResolutionMixin):
@@ -383,12 +378,10 @@ class PicoContainer(_ResolutionMixin):
     def cleanup_all(self) -> None:
         """Invoke all ``@cleanup`` methods on cached components (sync)."""
         for obj in self._iterate_cleanup_targets():
-            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
-                meta = getattr(m, PICO_META, {})
-                if meta.get("cleanup", False):
-                    res = self._call_cleanup_method(m)
-                    if inspect.isawaitable(res):
-                        LOGGER.warning(f"Async cleanup method {m} called during sync shutdown. Awaitable ignored.")
+            for _, m in pico_methods(obj, "cleanup"):
+                res = self._call_cleanup_method(m)
+                if inspect.isawaitable(res):
+                    LOGGER.warning(f"Async cleanup method {m} called during sync shutdown. Awaitable ignored.")
 
     async def cleanup_all_async(self) -> None:
         """Invoke all ``@cleanup`` methods on cached components (async).
@@ -396,12 +389,10 @@ class PicoContainer(_ResolutionMixin):
         Awaits async cleanup methods and closes the :class:`EventBus` if present.
         """
         for obj in self._iterate_cleanup_targets():
-            for _, m in inspect.getmembers(obj, predicate=inspect.ismethod):
-                meta = getattr(m, PICO_META, {})
-                if meta.get("cleanup", False):
-                    res = self._call_cleanup_method(m)
-                    if inspect.isawaitable(res):
-                        await res
+            for _, m in pico_methods(obj, "cleanup"):
+                res = self._call_cleanup_method(m)
+                if inspect.isawaitable(res):
+                    await res
 
         try:
             from .event_bus import EventBus
@@ -467,12 +458,11 @@ class PicoContainer(_ResolutionMixin):
         """
         out: Dict[str, bool] = {}
         for k, obj in self._caches.all_items():
-            for name, m in inspect.getmembers(obj, predicate=callable):
-                if getattr(m, PICO_META, {}).get("health_check", False):
-                    try:
-                        out[f"{getattr(k, '__name__', k)}.{name}"] = bool(m())
-                    except Exception:
-                        out[f"{getattr(k, '__name__', k)}.{name}"] = False
+            for name, m in pico_methods(obj, "health_check"):
+                try:
+                    out[f"{getattr(k, '__name__', k)}.{name}"] = bool(m())
+                except Exception:
+                    out[f"{getattr(k, '__name__', k)}.{name}"] = False
         return out
 
     def stats(self) -> Dict[str, Any]:
